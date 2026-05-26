@@ -1,0 +1,7 @@
+# 설치 후 버전 핀 예정 (pip freeze 결과로 정확한 버전 고정)
+fastapi
+uvicorn[standard]
+yfinance
+pandas
+numpy
+python-dotenv
