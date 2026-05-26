@@ -12,6 +12,7 @@
 | --- | --- |
 | 프론트엔드 | Next.js, TypeScript, TailwindCSS |
 | 백엔드 | FastAPI (Python), yfinance |
+| DB·인증 | Supabase (PostgreSQL) |
 | 배포 | Vercel |
 | 협업 | GitHub, Notion, Slack |
 

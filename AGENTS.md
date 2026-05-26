@@ -6,6 +6,16 @@
 
 삼성증권 영크리에이터 15기 4조 · PB Insight 과제 — PB가 VVIP 고객 상담 시 사용하는 AI 기반 자산관리 대시보드.
 
+## 기술 스택
+
+| 영역 | 사용 기술 |
+| --- | --- |
+| 프론트엔드 | Next.js, TypeScript, TailwindCSS |
+| 백엔드 | FastAPI (Python), yfinance |
+| DB·인증 | Supabase (PostgreSQL) |
+| 배포 | Vercel |
+| 협업 | GitHub, Notion, Slack |
+
 ## 레포 구조
 
 ```
