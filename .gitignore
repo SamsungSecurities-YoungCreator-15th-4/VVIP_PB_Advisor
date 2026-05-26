@@ -1,8 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
+# ---------- Node / Next.js (frontend) ----------
+# 모노레포 구조이므로 루트 기준이 아닌 임의 깊이에서 매칭되도록 한다.
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -11,18 +12,18 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
-# production
-/build
+# production build
+build/
 
-# misc
-.DS_Store
-*.pem
+# typescript
+*.tsbuildinfo
+next-env.d.ts
 
 # debug
 npm-debug.log*
@@ -30,12 +31,28 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
 # vercel
 .vercel
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ---------- Python (backend) ----------
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# ---------- 환경 변수 ----------
+# .env 류는 모두 무시하되, 템플릿인 .env.example만 추적한다.
+.env
+.env.*
+!.env.example
+backend/.env
+
+# ---------- OS / Editor ----------
+.DS_Store
+*.pem
+.idea/
+# .vscode/는 일단 무시한다. 팀이 공유 설정(권장 익스텐션·디버그 설정 등)을 도입하면
+# 아래 .vscode/ 줄을 제거하거나, 추적할 파일만 별도로 화이트리스트(!.vscode/extensions.json 등) 처리한다.
+.vscode/
