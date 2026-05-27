@@ -56,3 +56,7 @@ backend/.env
 # .vscode/는 일단 무시한다. 팀이 공유 설정(권장 익스텐션·디버그 설정 등)을 도입하면
 # 아래 .vscode/ 줄을 제거하거나, 추적할 파일만 별도로 화이트리스트(!.vscode/extensions.json 등) 처리한다.
 .vscode/
+
+# ---------- AI 코딩 도구 ----------
+# Claude Code
+.claude/
