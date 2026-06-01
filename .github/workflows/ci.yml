@@ -4,9 +4,9 @@ name: CI
 # 배포(CD)는 Vercel이 처리하므로 여기서는 다루지 않는다.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   frontend-lint:
