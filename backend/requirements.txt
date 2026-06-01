@@ -5,3 +5,8 @@ yfinance
 pandas
 numpy
 python-dotenv
+# RAG
+llama-index
+faiss-cpu
+openai
+pypdf

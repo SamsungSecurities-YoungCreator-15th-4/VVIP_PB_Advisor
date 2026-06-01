@@ -41,6 +41,11 @@ venv/
 .venv/
 *.egg-info/
 .pytest_cache/
+# RAG 데이터·인덱스 (용량 큰 파일)
+backend/data/*.pdf
+backend/data/*.docx
+backend/faiss_index/
+*.index
 
 # ---------- 환경 변수 ----------
 # .env 류는 모두 무시하되, 템플릿인 .env.example만 추적한다.
