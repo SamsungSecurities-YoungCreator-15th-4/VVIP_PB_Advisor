@@ -30,6 +30,18 @@ VVIP_PB_Advisor/
 └── README.md
 ```
 
+## 시작하기 (Getting Started)
+
+```bash
+# 프론트엔드
+cd frontend && npm install && npm run dev
+
+# 백엔드
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+```
+
+> 프론트는 **npm**으로 통일합니다. pnpm/yarn 섞지 마세요.
+
 ## 로컬 실행
 
 ### 프론트엔드 (`frontend/`)
