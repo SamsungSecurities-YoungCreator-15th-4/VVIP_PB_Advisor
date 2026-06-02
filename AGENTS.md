@@ -21,6 +21,7 @@
 ```
 frontend/   # Next.js 프론트엔드
 backend/    # FastAPI 백엔드
+AI/         # AI 관련 산출물·작업 파일 보관
 docs/       # 기획·설계·협업 규칙 문서
 .github/    # PR 템플릿 등
 ```
