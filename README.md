@@ -34,13 +34,13 @@ VVIP_PB_Advisor/
 
 ```bash
 # 프론트엔드
-cd frontend && npm install && npm run dev
+cd frontend && pnpm install && pnpm dev
 
 # 백엔드
 cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 ```
 
-> 프론트는 **npm**으로 통일합니다. pnpm/yarn 섞지 마세요.
+> 프론트는 **pnpm**으로 통일합니다. npm/yarn 섞지 마세요.
 
 ## 로컬 실행
 
@@ -48,8 +48,8 @@ cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 # http://localhost:3000
 ```
 
