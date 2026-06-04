@@ -1,14 +1,19 @@
+# Claude Team 계정 ban으로 비활성화 (2026-06). 새 인증 생기면 복구.
 name: Claude Code Review
 
+# 자동 트리거 비활성화: 인증(401) 실패로 모든 PR이 빨간불을 내서 workflow_dispatch만 남김.
+# 복구 시 아래 주석을 해제하고 workflow_dispatch는 지우면 된다.
+# on:
+#   pull_request:
+#     types: [opened, synchronize, ready_for_review, reopened]
+#     # Optional: Only run on specific file changes
+#     # paths:
+#     #   - "src/**/*.ts"
+#     #   - "src/**/*.tsx"
+#     #   - "src/**/*.js"
+#     #   - "src/**/*.jsx"
 on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+  workflow_dispatch:
 
 jobs:
   claude-review:

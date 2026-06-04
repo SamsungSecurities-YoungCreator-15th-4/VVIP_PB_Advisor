@@ -1,14 +1,19 @@
+# Claude Team 계정 ban으로 비활성화 (2026-06). 새 인증 생기면 복구.
 name: Claude Code
 
+# 자동 트리거 비활성화: 인증(401) 실패로 모든 PR이 빨간불을 내서 workflow_dispatch만 남김.
+# 복구 시 아래 주석을 해제하고 workflow_dispatch는 지우면 된다.
+# on:
+#   issue_comment:
+#     types: [created]
+#   pull_request_review_comment:
+#     types: [created]
+#   issues:
+#     types: [opened, assigned]
+#   pull_request_review:
+#     types: [submitted]
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  issues:
-    types: [opened, assigned]
-  pull_request_review:
-    types: [submitted]
+  workflow_dispatch:
 
 jobs:
   claude:
