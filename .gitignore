@@ -65,3 +65,10 @@ backend/.env
 # ---------- AI 코딩 도구 ----------
 # Claude Code
 .claude/
+
+# ---------- STT 개발 관련 ----------
+.env
+venv/
+__pycache__/
+*.wav
+*.mp3
