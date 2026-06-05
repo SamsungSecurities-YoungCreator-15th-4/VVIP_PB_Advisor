@@ -65,7 +65,9 @@ schema_paths = []
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
-enabled = true
+# seed.sql 미존재 상태에서 true면 `supabase db reset`/`start` 가 실패하므로,
+# 절세 규칙·페르소나 seed.sql 추가 시점에 true 로 전환한다. (Gemini 리뷰 반영)
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
 sql_paths = ["./seed.sql"]

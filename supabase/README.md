@@ -20,6 +20,7 @@ supabase/
 curl -sSL -o /tmp/supabase.tar.gz \
   https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz
 tar -xzf /tmp/supabase.tar.gz -C /tmp
+mkdir -p ~/.local/bin
 install -m 0755 /tmp/supabase ~/.local/bin/supabase
 supabase --version   # 확인
 ```
