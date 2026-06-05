@@ -50,7 +50,6 @@ backend/faiss_index/
 # ---------- 고객/상담 민감 데이터 (PII 유출 방지) ----------
 # 실제 VVIP 상담 전사·음성 등은 추적 금지. .txt/.json/음성 파일은 무시한다.
 # 이미 커밋된 STT 테스트 샘플은 추적 상태가 유지되며 영향받지 않는다.
-# 공유용 더미/샘플을 의도적으로 추가할 때만 `git add -f <파일>` 로 강제 추가한다.
 backend/data/*.txt
 backend/data/*.json
 AI/stt/*.txt
@@ -58,6 +57,9 @@ AI/stt/*.json
 AI/stt/*.wav
 AI/stt/*.mp3
 AI/stt/*.m4a
+# 공유용 더미/샘플은 파일명에 "sample" 을 넣으면 예외로 추적된다 (실데이터엔 절대 사용 금지).
+# 그 외 의도적 추가는 `git add -f <파일>` 로 강제 추가.
+!**/*sample*
 
 # ---------- 환경 변수 ----------
 # .env 류는 모두 무시하되, 템플릿인 .env.example만 추적한다.
