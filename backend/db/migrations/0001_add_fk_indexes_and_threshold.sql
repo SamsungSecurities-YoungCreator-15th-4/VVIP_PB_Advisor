@@ -16,6 +16,9 @@ create index if not exists idx_proposal_portfolio_option_id
   on proposal(portfolio_option_id);
 
 -- 2) RAG 검색 함수에 유사도 임계값 추가 (기본 0.0 = 하위호환)
+--    HNSW 인덱스 성능을 위해 먼저 Top-K(match_count)를 인덱스로 빠르게 뽑은 뒤,
+--    바깥 쿼리에서 similarity_threshold 미만을 필터링한다.
+--    (WHERE에서 임계값을 먼저 걸면 결과가 부족할 때 인덱스/테이블 풀스캔 위험)
 create or replace function match_document_chunks (
   query_embedding vector(1536),
   match_count int default 5,
@@ -29,14 +32,17 @@ returns table (
 )
 language sql stable
 as $$
-  select
-    dc.id,
-    dc.document_id,
-    dc.content,
-    1 - (dc.embedding <=> query_embedding) as similarity
-  from document_chunk dc
-  where dc.embedding is not null
-    and 1 - (dc.embedding <=> query_embedding) > similarity_threshold
-  order by dc.embedding <=> query_embedding
-  limit match_count;
+  select *
+  from (
+    select
+      dc.id,
+      dc.document_id,
+      dc.content,
+      1 - (dc.embedding <=> query_embedding) as similarity
+    from document_chunk dc
+    where dc.embedding is not null
+    order by dc.embedding <=> query_embedding
+    limit match_count
+  ) sub
+  where sub.similarity > similarity_threshold;
 $$;
