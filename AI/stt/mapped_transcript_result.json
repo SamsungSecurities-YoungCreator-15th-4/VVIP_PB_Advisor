@@ -1,0 +1,82 @@
+[
+  {
+    "sequence": 1,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "자, 오늘 우리 그 토론대회에 참석한 우리 친구들과 지금 이야기를 하고 있는데요. 어 토론대회.",
+    "offset_ticks": 12300000,
+    "duration_ticks": 71600000
+  },
+  {
+    "sequence": 2,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "나갔었기 때문에 우리 그 나간 경험을 또 이야기를 해주면 다음에 나갈 친구들이나 또 토론에 관심이 있는 친구들에게 굉장히 도움이 될 것 같아요.",
+    "offset_ticks": 98300000,
+    "duration_ticks": 105600000
+  },
+  {
+    "sequence": 3,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "자 그러면 그날 토론 주제가 뭐였을까요?",
+    "offset_ticks": 215100000,
+    "duration_ticks": 30000000
+  },
+  {
+    "sequence": 4,
+    "speaker_label": "Guest-2",
+    "speaker_role": "고객",
+    "text": "수익창출을 금지할 것이냐에 대한.",
+    "offset_ticks": 271100000,
+    "duration_ticks": 32800000
+  },
+  {
+    "sequence": 5,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "아키즈 유투브 보라는 것은 우리 어린이들이 유투버를 하는 데 있어서 수익 창출이 어?",
+    "offset_ticks": 303900000,
+    "duration_ticks": 101600000
+  },
+  {
+    "sequence": 6,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "그것이 맞는가 맞지 않는가? 이런 주제였다는 거죠. 아 네, 정확하게 이해했고요. 토론대로 지금 몇 명의 우리 친구들이 참석을 했죠. 아, 총 3명 이 참석했어 자. 그러면은 좀 연습을 많이 했겠네요.",
+    "offset_ticks": 411900000,
+    "duration_ticks": 156000000
+  },
+  {
+    "sequence": 7,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "그 룰은 지금 3명 이 한 팀이라고 했죠?",
+    "offset_ticks": 588400000,
+    "duration_ticks": 28400000
+  },
+  {
+    "sequence": 8,
+    "speaker_label": "Guest-1",
+    "speaker_role": "PB",
+    "text": "그러면 3명 이 어떤 역할들을 하는 건가요?",
+    "offset_ticks": 638700000,
+    "duration_ticks": 30800000
+  },
+  {
+    "sequence": 9,
+    "speaker_label": "Guest-2",
+    "speaker_role": "고객",
+    "text": "어 일어서는 그 저 처음에 자료조사를 해서 그 자료에 대한 이제 논거 저희 팀에 대한 문구를 설명하고 이연서는 한달 측 반박 측 논거에 대한 반박을 한 후.",
+    "offset_ticks": 671100000,
+    "duration_ticks": 142400000
+  },
+  {
+    "sequence": 10,
+    "speaker_label": "Guest-2",
+    "speaker_role": "고객",
+    "text": "자기 측 논거를 보충하는 것이고 삼은사는 자기 측 논거를 정리하고 자 자기측 자료도 정리하고 그다음 한글, 즉 이어서 반박을 한 후 한대책 논거를 정리하는 일을 하는 것입니다.",
+    "offset_ticks": 835200000,
+    "duration_ticks": 142400000
+  }
+]
