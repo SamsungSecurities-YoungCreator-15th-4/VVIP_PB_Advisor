@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface IndicatorData {
   price: number;
@@ -25,6 +25,10 @@ export default function MacroIndicators({ onShockChange }: Props) {
   const [krwUsdVal, setKrwUsdVal] = useState(1531);
   const [loaded, setLoaded] = useState(false);
 
+  // 부모가 onShockChange를 메모이제이션하지 않아도 무한 루프 방지
+  const onShockChangeRef = useRef(onShockChange);
+  useEffect(() => { onShockChangeRef.current = onShockChange; });
+
   // 헤더 ticker가 이미 fetch하므로 cache hit으로 빠르게 응답됨
   useEffect(() => {
     fetch('/api/macro-indicators')
@@ -44,8 +48,8 @@ export default function MacroIndicators({ onShockChange }: Props) {
   useEffect(() => {
     const baseRateDelta = Math.round((baseRateVal - liveBase) * 100);
     const krwUsdDelta = krwUsdVal - liveKrwUsd;
-    onShockChange?.({ baseRateDelta, krwUsdDelta });
-  }, [baseRateVal, krwUsdVal, liveBase, liveKrwUsd, onShockChange]);
+    onShockChangeRef.current?.({ baseRateDelta, krwUsdDelta });
+  }, [baseRateVal, krwUsdVal, liveBase, liveKrwUsd]);
 
   const hasShock =
     Math.abs(baseRateVal - liveBase) > 0.04 ||
