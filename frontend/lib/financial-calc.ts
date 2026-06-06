@@ -65,27 +65,45 @@ function generateBacktest(
   allocations: AssetAllocation[],
   marketData: Record<string, MarketDataPoint>
 ): BacktestPoint[] {
-  const firstTicker = allocations[0]?.ticker;
-  const referenceData = marketData[firstTicker];
-  if (!referenceData || referenceData.dates.length === 0) {
-    return generateSyntheticBacktest(allocations);
-  }
+  // 각 티커를 date → price 맵으로 변환
+  const priceMaps = allocations.flatMap(alloc => {
+    const data = marketData[alloc.ticker];
+    if (!data || data.dates.length === 0) return [];
+    const map = new Map<string, number>();
+    data.dates.forEach((date, i) => {
+      if (data.prices[i] != null) map.set(date, data.prices[i]);
+    });
+    return [{ alloc, map }];
+  });
 
-  const dates = referenceData.dates;
+  if (priceMaps.length === 0) return generateSyntheticBacktest(allocations);
+
+  // 모든 티커에 데이터가 있는 날짜만 사용 (교집합) — 한·미 휴장일 차이 방어
+  const allDateSets = priceMaps.map(({ map }) => new Set(map.keys()));
+  const commonDates = [...allDateSets[0]]
+    .filter(date => allDateSets.every(set => set.has(date)))
+    .sort();
+
+  if (commonDates.length < 10) return generateSyntheticBacktest(allocations);
+
   const result: BacktestPoint[] = [];
   let portfolioValue = 1.0;
 
-  for (let i = 1; i < dates.length; i++) {
-    let dailyReturn = 0;
-    for (const alloc of allocations) {
-      const data = marketData[alloc.ticker];
-      if (data && data.prices.length > i) {
-        const dailyRet = (data.prices[i] - data.prices[i - 1]) / data.prices[i - 1];
-        dailyReturn += alloc.weight * dailyRet;
+  for (let i = 1; i < commonDates.length; i++) {
+    const prevDate = commonDates[i - 1];
+    const currDate = commonDates[i];
+    let periodReturn = 0;
+
+    for (const { alloc, map } of priceMaps) {
+      const prev = map.get(prevDate);
+      const curr = map.get(currDate);
+      if (prev != null && curr != null && prev > 0) {
+        periodReturn += alloc.weight * (curr - prev) / prev;
       }
     }
-    portfolioValue *= 1 + dailyReturn;
-    result.push({ date: dates[i], value: portfolioValue });
+
+    portfolioValue *= 1 + periodReturn;
+    result.push({ date: currDate, value: portfolioValue });
   }
 
   return result;
