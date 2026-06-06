@@ -32,7 +32,7 @@ export default function MacroIndicators({ onShockChange }: Props) {
   // 헤더 ticker가 이미 fetch하므로 cache hit으로 빠르게 응답됨
   useEffect(() => {
     fetch('/api/macro-indicators')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d: { baseRate: IndicatorData; krwUsd: IndicatorData }) => {
         const base = d.baseRate?.price ?? 2.75;
         const fx = d.krwUsd?.price ?? 1531;

@@ -49,14 +49,14 @@ export default function HeaderTicker() {
   // 초기 로드 + 5분 자동 갱신
   useEffect(() => {
     fetch('/api/macro-indicators')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
       .catch(() => {})
       .finally(() => setIsLoading(false));
 
     const interval = setInterval(() => {
       fetch('/api/macro-indicators')
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
         .catch(() => {});
     }, 5 * 60 * 1000);
@@ -68,7 +68,7 @@ export default function HeaderTicker() {
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetch('/api/macro-indicators')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
       .catch(() => {})
       .finally(() => setIsRefreshing(false));
