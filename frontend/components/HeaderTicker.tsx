@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 interface IndicatorData {
   price: number;
@@ -16,6 +16,7 @@ interface MacroData {
   cpi:           IndicatorData;
   kospi:         IndicatorData;
   sp500:         IndicatorData;
+  fetchedAt?:    string;
 }
 
 const TICKER_CONFIG = [
@@ -27,35 +28,51 @@ const TICKER_CONFIG = [
   { key: 'sp500',         label: 'S&P 500',    unit: '',   fmt: (v: number) => v.toLocaleString('ko-KR', { maximumFractionDigits: 0 }),         fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}` },
 ];
 
+function applyMacroData(
+  json: MacroData,
+  setData: (d: MacroData) => void,
+  setUpdatedAt: (t: string) => void,
+) {
+  setData(json);
+  if (json.fetchedAt) {
+    const d = new Date(json.fetchedAt);
+    setUpdatedAt(`${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`);
+  }
+}
+
 export default function HeaderTicker() {
   const [data, setData] = useState<MacroData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (manual = false) => {
-    if (manual) setIsRefreshing(true);
-    try {
-      const res = await fetch('/api/macro-indicators');
-      const json: MacroData & { fetchedAt?: string } = await res.json();
-      setData(json);
-      if (json.fetchedAt) {
-        const d = new Date(json.fetchedAt);
-        setUpdatedAt(`${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`);
-      }
-    } catch {
-      // 실패 시 기존 데이터 유지
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
+  // 초기 로드 + 5분 자동 갱신
+  useEffect(() => {
+    fetch('/api/macro-indicators')
+      .then(r => r.json())
+      .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+
+    const interval = setInterval(() => {
+      fetch('/api/macro-indicators')
+        .then(r => r.json())
+        .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
+        .catch(() => {});
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => fetchData(), 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  // 수동 새로고침
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetch('/api/macro-indicators')
+      .then(r => r.json())
+      .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
+      .catch(() => {})
+      .finally(() => setIsRefreshing(false));
+  };
 
   return (
     <div className="flex items-center gap-1.5">
@@ -63,7 +80,7 @@ export default function HeaderTicker() {
         <span className="text-[10px] text-gray-600 whitespace-nowrap">{updatedAt} 기준</span>
       )}
       <button
-        onClick={() => fetchData(true)}
+        onClick={handleRefresh}
         disabled={isRefreshing}
         className="flex items-center justify-center w-6 h-6 rounded-md bg-gray-900 border border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-colors disabled:opacity-40"
         title="새로고침"
@@ -77,7 +94,7 @@ export default function HeaderTicker() {
         </svg>
       </button>
       {TICKER_CONFIG.map(({ key, label, unit, fmt, fmtChange }) => {
-        const item = data?.[key as keyof MacroData];
+        const item = data?.[key as keyof MacroData] as IndicatorData | undefined;
         const isPos = (item?.change ?? 0) > 0;
         const isNeg = (item?.change ?? 0) < 0;
         const upColor   = key === 'krwUsd' ? 'text-red-400'   : 'text-green-400';
