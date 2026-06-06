@@ -23,8 +23,8 @@ export function calcPortfolioMetrics(
       portfolioVariance += weights[i] * weights[j] * vols[i] * vols[j] * corr;
     }
   }
-  const volatility = Math.sqrt(portfolioVariance);
-  const sharpeRatio = (expectedReturn - RISK_FREE_RATE) / volatility;
+  const volatility = Math.sqrt(Math.max(0, portfolioVariance));
+  const sharpeRatio = volatility > 0 ? (expectedReturn - RISK_FREE_RATE) / volatility : 0;
 
   const backtestData = generateBacktest(allocations, marketData);
   const maxDrawdown = calcMDD(backtestData.map(d => d.value));
