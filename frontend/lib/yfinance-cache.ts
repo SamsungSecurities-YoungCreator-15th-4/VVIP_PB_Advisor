@@ -137,6 +137,8 @@ function readForexHistory(): ForexHistory | null {
 
 function writeForexHistory(history: ForexHistory): void {
   try {
+    const dir = path.dirname(FOREX_HISTORY_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(FOREX_HISTORY_PATH, JSON.stringify(history, null, 2));
   } catch {}
 }
