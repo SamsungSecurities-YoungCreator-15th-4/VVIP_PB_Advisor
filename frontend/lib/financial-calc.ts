@@ -148,31 +148,39 @@ export function calcAfterTaxReturn(
   totalAssets: number, // 억 원
   otherFinancialIncome: number // 억 원
 ): { afterTaxReturn: number; taxAmount: number; isComprehensive: boolean } {
-  const annualGrossIncome = grossReturn * totalAssets;
+  const annualGrossIncome = grossReturn * totalAssets; // 억 원
 
+  // 이자·배당소득만 금융소득종합과세 대상 (자본이득 제외)
   const dividendIncome = portfolio
     .filter(a => a.assetClass === 'dividend' || a.assetClass === 'bond')
     .reduce((sum, a) => sum + a.weight * grossReturn * totalAssets * 0.5, 0);
 
-  const totalFinancialIncome = dividendIncome + otherFinancialIncome;
+  const totalFinancialIncome = dividendIncome + otherFinancialIncome; // 억 원
   const COMPREHENSIVE_TAX_THRESHOLD = 0.2; // 2천만원 = 0.2억
 
   const isComprehensive = totalFinancialIncome > COMPREHENSIVE_TAX_THRESHOLD;
 
-  let taxRate: number;
+  let taxAmount = 0; // 억 원
+
   if (isComprehensive) {
-    const taxableIncome = totalFinancialIncome * 100; // 백만원 단위
-    if (taxableIncome <= 1400) taxRate = 0.066;
-    else if (taxableIncome <= 5000) taxRate = 0.165;
-    else if (taxableIncome <= 8800) taxRate = 0.264;
-    else if (taxableIncome <= 15000) taxRate = 0.385;
-    else taxRate = 0.495;
+    // 억 원 → 만원 변환 후 누진세율 + 누진공제 적용 (지방소득세 10% 포함)
+    const incomeManwon = totalFinancialIncome * 10000;
+    let totalTaxManwon = 0;
+    if (incomeManwon <= 1400)       totalTaxManwon = incomeManwon * 0.066;
+    else if (incomeManwon <= 5000)  totalTaxManwon = incomeManwon * 0.165 - 138.6;
+    else if (incomeManwon <= 8800)  totalTaxManwon = incomeManwon * 0.264 - 633.6;
+    else if (incomeManwon <= 15000) totalTaxManwon = incomeManwon * 0.385 - 1698.4;
+    else                            totalTaxManwon = incomeManwon * 0.495 - 3348.4;
+
+    // 이 포트폴리오의 배당소득 비율만큼 세금 안분
+    const portfolioShare = totalFinancialIncome > 0 ? dividendIncome / totalFinancialIncome : 0;
+    taxAmount = (totalTaxManwon / 10000) * portfolioShare;
   } else {
-    taxRate = 0.154; // 원천징수세율 15.4%
+    // 2천만원 이하: 원천징수세율 15.4%를 배당소득에만 부과
+    taxAmount = dividendIncome * 0.154;
   }
 
-  const taxAmount = annualGrossIncome * taxRate;
-  const afterTaxReturn = grossReturn * (1 - taxRate);
+  const afterTaxReturn = annualGrossIncome > 0 ? (annualGrossIncome - taxAmount) / totalAssets : 0;
 
   return { afterTaxReturn, taxAmount, isComprehensive };
 }
