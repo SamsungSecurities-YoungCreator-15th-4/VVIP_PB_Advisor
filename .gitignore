@@ -86,3 +86,6 @@ venv/
 __pycache__/
 *.wav
 *.mp3
+
+# RAG 소스 PDF (용량이 커서 git 제외 - 드라이브/슬랙으로 공유)
+backend/data/**/*.pdf
