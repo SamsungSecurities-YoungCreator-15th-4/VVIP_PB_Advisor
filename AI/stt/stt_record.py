@@ -245,6 +245,7 @@ def extract_customer_text(mapped_transcript: list[dict]) -> str:
 
 
 def get_openai_client() -> AzureOpenAI:
+    validate_env()
     return AzureOpenAI(
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_key=AZURE_OPENAI_API_KEY,
@@ -290,29 +291,38 @@ def extract_goal_rrttllu(customer_text: str) -> dict:
 {customer_text}
 """
 
-    response = client.chat.completions.create(
-        model=AZURE_OPENAI_DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": system_prompt.strip()},
-            {"role": "user", "content": user_prompt.strip()},
-        ],
-        temperature=0,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "goal_rrttllu_extraction",
-                "strict": True,
-                "schema": GOAL_RRTTLLU_SCHEMA,
+    try:
+        response = client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": user_prompt.strip()},
+            ],
+            temperature=0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "goal_rrttllu_extraction",
+                    "strict": True,
+                    "schema": GOAL_RRTTLLU_SCHEMA,
+                },
             },
-        },
-    )
+        )
+    except Exception as e:
+        raise RuntimeError(f"Azure OpenAI 호출 중 오류가 발생했습니다: {e}") from e
+
+    if not response.choices:
+        raise ValueError("모델 응답의 choices가 비어 있습니다.")
 
     content = response.choices[0].message.content
 
     if not content:
         raise ValueError("모델 응답이 비어 있습니다.")
 
-    return json.loads(content)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"모델 응답을 JSON으로 파싱하지 못했습니다: {e}") from e
 
 
 def save_json(data, output_path: str):
