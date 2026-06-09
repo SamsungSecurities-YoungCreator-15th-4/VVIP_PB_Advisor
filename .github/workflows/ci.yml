@@ -8,6 +8,12 @@ on:
   push:
     branches: [main, develop]
 
+# 모든 job에 대한 기본 GITHUB_TOKEN 권한을 최소(읽기 전용)로 제한한다.
+# 우리 CI는 lint·build·compileall만 수행하므로 contents: read 로 충분하다.
+# (CodeQL actions/missing-workflow-permissions 대응)
+permissions:
+  contents: read
+
 jobs:
   frontend-lint:
     name: Frontend Lint (ESLint)
