@@ -20,6 +20,7 @@ AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-pre
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
 DEFAULT_AUDIO_DIR = "audio"
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 SUPPORTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm"}
 MAPPED_TRANSCRIPT_OUTPUT_FILE = "mapped_transcript.json"
 GOAL_RRTTLLU_OUTPUT_FILE = "goal_rrttllu_result.json"
@@ -150,6 +151,7 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
 
     results = []
     done = False
+    cancellation_error = None
 
     def transcribed_handler(evt):
         if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
@@ -172,8 +174,42 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
             print("인식된 음성이 없습니다.")
 
     def canceled_handler(evt):
-        nonlocal done
+        nonlocal done, cancellation_error
         print(f"취소됨: {evt}")
+
+        result = getattr(evt, "result", None)
+        cancellation_details = getattr(evt, "cancellation_details", None)
+
+        if not cancellation_details and result:
+            cancellation_details = getattr(result, "cancellation_details", None)
+
+        reason = (
+            getattr(cancellation_details, "reason", None)
+            if cancellation_details
+            else getattr(evt, "reason", None)
+        )
+
+        if reason == speechsdk.CancellationReason.Error:
+            error_details = (
+                getattr(cancellation_details, "error_details", None)
+                if cancellation_details
+                else getattr(evt, "error_details", None)
+            )
+            error_code = (
+                getattr(cancellation_details, "error_code", None)
+                if cancellation_details
+                else getattr(evt, "error_code", None)
+            )
+            detail_parts = [
+                str(part)
+                for part in [error_code, error_details]
+                if part
+            ]
+            detail_message = " / ".join(detail_parts) or "상세 오류 없음"
+            cancellation_error = RuntimeError(
+                f"STT 전사가 오류로 취소되었습니다: {detail_message}"
+            )
+
         done = True
 
     def session_stopped_handler(evt):
@@ -191,7 +227,12 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
     while not done:
         time.sleep(0.5)
 
-    transcriber.stop_transcribing_async().get()
+    try:
+        transcriber.stop_transcribing_async().get()
+    finally:
+        if cancellation_error:
+            raise cancellation_error
+
     return results
 
 
@@ -236,7 +277,7 @@ def extract_customer_text(mapped_transcript: list[dict]) -> str:
     print("3/5 고객 발화 추출 시작...")
 
     customer_texts = [
-        item["text"]
+        f"[{item.get('utterance_time', '00:00')}] {item['text']}"
         for item in mapped_transcript
         if item.get("speaker_role") == "고객"
     ]
@@ -282,10 +323,13 @@ def extract_goal_rrttllu(customer_text: str) -> dict:
    - 단기 자금 인출 필요 또는 생활/전세/사업 자금 필요 → 높음
    - 일부 자금 필요 가능성 → 중간
    - 장기 운용 가능하고 단기 인출 언급 없음 → 낮음
+8. 고객 발화는 시간순이며 각 줄의 [MM:SS]는 발화 시작 시각이다.
+   - 같은 항목이 여러 번 언급되거나 정정되면 가장 마지막 발화의 값을 최종값으로 채택한다.
+   - 한 발화 안에서 같은 항목이 여러 번 나오면 문장 안에서 더 뒤에 나온 값을 최종값으로 채택한다.
 """
 
     user_prompt = f"""
-아래 고객 발화에서 Goal, Asset, Return, Risk, Time, Tax, Liquidity, Legal, Unique를 추출해라.
+아래 시간순 고객 발화에서 Goal, Asset, Return, Risk, Time, Tax, Liquidity, Legal, Unique를 추출해라.
 
 고객 발화:
 {customer_text}
@@ -325,31 +369,37 @@ def extract_goal_rrttllu(customer_text: str) -> dict:
         raise ValueError(f"모델 응답을 JSON으로 파싱하지 못했습니다: {e}") from e
 
 
-def save_json(data, output_path: str):
+def save_json(data, output_path: str | Path):
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
     print(f"저장 완료: {output_path}")
 
 
-def run_pipeline(audio_dir: str):
+def run_pipeline(audio_dir: str, output_dir: str | Path):
     validate_env()
 
     audio_file_path = find_single_audio_file(audio_dir)
     print(f"전사 대상 음성 파일: {audio_file_path}")
+    output_path = Path(output_dir)
 
     transcript = transcribe_with_diarization(audio_file_path)
 
     mapped_transcript = map_speaker_roles(transcript)
-    save_json(mapped_transcript, MAPPED_TRANSCRIPT_OUTPUT_FILE)
+    mapped_transcript_output = output_path / MAPPED_TRANSCRIPT_OUTPUT_FILE
+    save_json(mapped_transcript, mapped_transcript_output)
 
     customer_text = extract_customer_text(mapped_transcript)
 
     goal_rrttllu = extract_goal_rrttllu(customer_text)
-    save_json(goal_rrttllu, GOAL_RRTTLLU_OUTPUT_FILE)
+    goal_rrttllu_output = output_path / GOAL_RRTTLLU_OUTPUT_FILE
+    save_json(goal_rrttllu, goal_rrttllu_output)
 
     print("5/5 STT 통합 파이프라인 완료")
-    print(f"출력 파일: {MAPPED_TRANSCRIPT_OUTPUT_FILE}, {GOAL_RRTTLLU_OUTPUT_FILE}")
+    print(f"출력 파일: {mapped_transcript_output}, {goal_rrttllu_output}")
     print(json.dumps(goal_rrttllu, ensure_ascii=False, indent=2))
 
 
@@ -362,9 +412,14 @@ def parse_args():
         default=DEFAULT_AUDIO_DIR,
         help=f"전사할 음성 파일이 들어 있는 폴더 경로. 기본값: {DEFAULT_AUDIO_DIR}",
     )
+    parser.add_argument(
+        "--output-dir",
+        default=DEFAULT_OUTPUT_DIR,
+        help=f"결과 JSON을 저장할 폴더 경로. 기본값: {DEFAULT_OUTPUT_DIR}",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_pipeline(args.audio_dir)
+    run_pipeline(args.audio_dir, args.output_dir)
