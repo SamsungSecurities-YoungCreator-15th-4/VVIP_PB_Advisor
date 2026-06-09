@@ -224,14 +224,19 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
     print("1/5 STT + 화자 분리 시작...")
     transcriber.start_transcribing_async().get()
 
-    while not done:
-        time.sleep(0.5)
-
     try:
-        transcriber.stop_transcribing_async().get()
+        while not done:
+            time.sleep(0.5)
     finally:
-        if cancellation_error:
-            raise cancellation_error
+        # 루프 중 예외(KeyboardInterrupt 등)가 나도 세션을 반드시 종료해 리소스 누수 방지.
+        # 종료 호출 자체의 예외는 원래 예외를 덮어쓰지 않도록 잡아서 로그만 남긴다.
+        try:
+            transcriber.stop_transcribing_async().get()
+        except Exception as cleanup_error:
+            print(f"STT 세션 종료 중 오류 발생: {cleanup_error}")
+
+    if cancellation_error:
+        raise cancellation_error
 
     return results
 
