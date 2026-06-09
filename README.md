@@ -22,7 +22,7 @@
 VVIP_PB_Advisor/
 ├── frontend/      # Next.js 프론트엔드 (PB 상담 대시보드 UI)
 ├── backend/       # FastAPI 백엔드 (시장 데이터·정량 지표·포트폴리오 연산)
-├── AI/            # AI 관련 산출물·작업 파일 보관
+├── AI/stt/        # STT·화자 매핑·RRTTLLU 추출 작업 파일 보관
 ├── docs/          # 기획·설계·협업 규칙 문서
 ├── .github/       # PR 템플릿 등 GitHub 관련 설정
 ├── AGENTS.md      # AI 에이전트(코드 어시스턴트)를 위한 작업 규칙
