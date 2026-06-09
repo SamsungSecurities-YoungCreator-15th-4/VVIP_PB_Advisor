@@ -224,14 +224,15 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
     print("1/5 STT + 화자 분리 시작...")
     transcriber.start_transcribing_async().get()
 
-    while not done:
-        time.sleep(0.5)
-
     try:
-        transcriber.stop_transcribing_async().get()
+        while not done:
+            time.sleep(0.5)
     finally:
-        if cancellation_error:
-            raise cancellation_error
+        # 루프 중 예외(KeyboardInterrupt 등)가 나도 세션을 반드시 종료해 리소스 누수 방지
+        transcriber.stop_transcribing_async().get()
+
+    if cancellation_error:
+        raise cancellation_error
 
     return results
 

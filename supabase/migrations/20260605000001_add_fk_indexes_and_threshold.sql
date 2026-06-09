@@ -19,6 +19,11 @@ create index if not exists idx_proposal_portfolio_option_id
 --    HNSW 인덱스 성능을 위해 먼저 Top-K(match_count)를 인덱스로 빠르게 뽑은 뒤,
 --    바깥 쿼리에서 similarity_threshold 미만을 필터링한다.
 --    (WHERE에서 임계값을 먼저 걸면 결과가 부족할 때 인덱스/테이블 풀스캔 위험)
+--    주의: 인자가 추가되면 시그니처가 달라져 create or replace가 기존 2-인자 함수를
+--          교체하지 못하고 오버로드로 공존한다. 2-인자 호출이 기존 함수에 매칭되어
+--          임계값 필터가 무력화(또는 named-arg 호출 시 모호성 오류)되므로 먼저 drop한다.
+drop function if exists match_document_chunks(vector(1536), integer);
+
 create or replace function match_document_chunks (
   query_embedding vector(1536),
   match_count int default 5,
