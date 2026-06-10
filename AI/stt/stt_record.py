@@ -103,7 +103,7 @@ def validate_env():
         raise ValueError(f".env에 다음 값이 없습니다: {', '.join(missing)}")
 
 
-def find_single_audio_file(audio_dir: str) -> str:
+def find_latest_wav_file(audio_dir: str) -> str:
     audio_path = Path(audio_dir)
 
     if not audio_path.exists():
@@ -112,25 +112,16 @@ def find_single_audio_file(audio_dir: str) -> str:
     if not audio_path.is_dir():
         raise NotADirectoryError(f"음성 파일 경로가 폴더가 아닙니다: {audio_dir}")
 
-    audio_files = sorted(
+    audio_files = [
         path
         for path in audio_path.iterdir()
-        if path.is_file() and path.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS
-    )
+        if path.is_file() and path.suffix.lower() == ".wav"
+    ]
 
     if not audio_files:
-        supported = ", ".join(sorted(SUPPORTED_AUDIO_EXTENSIONS))
-        raise FileNotFoundError(
-            f"{audio_dir} 폴더에 전사할 음성 파일이 없습니다. 지원 확장자: {supported}"
-        )
+        raise FileNotFoundError(f"{audio_dir} 폴더에 전사할 WAV 파일이 없습니다.")
 
-    if len(audio_files) > 1:
-        file_list = ", ".join(str(path) for path in audio_files)
-        raise ValueError(
-            f"{audio_dir} 폴더에는 음성 파일이 정확히 하나만 있어야 합니다. 현재 파일: {file_list}"
-        )
-
-    return str(audio_files[0])
+    return str(max(audio_files, key=lambda path: path.stat().st_mtime_ns))
 
 
 def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
@@ -387,7 +378,7 @@ def save_json(data, output_path: str | Path):
 def run_pipeline(audio_dir: str, output_dir: str | Path):
     validate_env()
 
-    audio_file_path = find_single_audio_file(audio_dir)
+    audio_file_path = find_latest_wav_file(audio_dir)
     print(f"전사 대상 음성 파일: {audio_file_path}")
     output_path = Path(output_dir)
 
