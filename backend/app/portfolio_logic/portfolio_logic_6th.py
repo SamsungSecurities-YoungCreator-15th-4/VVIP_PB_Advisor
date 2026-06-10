@@ -1,3 +1,4 @@
+﻿# ruff: noqa: E501
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal, Tuple, Any
@@ -284,10 +285,13 @@ SCORING_WEIGHTS = {
 # 3. Request Models
 # ============================================================
 
+
 class IPSRequest(BaseModel):
     total_asset: float = Field(..., gt=0)
     unique_need_amount: float = Field(..., ge=0)
-    unique_asset: Literal["cash", "kr_treasury", "low_coupon_bond", "separate_tax_bond"] = Field(...)
+    unique_asset: Literal["cash", "kr_treasury", "low_coupon_bond", "separate_tax_bond"] = Field(
+        ...
+    )
 
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(..., ge=1, le=50)
@@ -316,7 +320,9 @@ class IPSRequest(BaseModel):
 
     irp_enabled: bool = Field(True)
     irp_remaining_tax_credit_capacity: float = Field(IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT, ge=0)
-    irp_tax_credit_rate: float = Field(IRP_TAX_CREDIT_RATE_HIGH_INCOME, ge=0.0, le=IRP_TAX_CREDIT_RATE_LOW_INCOME)
+    irp_tax_credit_rate: float = Field(
+        IRP_TAX_CREDIT_RATE_HIGH_INCOME, ge=0.0, le=IRP_TAX_CREDIT_RATE_LOW_INCOME
+    )
 
 
 class ScenarioRequest(BaseModel):
@@ -344,7 +350,9 @@ class AnalysisRequest(BaseModel):
 class PortfolioRequest(BaseModel):
     total_asset: float = Field(..., gt=0)
     unique_need_amount: float = Field(0, ge=0)
-    unique_asset: Literal["cash", "kr_treasury", "low_coupon_bond", "separate_tax_bond"] = Field("kr_treasury")
+    unique_asset: Literal["cash", "kr_treasury", "low_coupon_bond", "separate_tax_bond"] = Field(
+        "kr_treasury"
+    )
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(10, ge=1, le=50)
     tax_sensitivity: Literal["low", "medium", "high"] = Field("medium")
@@ -375,7 +383,9 @@ class PortfolioRequest(BaseModel):
 
     irp_enabled: bool = Field(True)
     irp_remaining_tax_credit_capacity: float = Field(IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT, ge=0)
-    irp_tax_credit_rate: float = Field(IRP_TAX_CREDIT_RATE_HIGH_INCOME, ge=0.0, le=IRP_TAX_CREDIT_RATE_LOW_INCOME)
+    irp_tax_credit_rate: float = Field(
+        IRP_TAX_CREDIT_RATE_HIGH_INCOME, ge=0.0, le=IRP_TAX_CREDIT_RATE_LOW_INCOME
+    )
 
 
 # ============================================================
@@ -460,6 +470,7 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
 # 5. 가격 데이터
 # ============================================================
 
+
 def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
     tickers = {asset: ticker for asset, ticker in ASSET_TICKERS.items() if ticker != "CASH"}
 
@@ -505,6 +516,7 @@ def calculate_daily_returns(prices: pd.DataFrame) -> pd.DataFrame:
 # 6. 기대수익률
 # ============================================================
 
+
 def calculate_expected_returns(
     returns: pd.DataFrame,
     expected_return_haircut: float,
@@ -524,7 +536,9 @@ def calculate_expected_returns(
     final_returns = adjusted_returns.copy()
     for asset, view_return in view_expected_returns.items():
         if asset in final_returns.index:
-            final_returns[asset] = final_returns[asset] * (1 - view_weight) + float(view_return) * view_weight
+            final_returns[asset] = (
+                final_returns[asset] * (1 - view_weight) + float(view_return) * view_weight
+            )
 
     return final_returns
 
@@ -532,6 +546,7 @@ def calculate_expected_returns(
 # ============================================================
 # 7. 세금 / 계좌
 # ============================================================
+
 
 def estimate_taxable_financial_income(
     weights: Dict[str, float],
@@ -549,14 +564,17 @@ def estimate_taxable_financial_income(
     return float(estimated_income)
 
 
-def calculate_financial_income_comprehensive_tax_status(taxable_financial_income: float) -> Dict[str, Any]:
+def calculate_financial_income_comprehensive_tax_status(
+    taxable_financial_income: float,
+) -> Dict[str, Any]:
     excess = max(taxable_financial_income - FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD, 0.0)
 
     return {
         "taxable_financial_income": round(float(taxable_financial_income), 0),
         "threshold": FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
         "excess_over_threshold": round(float(excess), 0),
-        "is_over_threshold": taxable_financial_income > FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
+        "is_over_threshold": taxable_financial_income
+        > FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
         "basis": "금융소득종합과세 검토 기준 2,000만 원. 세부 적용은 고객 전체 소득과 세법 확인 필요.",
     }
 
@@ -571,7 +589,9 @@ def estimate_overseas_stock_capital_gains_tax(
 
     for asset in OVERSEAS_STOCK_ASSETS:
         if asset in expected_returns.index:
-            asset_profit = weights.get(asset, 0.0) * total_asset * max(float(expected_returns[asset]), 0.0)
+            asset_profit = (
+                weights.get(asset, 0.0) * total_asset * max(float(expected_returns[asset]), 0.0)
+            )
             gross_realized_gain += asset_profit * realized_gain_rate
 
     taxable_gain = max(gross_realized_gain - OVERSEAS_STOCK_GAIN_DEDUCTION, 0.0)
@@ -593,8 +613,7 @@ def allocate_account_buckets(
     request: PortfolioRequest,
 ) -> Dict[str, Any]:
     remaining_amounts = {
-        asset: weights.get(asset, 0.0) * total_asset
-        for asset in ASSET_TICKERS.keys()
+        asset: weights.get(asset, 0.0) * total_asset for asset in ASSET_TICKERS.keys()
     }
 
     isa_alloc = {asset: 0.0 for asset in ASSET_TICKERS.keys()}
@@ -631,7 +650,9 @@ def allocate_account_buckets(
     taxable_total = sum(taxable_alloc.values())
 
     isa_locked_amount = isa_total if request.isa_years_until_liquid > 0 else 0.0
-    irp_tax_credit = min(irp_total, request.irp_remaining_tax_credit_capacity) * request.irp_tax_credit_rate
+    irp_tax_credit = (
+        min(irp_total, request.irp_remaining_tax_credit_capacity) * request.irp_tax_credit_rate
+    )
 
     return {
         "isa": {
@@ -641,7 +662,9 @@ def allocate_account_buckets(
             "allocated_amount": round(float(isa_total), 0),
             "locked_amount_for_liquidity": round(float(isa_locked_amount), 0),
             "years_until_liquid": request.isa_years_until_liquid,
-            "tax_free_limit": ISA_GENERAL_TAX_FREE_LIMIT if request.isa_type == "general" else ISA_SEOGMIN_TAX_FREE_LIMIT,
+            "tax_free_limit": ISA_GENERAL_TAX_FREE_LIMIT
+            if request.isa_type == "general"
+            else ISA_SEOGMIN_TAX_FREE_LIMIT,
             "low_tax_rate_after_tax_free_limit": ISA_LOW_TAX_RATE,
             "allocations": {
                 asset: {
@@ -655,7 +678,9 @@ def allocate_account_buckets(
         },
         "irp": {
             "enabled": request.irp_enabled,
-            "remaining_tax_credit_capacity_input": round(float(request.irp_remaining_tax_credit_capacity), 0),
+            "remaining_tax_credit_capacity_input": round(
+                float(request.irp_remaining_tax_credit_capacity), 0
+            ),
             "allocated_amount": round(float(irp_total), 0),
             "estimated_tax_credit": round(float(irp_tax_credit), 0),
             "tax_credit_rate": request.irp_tax_credit_rate,
@@ -691,7 +716,9 @@ def estimate_tax_saving_effect(
     request: PortfolioRequest,
     account_buckets: Dict[str, Any],
 ) -> Dict[str, Any]:
-    taxable_income_before = estimate_taxable_financial_income(weights, expected_returns, total_asset)
+    taxable_income_before = estimate_taxable_financial_income(
+        weights, expected_returns, total_asset
+    )
 
     isa_amount = account_buckets["isa"]["allocated_amount"]
     irp_tax_credit = account_buckets["irp"]["estimated_tax_credit"]
@@ -705,28 +732,35 @@ def estimate_tax_saving_effect(
     weighted_expected_income_return = 0.0
     for asset in INCOME_TAXABLE_ASSETS:
         if asset in expected_returns.index:
-            weighted_expected_income_return += weights.get(asset, 0.0) * max(float(expected_returns[asset]), 0.0)
+            weighted_expected_income_return += weights.get(asset, 0.0) * max(
+                float(expected_returns[asset]), 0.0
+            )
 
     if sum(weights.get(asset, 0.0) for asset in INCOME_TAXABLE_ASSETS) > 0:
-        avg_income_return = weighted_expected_income_return / sum(weights.get(asset, 0.0) for asset in INCOME_TAXABLE_ASSETS)
+        avg_income_return = weighted_expected_income_return / sum(
+            weights.get(asset, 0.0) for asset in INCOME_TAXABLE_ASSETS
+        )
     else:
         avg_income_return = 0.0
 
     income_shifted_to_isa = income_taxable_weight_in_isa * total_asset * avg_income_return
 
-    isa_tax_free_limit = ISA_GENERAL_TAX_FREE_LIMIT if request.isa_type == "general" else ISA_SEOGMIN_TAX_FREE_LIMIT
+    isa_tax_free_limit = (
+        ISA_GENERAL_TAX_FREE_LIMIT if request.isa_type == "general" else ISA_SEOGMIN_TAX_FREE_LIMIT
+    )
     isa_tax_free_income = min(income_shifted_to_isa, isa_tax_free_limit)
     isa_low_tax_income = max(income_shifted_to_isa - isa_tax_free_limit, 0.0)
 
-    isa_tax_saving = (
-        isa_tax_free_income * DEFAULT_WITHHOLDING_TAX_RATE
-        + isa_low_tax_income * max(DEFAULT_WITHHOLDING_TAX_RATE - ISA_LOW_TAX_RATE, 0.0)
+    isa_tax_saving = isa_tax_free_income * DEFAULT_WITHHOLDING_TAX_RATE + isa_low_tax_income * max(
+        DEFAULT_WITHHOLDING_TAX_RATE - ISA_LOW_TAX_RATE, 0.0
     )
 
     estimated_total_tax_saving = isa_tax_saving + irp_tax_credit
 
     return {
-        "taxable_financial_income_before_account_allocation": round(float(taxable_income_before), 0),
+        "taxable_financial_income_before_account_allocation": round(
+            float(taxable_income_before), 0
+        ),
         "estimated_income_shifted_to_isa": round(float(income_shifted_to_isa), 0),
         "isa_tax_free_income_used": round(float(isa_tax_free_income), 0),
         "isa_low_tax_income_used": round(float(isa_low_tax_income), 0),
@@ -756,8 +790,12 @@ def calculate_after_tax_return(
         if asset in INCOME_TAXABLE_ASSETS and asset_profit > 0:
             withholding_tax += asset_profit * DEFAULT_WITHHOLDING_TAX_RATE
 
-    taxable_financial_income = estimate_taxable_financial_income(weights, expected_returns, total_asset)
-    comprehensive_tax_status = calculate_financial_income_comprehensive_tax_status(taxable_financial_income)
+    taxable_financial_income = estimate_taxable_financial_income(
+        weights, expected_returns, total_asset
+    )
+    comprehensive_tax_status = calculate_financial_income_comprehensive_tax_status(
+        taxable_financial_income
+    )
 
     overseas_tax = estimate_overseas_stock_capital_gains_tax(
         weights=weights,
@@ -782,8 +820,12 @@ def calculate_after_tax_return(
         0.0,
     )
 
-    total_tax_before_saving = withholding_tax + overseas_tax["estimated_tax"] + additional_comprehensive_tax
-    total_tax_after_saving = max(total_tax_before_saving - tax_saving_effect["estimated_total_tax_saving"], 0.0)
+    total_tax_before_saving = (
+        withholding_tax + overseas_tax["estimated_tax"] + additional_comprehensive_tax
+    )
+    total_tax_after_saving = max(
+        total_tax_before_saving - tax_saving_effect["estimated_total_tax_saving"], 0.0
+    )
 
     after_tax_profit = gross_profit - total_tax_after_saving
     after_tax_return = after_tax_profit / total_asset
@@ -809,6 +851,7 @@ def calculate_after_tax_return(
 # ============================================================
 # 8. 지표 계산
 # ============================================================
+
 
 def calculate_mdd(portfolio_daily_returns: pd.Series) -> float:
     cumulative = (1 + portfolio_daily_returns).cumprod()
@@ -854,8 +897,7 @@ def calculate_portfolio_duration(weights: Dict[str, float]) -> float:
         return 0.0
 
     weighted_duration = sum(
-        weights.get(asset, 0.0) * ASSET_DURATION_YEARS.get(asset, 0.0)
-        for asset in BOND_CASH_ASSETS
+        weights.get(asset, 0.0) * ASSET_DURATION_YEARS.get(asset, 0.0) for asset in BOND_CASH_ASSETS
     )
 
     return float(weighted_duration / bond_cash_weight)
@@ -917,7 +959,9 @@ def calculate_stress_test(
         duration = ASSET_DURATION_YEARS.get(asset, 0.0)
         interest_rate_effect += asset_weight * (-duration * request.stress_interest_rate_shock)
 
-    fx_effect = sum(weights.get(asset, 0.0) for asset in FX_SENSITIVE_ASSETS) * request.stress_fx_shock
+    fx_effect = (
+        sum(weights.get(asset, 0.0) for asset in FX_SENSITIVE_ASSETS) * request.stress_fx_shock
+    )
 
     total_stress_return = interest_rate_effect + fx_effect
     estimated_loss_ratio = min(total_stress_return, 0.0)
@@ -1060,6 +1104,7 @@ def calculate_cumulative_returns(
 # 9. 기준표 평가
 # ============================================================
 
+
 def evaluate_guideline_detail(metrics: Dict[str, Any], profile: str) -> Dict[str, Any]:
     rule = GUIDELINE_RULES[profile]
 
@@ -1115,7 +1160,9 @@ def evaluate_guideline_detail(metrics: Dict[str, Any], profile: str) -> Dict[str
         if expected_return <= 0:
             soft_checks["after_tax_retention"] = False
         else:
-            soft_checks["after_tax_retention"] = after_tax_return / expected_return >= rule["after_tax_retention_min"]
+            soft_checks["after_tax_retention"] = (
+                after_tax_return / expected_return >= rule["after_tax_retention_min"]
+            )
     else:
         soft_checks["after_tax_retention"] = True
 
@@ -1163,6 +1210,7 @@ def is_suitable_for_client(metrics: Dict[str, Any], client_risk_profile: str) ->
 # 10. 포트폴리오 생성 / 점수화
 # ============================================================
 
+
 def generate_random_weights() -> Dict[str, float]:
     assets = list(ASSET_TICKERS.keys())
     alpha = np.ones(len(assets))
@@ -1190,7 +1238,9 @@ def apply_unique_constraint(
     return normalize_weights(final_weights)
 
 
-def score_portfolio(metrics: Dict[str, Any], client_risk_profile: str, stress_affects_scoring: bool) -> float:
+def score_portfolio(
+    metrics: Dict[str, Any], client_risk_profile: str, stress_affects_scoring: bool
+) -> float:
     expected_return = metrics["expected_return"]
     after_tax_return = metrics["after_tax_return"]
     volatility = metrics["volatility"]
@@ -1235,7 +1285,9 @@ def score_portfolio(metrics: Dict[str, Any], client_risk_profile: str, stress_af
 
         taxable_income = metrics["taxable_financial_income"]
         if taxable_income > FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD:
-            excess_ratio = (taxable_income - FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD) / FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD
+            excess_ratio = (
+                taxable_income - FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD
+            ) / FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD
             score -= min(excess_ratio, 2.0)
 
     else:
@@ -1382,6 +1434,7 @@ def find_recommended_portfolios(
 # 11. 응답 생성
 # ============================================================
 
+
 def build_guideline_report(metrics: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "conservative": evaluate_guideline_detail(metrics, "conservative"),
@@ -1429,24 +1482,22 @@ def build_portfolio_response(
             "sortino_ratio": metrics["sortino_ratio"],
             "mdd": metrics["mdd"],
             "liquidity_coverage": metrics["liquidity_coverage"],
-
             # 세후수익률은 절세 최적화 계산 이후 반영되는 값
             "after_tax_return": metrics["after_tax_return"],
-
             # 포트폴리오 위험/세금/스트레스 정보
             "taxable_financial_income": metrics["taxable_financial_income"],
-            "financial_income_comprehensive_tax_status": metrics["tax_breakdown"]["financial_income_comprehensive_tax"],
+            "financial_income_comprehensive_tax_status": metrics["tax_breakdown"][
+                "financial_income_comprehensive_tax"
+            ],
             "risk_level": metrics["risk_level"],
             "risk_level_label": metrics["risk_level_label"],
             "stock_weight": metrics["stock_weight"],
             "bond_cash_weight": metrics["bond_cash_weight"],
             "alternative_weight": metrics["alternative_weight"],
-
             # 듀레이션은 표시용 6종 지표가 아니라 점수화/내부 설명용
             "portfolio_duration": metrics["portfolio_duration"],
             "target_duration": metrics["target_duration"],
             "duration_fit_score": metrics["duration_fit_score"],
-
             "stress_test": metrics["stress_test"],
         },
         "tax_breakdown": metrics["tax_breakdown"],
@@ -1566,6 +1617,7 @@ def extract_tax_inputs_payload(full_response: Dict[str, Any]) -> Dict[str, Any]:
 # ============================================================
 # 12. 전체 분석 실행
 # ============================================================
+
 
 def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
     if request.unique_need_amount > request.total_asset:
@@ -1711,8 +1763,10 @@ def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
     core["scenario_summary"] = {
         "base_interest_rate": request.scenario.base_interest_rate,
         "base_fx_rate_krw_per_usd": request.scenario.base_fx_rate_krw_per_usd,
-        "stressed_interest_rate": request.scenario.base_interest_rate + request.scenario.stress_interest_rate_shock,
-        "stressed_fx_rate_krw_per_usd": request.scenario.base_fx_rate_krw_per_usd * (1 + request.scenario.stress_fx_shock),
+        "stressed_interest_rate": request.scenario.base_interest_rate
+        + request.scenario.stress_interest_rate_shock,
+        "stressed_fx_rate_krw_per_usd": request.scenario.base_fx_rate_krw_per_usd
+        * (1 + request.scenario.stress_fx_shock),
         "stress_interest_rate_shock": request.scenario.stress_interest_rate_shock,
         "stress_fx_shock": request.scenario.stress_fx_shock,
         "stress_affects_scoring": request.scenario.stress_affects_scoring,
@@ -1728,6 +1782,7 @@ def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
 # ============================================================
 # 13. API Endpoints
 # ============================================================
+
 
 @app.get("/")
 def root():
@@ -1910,6 +1965,7 @@ def api_get_saved_request(session_id: str):
 # 기존 프론트나 테스트 코드와의 호환을 위해 남김.
 # 새 프론트는 /api/portfolio/all 등 분리 API를 사용하면 됨.
 
+
 @app.post("/analyze")
 def analyze_portfolio(request: PortfolioRequest):
     try:
@@ -1920,3 +1976,4 @@ def analyze_portfolio(request: PortfolioRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
