@@ -1,13 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-
-interface IndicatorData {
-  price: number;
-  change: number;
-  changePct: number;
-  isStatic?: boolean;
-}
+import { fetchMacroIndicators } from '@/lib/api';
 
 interface MacroShock {
   baseRateDelta: number;
@@ -29,11 +23,10 @@ export default function MacroIndicators({ onShockChange }: Props) {
   const onShockChangeRef = useRef(onShockChange);
   useEffect(() => { onShockChangeRef.current = onShockChange; });
 
-  // 헤더 ticker가 이미 fetch하므로 cache hit으로 빠르게 응답됨
+  // 헤더 ticker가 이미 fetch하므로 백엔드 캐시 hit으로 빠르게 응답됨
   useEffect(() => {
-    fetch('/api/macro-indicators')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((d: { baseRate: IndicatorData; krwUsd: IndicatorData }) => {
+    fetchMacroIndicators()
+      .then((d) => {
         const base = d.baseRate?.price ?? 2.75;
         const fx = d.krwUsd?.price ?? 1531;
         setLiveBase(base);

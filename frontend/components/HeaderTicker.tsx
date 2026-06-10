@@ -1,23 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-interface IndicatorData {
-  price: number;
-  change: number;
-  changePct: number;
-  isStatic?: boolean;
-}
-
-interface MacroData {
-  baseRate:      IndicatorData;
-  treasuryYield: IndicatorData;
-  krwUsd:        IndicatorData;
-  cpi:           IndicatorData;
-  kospi:         IndicatorData;
-  sp500:         IndicatorData;
-  fetchedAt?:    string;
-}
+import { fetchMacroIndicators } from '@/lib/api';
+import type { IndicatorData, MacroIndicators as MacroData } from '@/lib/types';
 
 const TICKER_CONFIG = [
   { key: 'baseRate',      label: '기준금리',   unit: '%',  fmt: (v: number) => v.toFixed(2),                                                   fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%p` },
@@ -48,16 +33,14 @@ export default function HeaderTicker() {
 
   // 초기 로드 + 5분 자동 갱신
   useEffect(() => {
-    fetch('/api/macro-indicators')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
+    fetchMacroIndicators()
+      .then((json) => applyMacroData(json, setData, setUpdatedAt))
       .catch(() => {})
       .finally(() => setIsLoading(false));
 
     const interval = setInterval(() => {
-      fetch('/api/macro-indicators')
-        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-        .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
+      fetchMacroIndicators()
+        .then((json) => applyMacroData(json, setData, setUpdatedAt))
         .catch(() => {});
     }, 5 * 60 * 1000);
 
@@ -67,9 +50,8 @@ export default function HeaderTicker() {
   // 수동 새로고침
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetch('/api/macro-indicators')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((json: MacroData) => applyMacroData(json, setData, setUpdatedAt))
+    fetchMacroIndicators()
+      .then((json) => applyMacroData(json, setData, setUpdatedAt))
       .catch(() => {})
       .finally(() => setIsRefreshing(false));
   };

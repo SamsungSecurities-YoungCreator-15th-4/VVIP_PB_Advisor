@@ -109,9 +109,17 @@ export default function StressTest({ scenarios, portfolios }: Props) {
 
       <div className="mt-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
         <div className="text-yellow-400 text-xs font-medium mb-1">⚠️ 해석 가이드</div>
-        <div className="text-gray-400 text-xs">
-          각 수치는 해당 시나리오 발생 시 연간 기대수익률의 변화량입니다. 양수(+)는 오히려 유리한 방향, 음수(-)는 불리한 방향을 의미합니다.
-          실제 시장에서는 여러 충격이 복합적으로 발생할 수 있습니다.
+        <div className="text-gray-400 text-xs space-y-1">
+          <p>
+            각 수치는 해당 시나리오 발생 시 연간 기대수익률의 변화량입니다. 양수(+)는 오히려 유리한 방향, 음수(-)는 불리한 방향을 의미합니다.
+          </p>
+          <p>이 추정치는 다음 한계를 가진 단순화된 모델입니다.</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            <li>비선형성 미반영: 실제 가격-요인 관계는 비선형(예: 채권 컨벡시티)이나 선형 충격으로 단순화했습니다.</li>
+            <li>자산 간 상관관계 무시: 각 자산군에 독립적으로 충격을 적용해 복합 충격 시 분산·전이 효과는 반영되지 않습니다.</li>
+            <li>시기의존성: 위기 국면의 상관관계·변동성은 평시와 크게 달라질 수 있어 점추정치 범위를 벗어날 수 있습니다.</li>
+            <li>한국 시장 특수성: 환헤지 비율, 거래시간 차이, 외국인 수급 등은 단순 부호/크기로만 반영했습니다.</li>
+          </ul>
         </div>
       </div>
     </div>

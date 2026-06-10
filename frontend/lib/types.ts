@@ -1,38 +1,20 @@
-export interface IPSProfile {
-  clientName: string;
-  totalAssets: number; // 억 원
-  return: {
-    targetReturn: number; // % per year
-    description: string;
-  };
-  risk: {
-    level: 'conservative' | 'moderate' | 'aggressive';
-    maxDrawdownTolerance: number; // %
-    description: string;
-  };
-  timeHorizon: {
-    years: number;
-    description: string;
-  };
-  tax: {
-    comprehensiveTaxation: boolean; // 금융소득종합과세 해당 여부
-    otherFinancialIncome: number; // 억 원
-    description: string;
-  };
-  liquidity: {
-    amount: number; // 억 원
-    timeframe: string;
-    description: string;
-  };
-  legal: {
-    constraints: string[];
-    description: string;
-  };
-  unique: {
-    circumstances: string[];
-    description: string;
-  };
-  rawText: string;
+// 백엔드(FastAPI) market API 응답 타입 — backend/app/market/schemas.py 와 1:1 대응
+
+export interface IndicatorData {
+  price: number;
+  change: number;
+  changePct: number;
+  isStatic?: boolean;
+}
+
+export interface MacroIndicators {
+  baseRate: IndicatorData;
+  treasuryYield: IndicatorData;
+  krwUsd: IndicatorData;
+  cpi: IndicatorData;
+  kospi: IndicatorData;
+  sp500: IndicatorData;
+  fetchedAt: string;
 }
 
 export interface AssetAllocation {
@@ -44,17 +26,17 @@ export interface AssetAllocation {
   color: string;
 }
 
+export interface BacktestPoint {
+  date: string;
+  value: number; // 누적 수익률 (1.0 = 0%)
+}
+
 export interface PortfolioMetrics {
   expectedReturn: number; // % per year
   volatility: number; // % per year
   sharpeRatio: number;
-  maxDrawdown: number; // %
+  maxDrawdown: number | null; // % — 실측 백테스트가 부족하면 null(N/A)
   backtestData: BacktestPoint[];
-}
-
-export interface BacktestPoint {
-  date: string;
-  value: number; // 누적 수익률 (1.0 = 0%)
 }
 
 export interface PortfolioProposal {
@@ -74,34 +56,5 @@ export interface StressScenario {
   description: string;
   icon: string;
   shocks: Record<string, number>; // asset class → shock multiplier
-  results: Record<string, number>; // portfolio id → expected loss %
-}
-
-export interface MarketDataPoint {
-  ticker: string;
-  prices: number[];
-  dates: string[];
-  annualReturn: number;
-  annualVolatility: number;
-}
-
-export interface MacroReport {
-  pbScript: string;
-  clientLetter: string;
-  generatedAt: string;
-}
-
-export interface DashboardState {
-  clientMemo: string;
-  ipsProfile: IPSProfile | null;
-  portfolios: PortfolioProposal[];
-  selectedPortfolioId: 'current' | 'proposalA' | 'proposalB';
-  stressScenarios: StressScenario[];
-  macroReport: MacroReport | null;
-  uploadedDocText: string;
-  isLoading: {
-    ips: boolean;
-    market: boolean;
-    report: boolean;
-  };
+  results: Record<string, number>; // portfolio id → expected return change (p.p.)
 }
