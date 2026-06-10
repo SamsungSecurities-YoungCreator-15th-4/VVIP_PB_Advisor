@@ -8,7 +8,7 @@
 --     사유는 assumptions 에 ⚠️ 로 남기고 검증 후 채운다.
 --
 -- 스키마 매핑(기존 baseline tax_rule 재사용):
---   category  → module  ('friction_cost' | 'tax_saving')
+--   category  → module  ('friction_cost' | 'tax_efficient_location')
 --   name_ko   → description
 --   trigger   → (시드에 트리거 조건이 없어 미사용; 필요 시 params 에 보관)
 --   audit 컬럼 source/source_law/effective_from/to/assumptions 는
@@ -64,11 +64,11 @@ on conflict (module, rule_key) do update set
   effective_to   = excluded.effective_to,
   assumptions    = excluded.assumptions;
 
--- ── tax_saving (절감: 세 부담을 줄이는 절세 수단) ─────────────────────
+-- ── tax_efficient_location (절감: 세 부담을 줄이는 절세 수단) ─────────────────────
 insert into tax_rule (module, rule_key, description, params, source, source_law, assumptions)
 values
   (
-    'tax_saving',
+    'tax_efficient_location',
     'isa_tax_exemption',
     'ISA 비과세/분리과세',
     jsonb_build_object(
@@ -82,7 +82,7 @@ values
     'ISA 의무가입 3년 → 유동성(L) 계산에 반영 필요. 일반형 200만원/서민형 400만원 비과세, 초과분 9.9% 분리과세.'
   ),
   (
-    'tax_saving',
+    'tax_efficient_location',
     'low_coupon_bond',
     '저쿠폰채 절세전략',
     jsonb_build_object('mechanism', 'capital_gain_tax_free'),
@@ -91,7 +91,7 @@ values
     '저쿠폰채 절세효과 = 자본차익 비과세 활용(과세 이자 비중 최소화). 신청분리과세 30%는 2018 폐지. 금투세 2024.12 폐지 전제.'
   ),
   (
-    'tax_saving',
+    'tax_efficient_location',
     'pension_account_tax_credit',
     '연금계좌 세액공제',
     jsonb_build_object('note', 'TODO'),
@@ -100,7 +100,7 @@ values
     '⚠️ 연금저축·IRP 세액공제율·한도 검증 보강 대상 — 검증 후 params 채움(임의값 금지).'
   ),
   (
-    'tax_saving',
+    'tax_efficient_location',
     'capital_loss_offset',
     '손익통산',
     jsonb_build_object('note', 'TODO'),
