@@ -35,3 +35,15 @@ curl http://127.0.0.1:8000/health
 ```bash
 cp .env.example .env
 ```
+
+## 데이터베이스 (DB)
+
+DB 스키마·마이그레이션은 **Supabase CLI**로 관리하며 레포 루트 **`supabase/`** 에 있다. (과거 `backend/db/`는 폐지)
+
+| 항목 | 위치 |
+| --- | --- |
+| baseline (v0.1, 9개 테이블·RAG 함수·RLS) | `supabase/migrations/20260605000000_baseline_v0_1.sql` |
+| 0001 (FK 인덱스 3건 + RAG 임계값) | `supabase/migrations/20260605000001_add_fk_indexes_and_threshold.sql` |
+| CLI 설정 | `supabase/config.toml` |
+
+새 마이그레이션은 `supabase migration new <이름>` 으로 만든다. 운영 절차(로그인·링크·동기화)는 **[`../supabase/README.md`](../supabase/README.md)** 참고.
