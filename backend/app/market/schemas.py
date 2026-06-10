@@ -56,7 +56,8 @@ class PortfolioMetrics(BaseModel):
     expectedReturn: float
     volatility: float
     sharpeRatio: float
-    # 공통 거래일이 부족해 실측 백테스트를 만들 수 없는 경우 None(N/A) — 가짜 시계열로 대체하지 않는다.
+    # 공통 거래일이 부족해 실측 백테스트를 만들 수 없는 경우 None(N/A)
+    # — 가짜 시계열로 대체하지 않는다.
     maxDrawdown: float | None
     backtestData: list[BacktestPoint]
 

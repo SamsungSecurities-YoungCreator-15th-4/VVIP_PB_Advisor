@@ -129,7 +129,9 @@ def calc_portfolio_metrics(
         portfolio_variance = 0.0
         for i in range(len(weights)):
             for j in range(len(weights)):
-                corr = _get_fallback_correlation(allocations[i].assetClass, allocations[j].assetClass)
+                corr = _get_fallback_correlation(
+                    allocations[i].assetClass, allocations[j].assetClass
+                )
                 portfolio_variance += weights[i] * weights[j] * vols[i] * vols[j] * corr
 
         backtest_data = []
@@ -220,7 +222,9 @@ def calc_after_tax_return(
             total_tax_manwon = income_manwon * 0.495 - 3348.4
 
         # 이 포트폴리오의 배당소득 비율만큼 세금 안분
-        portfolio_share = (dividend_income / total_financial_income) if total_financial_income > 0 else 0.0
+        portfolio_share = (
+            (dividend_income / total_financial_income) if total_financial_income > 0 else 0.0
+        )
         tax_amount = (total_tax_manwon / 10000) * portfolio_share
     else:
         # 2천만원 이하: 원천징수세율 15.4%를 배당소득에만 부과

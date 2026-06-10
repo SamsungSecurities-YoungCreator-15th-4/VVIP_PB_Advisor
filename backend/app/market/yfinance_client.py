@@ -175,7 +175,10 @@ def _fetch_usd_krw_sync() -> ForexResult:
         change = price - history["today"]["rate"]
         change_pct = (change / history["today"]["rate"]) * 100
         if source != "file-cache":
-            _write_forex_history({"today": {"date": today_str, "rate": price}, "yesterday": history["today"]})
+            _write_forex_history({
+                "today": {"date": today_str, "rate": price},
+                "yesterday": history["today"],
+            })
 
     entry = ForexResult(price=price, change=change, changePct=change_pct)
     _forex_cache.set(cache_key, entry)
@@ -214,7 +217,9 @@ def _fetch_historical_sync(ticker: str, years: int = 5) -> MarketDataPoint:
         prices = [float(p) for p in closes.tolist()]
         dates = [ts.strftime("%Y-%m-%d") for ts in closes.index]
 
-        weekly_returns = [(prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))]
+        weekly_returns = [
+            (prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))
+        ]
         mean = sum(weekly_returns) / len(weekly_returns)
         annual_return = (1 + mean) ** 52 - 1
         variance = sum((r - mean) ** 2 for r in weekly_returns) / len(weekly_returns)

@@ -9,10 +9,22 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         description="기존 보수적 자산 배분",
         theme="안정형",
         allocations=[
-            AssetAllocation(ticker="TLT", name="US Long-Term Bond", nameKr="미국 장기채", weight=0.40, assetClass="bond", color="#3B82F6"),
-            AssetAllocation(ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)", weight=0.30, assetClass="domestic_equity", color="#10B981"),
-            AssetAllocation(ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주", weight=0.20, assetClass="dividend", color="#F59E0B"),
-            AssetAllocation(ticker="GLD", name="SPDR Gold", nameKr="금", weight=0.10, assetClass="gold", color="#EF4444"),
+            AssetAllocation(
+                ticker="TLT", name="US Long-Term Bond", nameKr="미국 장기채",
+                weight=0.40, assetClass="bond", color="#3B82F6",
+            ),
+            AssetAllocation(
+                ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
+                weight=0.30, assetClass="domestic_equity", color="#10B981",
+            ),
+            AssetAllocation(
+                ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주",
+                weight=0.20, assetClass="dividend", color="#F59E0B",
+            ),
+            AssetAllocation(
+                ticker="GLD", name="SPDR Gold", nameKr="금",
+                weight=0.10, assetClass="gold", color="#EF4444",
+            ),
         ],
     ),
     PortfolioProposal(
@@ -22,10 +34,22 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         description="안정적 현금흐름 극대화",
         theme="고배당 인컴형",
         allocations=[
-            AssetAllocation(ticker="TLT", name="US Long-Term Bond", nameKr="미국 장기채", weight=0.30, assetClass="bond", color="#3B82F6"),
-            AssetAllocation(ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)", weight=0.25, assetClass="domestic_equity", color="#10B981"),
-            AssetAllocation(ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주", weight=0.30, assetClass="dividend", color="#F59E0B"),
-            AssetAllocation(ticker="GLD", name="SPDR Gold", nameKr="금", weight=0.15, assetClass="gold", color="#EF4444"),
+            AssetAllocation(
+                ticker="TLT", name="US Long-Term Bond", nameKr="미국 장기채",
+                weight=0.30, assetClass="bond", color="#3B82F6",
+            ),
+            AssetAllocation(
+                ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
+                weight=0.25, assetClass="domestic_equity", color="#10B981",
+            ),
+            AssetAllocation(
+                ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주",
+                weight=0.30, assetClass="dividend", color="#F59E0B",
+            ),
+            AssetAllocation(
+                ticker="GLD", name="SPDR Gold", nameKr="금",
+                weight=0.15, assetClass="gold", color="#EF4444",
+            ),
         ],
     ),
     PortfolioProposal(
@@ -35,12 +59,30 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         description="장기 자산 증식 극대화",
         theme="글로벌 성장/대체자산",
         allocations=[
-            AssetAllocation(ticker="TLT", name="US Long-Term Bond", nameKr="미국 장기채", weight=0.10, assetClass="bond", color="#3B82F6"),
-            AssetAllocation(ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)", weight=0.10, assetClass="domestic_equity", color="#10B981"),
-            AssetAllocation(ticker="QQQ", name="Nasdaq 100 ETF", nameKr="미국 성장주(나스닥100)", weight=0.30, assetClass="us_equity", color="#8B5CF6"),
-            AssetAllocation(ticker="VNQ", name="Vanguard REIT", nameKr="글로벌 리츠", weight=0.20, assetClass="reit", color="#06B6D4"),
-            AssetAllocation(ticker="GLD", name="SPDR Gold", nameKr="금", weight=0.15, assetClass="gold", color="#EF4444"),
-            AssetAllocation(ticker="GSG", name="iShares Commodity", nameKr="원자재", weight=0.15, assetClass="commodity", color="#F97316"),
+            AssetAllocation(
+                ticker="TLT", name="US Long-Term Bond", nameKr="미국 장기채",
+                weight=0.10, assetClass="bond", color="#3B82F6",
+            ),
+            AssetAllocation(
+                ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
+                weight=0.10, assetClass="domestic_equity", color="#10B981",
+            ),
+            AssetAllocation(
+                ticker="QQQ", name="Nasdaq 100 ETF", nameKr="미국 성장주(나스닥100)",
+                weight=0.30, assetClass="us_equity", color="#8B5CF6",
+            ),
+            AssetAllocation(
+                ticker="VNQ", name="Vanguard REIT", nameKr="글로벌 리츠",
+                weight=0.20, assetClass="reit", color="#06B6D4",
+            ),
+            AssetAllocation(
+                ticker="GLD", name="SPDR Gold", nameKr="금",
+                weight=0.15, assetClass="gold", color="#EF4444",
+            ),
+            AssetAllocation(
+                ticker="GSG", name="iShares Commodity", nameKr="원자재",
+                weight=0.15, assetClass="commodity", color="#F97316",
+            ),
         ],
     ),
 ]
