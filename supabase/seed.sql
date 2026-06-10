@@ -4,8 +4,8 @@
 -- 원칙(차별점 = 재현성·감사추적성):
 --   * 규칙 숫자는 LLM 추정이 아니라 국세청 등 명시 출처에 근거한다.
 --   * 모든 행은 source 를 채운다(감사추적 필수, NOT NULL).
---   * 검증 미완료 항목은 임의 숫자를 넣지 않는다 → params {"note":"TODO"},
---     사유는 assumptions 에 ⚠️ 로 남기고 검증 후 채운다.
+--   * 검증 미완료 항목은 임의 숫자를 넣지 않는다(값 미상이면 비워두고
+--     사유를 assumptions 에 남긴 뒤 검증 후 채운다). 현재 전 행 검증 완료.
 --
 -- 스키마 매핑(기존 baseline tax_rule 재사용):
 --   category  → module  ('friction_cost' | 'tax_efficient_location')
@@ -49,11 +49,14 @@ values
     '해외주식 양도소득세',
     jsonb_build_object(
       'rate',                0.22,
-      'basic_deduction_krw', 2500000
+      'national_rate',       0.20,
+      'local_rate',          0.02,
+      'basic_deduction_krw', 2500000,
+      'loss_offset_scope',   'overseas_equity_same_year'
     ),
-    '국세청 2026 세금가이드 2권(양도소득 기본공제 250만원 확인) / 세율 재검증 TODO',
-    null,
-    '⚠️ 세율 0.22(20%+지방세 2%)는 검증 보강 대상 — 2권 양도세 조항 재확인 필요. 기본공제 250만원은 확인됨.'
+    '국세청 2026 세금가이드 2권(기본공제 250만) + 유안타증권·토스뱅크 해외주식 양도세 안내(세율 22%)',
+    '소득세법 양도소득(국외주식)',
+    '국세 20%+지방세 2%=22%, 연 250만원 기본공제. 금투세 2024.12 폐지로 현행 유지(2026 기준). 같은 해 해외주식 양도손익끼리 통산 후 과세 — 일반 개인은 국내주식·해외파생과 통산 불가.'
   )
 -- effective_from/to 는 INSERT 에서 제공하지 않으므로(향후 수동/별도 관리)
 -- DO UPDATE 에서 제외한다. 포함하면 재시드 시 기존 값이 NULL 로 덮어써진다.
@@ -94,19 +97,37 @@ values
     'tax_efficient_location',
     'pension_account_tax_credit',
     '연금계좌 세액공제',
-    jsonb_build_object('note', 'TODO'),
-    '검증 보강 TODO',
-    null,
-    '⚠️ 연금저축·IRP 세액공제율·한도 검증 보강 대상 — 검증 후 params 채움(임의값 금지).'
+    jsonb_build_object(
+      'limit_pension_krw',            6000000,
+      'limit_total_krw',             9000000,
+      'credit_rate_low_incl_local',  0.165,
+      'credit_rate_high_incl_local', 0.132,
+      'credit_rate_low_national',    0.15,
+      'credit_rate_high_national',   0.12,
+      'income_threshold_krw',        45000000,
+      'salary_threshold_krw',        55000000,
+      'isa_rollover_extra_rate',     0.10,
+      'isa_rollover_extra_limit_krw', 3000000,
+      'pension_receipt_rate_min',    0.033,
+      'pension_receipt_rate_max',    0.055,
+      'separate_tax_limit_krw',      15000000
+    ),
+    '국세청 2026 세금가이드 1권(근로자 세금)',
+    '소득세법 §59의3',
+    '연금저축 600만+IRP 합산 900만 한도. 공제율 국세 15%/12%(지방세 포함 16.5%/13.2%), 기준 종합소득 4,500만(총급여 5,500만) 이하 고율. 과세이연: 운용수익 비과세→수령 시 연금소득세 3~5%, 연 1,500만 이하 분리과세. ISA 만기 추가납입 10% 추가공제(300만 한도).'
   ),
   (
     'tax_efficient_location',
     'capital_loss_offset',
     '손익통산',
-    jsonb_build_object('note', 'TODO'),
-    '검증 보강 TODO',
-    null,
-    '⚠️ 국외주식 양도손익 통산 메커니즘 검증 TODO — 검증 후 params 채움(임의값 금지).'
+    jsonb_build_object(
+      'scope',             'overseas_equity_same_year',
+      'cross_domestic_equity', false,
+      'cross_derivatives',     false
+    ),
+    '헬프미·토스뱅크·taxly 해외주식 양도세 안내(웹 교차검증)',
+    '소득세법 양도소득 통산',
+    '같은 해 해외주식 양도차익·차손 상계 가능. 일반 개인(대주주 아님)은 국내주식·해외파생상품과 통산 불가 → 해외주식 양도손익끼리만. Tax-loss Harvesting 근거.'
   )
 -- effective_from/to 는 INSERT 에서 제공하지 않으므로(향후 수동/별도 관리)
 -- DO UPDATE 에서 제외한다. 포함하면 재시드 시 기존 값이 NULL 로 덮어써진다.
