@@ -84,6 +84,8 @@ backend/.env
 # ---------- AI 코딩 도구 ----------
 # Claude Code
 .claude/
+# MCP 서버 설정(개인 로컬 설정). project_ref만 담기지만 팀 공유 대신 각자 관리한다.
+.mcp.json
 
 # ---------- STT 개발 관련 ----------
 .env
