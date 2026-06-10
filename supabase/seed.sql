@@ -55,13 +55,13 @@ values
     null,
     '⚠️ 세율 0.22(20%+지방세 2%)는 검증 보강 대상 — 2권 양도세 조항 재확인 필요. 기본공제 250만원은 확인됨.'
   )
+-- effective_from/to 는 INSERT 에서 제공하지 않으므로(향후 수동/별도 관리)
+-- DO UPDATE 에서 제외한다. 포함하면 재시드 시 기존 값이 NULL 로 덮어써진다.
 on conflict (module, rule_key) do update set
   description    = excluded.description,
   params         = excluded.params,
   source         = excluded.source,
   source_law     = excluded.source_law,
-  effective_from = excluded.effective_from,
-  effective_to   = excluded.effective_to,
   assumptions    = excluded.assumptions;
 
 -- ── tax_efficient_location (절감: 세 부담을 줄이는 절세 수단) ─────────────────────
@@ -108,11 +108,11 @@ values
     null,
     '⚠️ 국외주식 양도손익 통산 메커니즘 검증 TODO — 검증 후 params 채움(임의값 금지).'
   )
+-- effective_from/to 는 INSERT 에서 제공하지 않으므로(향후 수동/별도 관리)
+-- DO UPDATE 에서 제외한다. 포함하면 재시드 시 기존 값이 NULL 로 덮어써진다.
 on conflict (module, rule_key) do update set
   description    = excluded.description,
   params         = excluded.params,
   source         = excluded.source,
   source_law     = excluded.source_law,
-  effective_from = excluded.effective_from,
-  effective_to   = excluded.effective_to,
   assumptions    = excluded.assumptions;
