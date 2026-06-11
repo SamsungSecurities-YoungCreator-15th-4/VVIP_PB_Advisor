@@ -104,8 +104,7 @@ def search_chunks(
     # published_date 는 document 에 전용 컬럼이 없어 meta jsonb 에서 읽는다(없으면 None).
     doc_ids = list({row["document_id"] for row in rows})
     doc_result = (
-        get_supabase_client()
-        .table("document")
+        supabase.table("document")
         .select("id, title, source_type, meta")
         .in_("id", doc_ids)
         .execute()
@@ -116,12 +115,15 @@ def search_chunks(
     for row in rows:
         doc = docs_by_id.get(row["document_id"], {})
         meta = doc.get("meta") or {}
+        # 빈 문자열("") 등 falsy 값이면 Citation.published_date(date | None)
+        # 검증에서 500이 나므로 None 으로 정규화한다.
+        pub_date = meta.get("published_date")
         citations.append(
             {
                 "doc_id": row["document_id"],
                 "source_type": doc.get("source_type", "unknown"),
                 "title": doc.get("title", ""),
-                "published_date": meta.get("published_date"),
+                "published_date": pub_date if pub_date else None,
                 "chunk": row["content"],
                 "similarity": row["similarity"],
             }

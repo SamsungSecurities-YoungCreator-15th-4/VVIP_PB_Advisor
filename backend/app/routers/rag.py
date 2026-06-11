@@ -52,15 +52,16 @@ class InsightResponse(BaseModel):
 @router.post("/insight", response_model=InsightResponse)
 def create_insight(request: InsightRequest) -> InsightResponse:
     # TODO: consultation_id 존재 검증 — consultation 테이블 조회는 다음 단계에서 추가.
-    if not request.query.strip():
+    query = request.query.strip()
+    if not query:
         raise HTTPException(status_code=400, detail="query 는 빈 문자열일 수 없습니다.")
 
-    query_embedding = embed_query(request.query)
+    query_embedding = embed_query(query)
     chunks = search_chunks(query_embedding)
     if not chunks:
         raise HTTPException(status_code=404, detail="관련 문서 없음(임계값 미달)")
 
-    answer = _generator.generate(request.query, chunks)
+    answer = _generator.generate(query, chunks)
     return InsightResponse(
         answer=answer,
         citations=[Citation(**chunk) for chunk in chunks],
