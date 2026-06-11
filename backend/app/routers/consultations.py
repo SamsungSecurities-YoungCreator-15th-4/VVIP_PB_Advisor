@@ -3,12 +3,13 @@ from datetime import datetime, timezone
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
 from app.db.supabase import get_supabase
 from app.schemas.consultations import (
     ConsultationListResponse,
     ConsultationResponse,
+    ConsultationSummaryResponse,
     CustomerName,
     InitialIpsResponse,
 )
@@ -169,6 +170,53 @@ def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
     )
 
 
+@router.get("/detail", response_model=ConsultationResponse)
+def get_consultation_detail(
+    customer_name: CustomerName,
+    consultation_id: Annotated[str | None, Query()] = None,
+    transcript_title: Annotated[str | None, Query()] = None,
+) -> ConsultationResponse:
+    if not consultation_id and not transcript_title:
+        raise HTTPException(
+            status_code=400,
+            detail="consultation_id 또는 transcript_title 중 하나가 필요합니다.",
+        )
+
+    supabase = get_supabase()
+    client = _get_client_by_name(supabase, customer_name)
+    if not client:
+        raise HTTPException(
+            status_code=404,
+            detail=f"고객 정보를 찾을 수 없습니다: {customer_name}",
+        )
+
+    query = (
+        supabase.table("consultation")
+        .select(
+            "id,client_id,transcript_title,ips_title,"
+            "transcript_json,ips_json,created_at"
+        )
+        .eq("client_id", client["id"])
+    )
+    if consultation_id:
+        query = query.eq("id", consultation_id)
+    else:
+        query = query.eq("transcript_title", transcript_title)
+
+    result = query.order("created_at", desc=True).limit(1).execute()
+    consultation = _first_row(result.data)
+    if not consultation:
+        raise HTTPException(
+            status_code=404,
+            detail="상담 내역을 찾을 수 없습니다.",
+        )
+
+    return _build_consultation_response(
+        consultation=consultation,
+        customer_name=customer_name,
+    )
+
+
 @router.get("", response_model=ConsultationListResponse)
 def list_consultations(customer_name: CustomerName) -> ConsultationListResponse:
     supabase = get_supabase()
@@ -181,26 +229,20 @@ def list_consultations(customer_name: CustomerName) -> ConsultationListResponse:
 
     result = (
         supabase.table("consultation")
-        .select(
-            "id,client_id,transcript_title,ips_title,"
-            "transcript_json,ips_json,created_at"
-        )
+        .select("id,client_id,transcript_title,ips_title,created_at")
         .eq("client_id", client["id"])
         .order("created_at", desc=True)
         .execute()
     )
 
     consultations = [
-        ConsultationResponse(
+        ConsultationSummaryResponse(
             consultation_id=row["id"],
             customer_id=row["client_id"],
             customer_name=customer_name,
             consultation_date=_consultation_date(row["created_at"]),
             transcript_title=row.get("transcript_title") or "",
             ips_title=row.get("ips_title") or "",
-            transcript_json=row.get("transcript_json") or [],
-            ips_json=row.get("ips_json") or {},
-            ips_snapshot_id=None,
             created_at=_to_kst_iso(row["created_at"]),
         )
         for row in result.data
@@ -224,6 +266,25 @@ def _first_row(rows: list[dict] | None) -> dict | None:
     if not rows:
         return None
     return rows[0]
+
+
+def _build_consultation_response(
+    *,
+    consultation: dict,
+    customer_name: CustomerName,
+) -> ConsultationResponse:
+    return ConsultationResponse(
+        consultation_id=consultation["id"],
+        customer_id=consultation["client_id"],
+        customer_name=customer_name,
+        consultation_date=_consultation_date(consultation["created_at"]),
+        transcript_title=consultation.get("transcript_title") or "",
+        ips_title=consultation.get("ips_title") or "",
+        transcript_json=consultation.get("transcript_json") or [],
+        ips_json=consultation.get("ips_json") or {},
+        ips_snapshot_id=None,
+        created_at=_to_kst_iso(consultation["created_at"]),
+    )
 
 
 def _consultation_date(created_at: str) -> str:

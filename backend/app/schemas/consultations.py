@@ -21,9 +21,21 @@ class ConsultationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ConsultationSummaryResponse(BaseModel):
+    consultation_id: str
+    customer_id: str
+    customer_name: CustomerName
+    consultation_date: str
+    transcript_title: str
+    ips_title: str
+    created_at: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ConsultationListResponse(BaseModel):
     customer_name: CustomerName
-    consultations: list[ConsultationResponse]
+    consultations: list[ConsultationSummaryResponse]
 
     model_config = ConfigDict(extra="forbid")
 
