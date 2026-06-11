@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchHistoricalCrises, fetchStressedPortfolios } from '@/lib/api';
 import type {
   HistoricalCrisis,
@@ -115,9 +115,12 @@ function MetricRow({ def, base, stressed }: {
 }
 
 function TunerImpactPanel({ shock }: { shock: MacroShock }) {
-  const [data, setData] = useState<StressedPortfolio[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 응답이 어떤 충격값(key)에 대한 것인지 함께 저장 — 로딩 여부는 key 비교로 파생
+  const [result, setResult] = useState<{
+    key: string;
+    data: StressedPortfolio[] | null;
+  } | null>(null);
+  const shockKey = `${shock.baseRateDelta}:${shock.krwUsdDelta}`;
 
   // 충격계수는 ±100bp/±200원 기준 캘리브레이션 후 선형 비례 적용.
   // 기준점의 2배(±200bp/±400원)를 넘으면 비선형 효과(채권 컨벡시티, 패닉 국면)로
@@ -127,18 +130,25 @@ function TunerImpactPanel({ shock }: { shock: MacroShock }) {
 
   useEffect(() => {
     // 슬라이더 드래그 중 과도한 호출 방지 (400ms 디바운스)
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setLoading(true);
-    timerRef.current = setTimeout(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
       fetchStressedPortfolios(shock.baseRateDelta, shock.krwUsdDelta)
-        .then(setData)
-        .catch(() => setData(null))
-        .finally(() => setLoading(false));
+        .then(d => {
+          if (!cancelled) setResult({ key: shockKey, data: d });
+        })
+        .catch(() => {
+          if (!cancelled) setResult({ key: shockKey, data: null });
+        });
     }, 400);
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      cancelled = true;
+      clearTimeout(timer);
     };
-  }, [shock.baseRateDelta, shock.krwUsdDelta]);
+  }, [shockKey, shock.baseRateDelta, shock.krwUsdDelta]);
+
+  // 현재 충격값에 대한 응답일 때만 표시 — 아니면 로딩 중으로 파생
+  const data = result?.key === shockKey ? result.data : null;
+  const loading = result?.key !== shockKey;
 
   return (
     <div className="bg-gray-800 rounded-xl p-4 border border-yellow-500/20">

@@ -5,7 +5,7 @@
 // /api/stressed-portfolios를 재호출해 중앙의 현재·A·B 포트폴리오 카드 지표와
 // 예상 평가손익이 함께 갱신된다. 고정 시나리오 막대·과거 위기 패널은
 // 대시보드에서 제외 (API는 유지 — 제안서 PDF 등에서 재사용 가능).
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import MacroIndicators, { type PnlRow } from '@/components/MacroIndicators';
 import { fetchPortfolios, fetchStressedPortfolios } from '@/lib/api';
@@ -98,12 +98,15 @@ function PortfolioCard({
 export default function Home() {
   const [portfolios, setPortfolios] = useState<PortfolioProposal[]>([]);
   const [shock, setShock] = useState<MacroShock>({ baseRateDelta: 0, krwUsdDelta: 0 });
-  const [stressedData, setStressedData] = useState<StressedPortfolio[] | null>(null);
-  const [stressLoading, setStressLoading] = useState(false);
+  // 응답이 어떤 충격값(key)에 대한 것인지 함께 저장 — 로딩/표시 여부는 key 비교로 파생
+  const [stressResult, setStressResult] = useState<{
+    key: string;
+    data: StressedPortfolio[] | null;
+  } | null>(null);
   const [error, setError] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasShock = Math.abs(shock.baseRateDelta) >= 1 || Math.abs(shock.krwUsdDelta) >= 1;
+  const shockKey = `${shock.baseRateDelta}:${shock.krwUsdDelta}`;
 
   useEffect(() => {
     fetchPortfolios()
@@ -113,23 +116,26 @@ export default function Home() {
 
   // 슬라이더 변경 시 스트레스 재계산 (드래그 중 과도한 호출 방지 — 400ms 디바운스)
   useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!hasShock) {
-      setStressedData(null);
-      setStressLoading(false);
-      return;
-    }
-    setStressLoading(true);
-    timerRef.current = setTimeout(() => {
+    if (!hasShock) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
       fetchStressedPortfolios(shock.baseRateDelta, shock.krwUsdDelta)
-        .then(setStressedData)
-        .catch(() => setStressedData(null))
-        .finally(() => setStressLoading(false));
+        .then(data => {
+          if (!cancelled) setStressResult({ key: shockKey, data });
+        })
+        .catch(() => {
+          if (!cancelled) setStressResult({ key: shockKey, data: null });
+        });
     }, 400);
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      cancelled = true;
+      clearTimeout(timer);
     };
-  }, [shock.baseRateDelta, shock.krwUsdDelta, hasShock]);
+  }, [shockKey, hasShock, shock.baseRateDelta, shock.krwUsdDelta]);
+
+  // 현재 충격값에 대한 응답일 때만 사용 — 아니면 로딩 중으로 파생
+  const stressedData = hasShock && stressResult?.key === shockKey ? stressResult.data : null;
+  const stressLoading = hasShock && stressResult?.key !== shockKey;
 
   // 예상 평가손익 = (충격 후 기대수익률 − 기준 기대수익률) × 운용자산
   const pnl: PnlRow[] = portfolios.map(p => {
