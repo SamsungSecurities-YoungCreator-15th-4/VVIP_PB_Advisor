@@ -62,12 +62,18 @@ GOAL_RRTTLLU_SCHEMA = {
         },
         "Tax": {
             "type": ["string", "null"],
-            "description": "세금 관련 이슈. 예: 증여세, 상속세, 양도소득세, 배당소득세 등. 언급 없으면 null.",
+            "description": (
+                "세금 관련 이슈. 예: 증여세, 상속세, 양도소득세, "
+                "배당소득세 등. 언급 없으면 null."
+            ),
         },
         "Liquidity": {
             "type": ["string", "null"],
             "enum": ["낮음", "중간", "높음", None],
-            "description": "유동성 필요 수준. 단기 현금 필요가 크면 높음, 일부 필요하면 중간, 거의 없으면 낮음.",
+            "description": (
+                "유동성 필요 수준. 단기 현금 필요가 크면 높음, "
+                "일부 필요하면 중간, 거의 없으면 낮음."
+            ),
         },
         "Legal": {
             "type": ["string", "null"],
@@ -75,7 +81,10 @@ GOAL_RRTTLLU_SCHEMA = {
         },
         "Unique": {
             "type": ["string", "null"],
-            "description": "고객의 특수 니즈. 예: 자녀 전세자금, 증여 계획, 미국 배당주 선호, 장기채 선호 등.",
+            "description": (
+                "고객의 특수 니즈. 예: 자녀 전세자금, 증여 계획, "
+                "미국 배당주 선호, 장기채 선호 등."
+            ),
         },
     },
     "required": [
@@ -405,7 +414,10 @@ def run_pipeline(audio_dir: str, output_dir: str | Path):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="음성 전사, 화자 분리, 화자 매핑, 고객 발화 추출, Goal/RRTTLLU JSON 구조화를 한 번에 실행합니다."
+        description=(
+            "음성 전사, 화자 분리, 화자 매핑, 고객 발화 추출, "
+            "Goal/RRTTLLU JSON 구조화를 한 번에 실행합니다."
+        )
     )
     parser.add_argument(
         "--audio-dir",
