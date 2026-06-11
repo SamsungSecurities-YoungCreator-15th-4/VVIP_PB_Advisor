@@ -121,7 +121,7 @@ def create_stt_consultation(
         transcript_json=pipeline_result.transcript_json,
         ips_json=ips_json,
         ips_snapshot_id=snapshot["id"],
-        created_at=consultation["created_at"],
+        created_at=_to_kst_iso(consultation["created_at"]),
     )
 
 
@@ -165,7 +165,7 @@ def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
         customer_name=customer_name,
         source_type="initial",
         ips_json=ips_json,
-        created_at=snapshot["created_at"],
+        created_at=_to_kst_iso(snapshot["created_at"]),
     )
 
 
@@ -201,7 +201,7 @@ def list_consultations(customer_name: CustomerName) -> ConsultationListResponse:
             transcript_json=row.get("transcript_json") or [],
             ips_json=row.get("ips_json") or {},
             ips_snapshot_id=None,
-            created_at=row["created_at"],
+            created_at=_to_kst_iso(row["created_at"]),
         )
         for row in result.data
     ]
@@ -227,12 +227,20 @@ def _first_row(rows: list[dict] | None) -> dict | None:
 
 
 def _consultation_date(created_at: str) -> str:
-    normalized = created_at.replace("Z", "+00:00")
+    return _parse_datetime(created_at).astimezone(KST).date().isoformat()
+
+
+def _to_kst_iso(created_at: str) -> str:
+    return _parse_datetime(created_at).astimezone(KST).isoformat()
+
+
+def _parse_datetime(datetime_text: str) -> datetime:
+    normalized = datetime_text.replace("Z", "+00:00")
     created_datetime = datetime.fromisoformat(normalized)
     if created_datetime.tzinfo is None:
         created_datetime = created_datetime.replace(tzinfo=timezone.utc)
 
-    return created_datetime.astimezone(KST).date().isoformat()
+    return created_datetime
 
 
 def _delete_consultation(supabase, consultation_id: str) -> None:
