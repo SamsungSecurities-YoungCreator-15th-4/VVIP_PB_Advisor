@@ -10,6 +10,9 @@ from fastapi import UploadFile
 from app.core.config import STT_AUDIO_DIR, STT_DIR, STT_OUTPUT_DIR
 
 
+if str(STT_DIR) not in sys.path:
+    sys.path.append(str(STT_DIR))
+
 KST = ZoneInfo("Asia/Seoul")
 
 
@@ -41,8 +44,7 @@ def run_uploaded_wav_pipeline(
 
     try:
         _save_upload_file(audio_file, upload_path)
-        latest_audio_path = find_latest_wav_file(STT_AUDIO_DIR)
-        transcript_json, ips_json = run_stt_pipeline(str(latest_audio_path))
+        transcript_json, ips_json = run_stt_pipeline(str(upload_path))
         title_prefix = f"{datetime.now(KST):%y%m%d}_{customer_name}"
         transcript_title = f"{title_prefix}_상담 스크립트"
         ips_title = f"{title_prefix}_ips"
@@ -65,8 +67,6 @@ def run_uploaded_wav_pipeline(
 
 
 def run_stt_pipeline(audio_file_path: str) -> tuple[list[dict], dict]:
-    _ensure_stt_import_path()
-
     from stt_record import (  # noqa: PLC0415
         extract_customer_text,
         extract_goal_rrttllu,
@@ -84,25 +84,6 @@ def run_stt_pipeline(audio_file_path: str) -> tuple[list[dict], dict]:
     return mapped_transcript, ips_json
 
 
-def find_latest_wav_file(audio_dir: Path) -> Path:
-    if not audio_dir.exists():
-        raise FileNotFoundError(f"음성 파일 폴더를 찾을 수 없습니다: {audio_dir}")
-
-    if not audio_dir.is_dir():
-        raise NotADirectoryError(f"음성 파일 경로가 폴더가 아닙니다: {audio_dir}")
-
-    wav_files = [
-        path
-        for path in audio_dir.iterdir()
-        if path.is_file() and path.suffix.lower() == ".wav"
-    ]
-
-    if not wav_files:
-        raise FileNotFoundError(f"{audio_dir} 폴더에 전사할 WAV 파일이 없습니다.")
-
-    return max(wav_files, key=lambda path: path.stat().st_mtime_ns)
-
-
 def _save_upload_file(audio_file: UploadFile, upload_path: Path) -> None:
     with upload_path.open("wb") as output:
         while chunk := audio_file.file.read(1024 * 1024):
@@ -110,14 +91,6 @@ def _save_upload_file(audio_file: UploadFile, upload_path: Path) -> None:
 
 
 def _save_json(data: list[dict] | dict, output_path: Path) -> None:
-    _ensure_stt_import_path()
-
     from stt_record import save_json  # noqa: PLC0415
 
     save_json(data, output_path)
-
-
-def _ensure_stt_import_path() -> None:
-    stt_path = str(Path(STT_DIR))
-    if stt_path not in sys.path:
-        sys.path.append(stt_path)

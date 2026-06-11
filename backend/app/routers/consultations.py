@@ -1,4 +1,7 @@
+import logging
+from datetime import datetime, timezone
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
@@ -16,6 +19,8 @@ from app.services.stt_pipeline import run_uploaded_wav_pipeline
 from app.services.transcript import transcript_to_raw_note
 
 router = APIRouter(prefix="/consultations", tags=["consultations"])
+logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 
 @router.post(
@@ -23,7 +28,7 @@ router = APIRouter(prefix="/consultations", tags=["consultations"])
     response_model=ConsultationResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_stt_consultation(
+def create_stt_consultation(
     customer_name: Annotated[CustomerName, Form()],
     audio_file: Annotated[UploadFile, File()],
 ) -> ConsultationResponse:
@@ -43,10 +48,21 @@ async def create_stt_consultation(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("STT consultation pipeline failed")
+        raise HTTPException(
+            status_code=500,
+            detail="STT 상담 처리 중 오류가 발생했습니다.",
+        ) from exc
 
-    raw_note = transcript_to_raw_note(pipeline_result.transcript_json)
-    ips_json = flatten_ips_json(pipeline_result.ips_json)
+    try:
+        raw_note = transcript_to_raw_note(pipeline_result.transcript_json)
+        ips_json = flatten_ips_json(pipeline_result.ips_json)
+    except ValueError as exc:
+        logger.exception("Invalid IPS extraction result")
+        raise HTTPException(
+            status_code=500,
+            detail="IPS 구조화 결과 검증 중 오류가 발생했습니다.",
+        ) from exc
 
     consultation_payload = {
         "client_id": client["id"],
@@ -72,14 +88,27 @@ async def create_stt_consultation(
         source_type="consultation",
         raw_ips_json=ips_json,
     )
-    snapshot_result = (
-        supabase.table("ips_snapshot")
-        .insert(snapshot_payload)
-        .execute()
-    )
-    snapshot = _first_row(snapshot_result.data)
+    try:
+        snapshot_result = (
+            supabase.table("ips_snapshot")
+            .insert(snapshot_payload)
+            .execute()
+        )
+        snapshot = _first_row(snapshot_result.data)
+    except Exception as exc:
+        _delete_consultation(supabase, consultation["id"])
+        logger.exception("IPS snapshot insert failed")
+        raise HTTPException(
+            status_code=500,
+            detail="상담 결과 저장 중 오류가 발생했습니다.",
+        ) from exc
+
     if not snapshot:
-        raise HTTPException(status_code=500, detail="IPS 스냅샷 저장에 실패했습니다.")
+        _delete_consultation(supabase, consultation["id"])
+        raise HTTPException(
+            status_code=500,
+            detail="상담 결과 저장 중 오류가 발생했습니다.",
+        )
 
     return ConsultationResponse(
         consultation_id=consultation["id"],
@@ -153,4 +182,16 @@ def _first_row(rows: list[dict] | None) -> dict | None:
 
 
 def _consultation_date(created_at: str) -> str:
-    return created_at[:10]
+    normalized = created_at.replace("Z", "+00:00")
+    created_datetime = datetime.fromisoformat(normalized)
+    if created_datetime.tzinfo is None:
+        created_datetime = created_datetime.replace(tzinfo=timezone.utc)
+
+    return created_datetime.astimezone(KST).date().isoformat()
+
+
+def _delete_consultation(supabase, consultation_id: str) -> None:
+    try:
+        supabase.table("consultation").delete().eq("id", consultation_id).execute()
+    except Exception:
+        logger.exception("Failed to delete orphan consultation: %s", consultation_id)
