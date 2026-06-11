@@ -1,65 +1,177 @@
-import Image from "next/image";
+'use client';
+
+// 메인 대시보드 — 목업(vvip_pb_advisor_mockup.html) 구조 기준.
+// 우측 "시나리오 Test" 조절기(금리 0~6% / 환율 1,000~2,000원)를 움직이면
+// /api/stressed-portfolios를 재호출해 중앙의 현재·A·B 포트폴리오 카드 지표와
+// 예상 평가손익이 함께 갱신된다. 고정 시나리오 막대·과거 위기 패널은
+// 대시보드에서 제외 (API는 유지 — 제안서 PDF 등에서 재사용 가능).
+import { useEffect, useRef, useState } from 'react';
+
+import MacroIndicators, { type PnlRow } from '@/components/MacroIndicators';
+import { fetchPortfolios, fetchStressedPortfolios } from '@/lib/api';
+import type { PortfolioProposal, StressedPortfolio } from '@/lib/types';
+
+interface MacroShock {
+  baseRateDelta: number; // bp
+  krwUsdDelta: number; // 원
+}
+
+// 고객 운용자산 (억 원) — 고객 상세(/clients/:id) 연동 전 목업 기준 상수
+const TOTAL_ASSETS_EOK = 18;
+
+const PORTFOLIO_LABELS: Record<string, string> = {
+  current: '현재',
+  proposalA: '제안 A',
+  proposalB: '제안 B',
+};
+
+const PORTFOLIO_TITLE_COLORS: Record<string, string> = {
+  current: 'text-gray-300',
+  proposalA: 'text-blue-400',
+  proposalB: 'text-purple-400',
+};
+
+type MetricKey = 'expectedReturn' | 'volatility' | 'sharpeRatio' | 'sortinoRatio' | 'maxDrawdown';
+
+const METRIC_DEFS: { key: MetricKey; label: string; isPct: boolean; higherIsBetter: boolean }[] = [
+  { key: 'expectedReturn', label: '기대수익률', isPct: true, higherIsBetter: true },
+  { key: 'volatility', label: '변동성', isPct: true, higherIsBetter: false },
+  { key: 'sharpeRatio', label: '샤프지수', isPct: false, higherIsBetter: true },
+  { key: 'sortinoRatio', label: '소르티노', isPct: false, higherIsBetter: true },
+  { key: 'maxDrawdown', label: 'MDD', isPct: true, higherIsBetter: false },
+];
+
+function fmt(value: number | null | undefined, isPct: boolean): string {
+  if (value === null || value === undefined) return 'N/A';
+  return isPct ? `${(value * 100).toFixed(1)}%` : value.toFixed(2);
+}
+
+function PortfolioCard({
+  proposal,
+  stressed,
+  hasShock,
+}: {
+  proposal: PortfolioProposal;
+  stressed?: StressedPortfolio;
+  hasShock: boolean;
+}) {
+  const base = stressed?.base ?? proposal.metrics;
+  const shown = hasShock && stressed ? stressed.stressed : base;
+  if (!base || !shown) return null;
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+      <div className={`text-sm font-semibold mb-1 ${PORTFOLIO_TITLE_COLORS[proposal.id]}`}>
+        {proposal.nameKr}
+      </div>
+      <div className="text-[11px] text-gray-500 mb-3">{proposal.theme}</div>
+      <div className="divide-y divide-gray-700/60">
+        {METRIC_DEFS.map(def => {
+          const b = base[def.key] as number | null;
+          const s = shown[def.key] as number | null;
+          const delta = b !== null && s !== null && b !== undefined && s !== undefined ? s - b : null;
+          const isZero = delta === null || Math.abs(delta) < (def.isPct ? 0.0005 : 0.005);
+          const improved = delta !== null && (def.higherIsBetter ? delta > 0 : delta < 0);
+          const deltaColor = isZero ? 'text-gray-600' : improved ? 'text-green-400' : 'text-red-400';
+          return (
+            <div key={def.key} className="flex items-center justify-between py-1.5 text-xs">
+              <span className="text-gray-400">{def.label}</span>
+              <span className="tabular-nums flex items-center gap-1.5">
+                <span className="text-gray-100 font-semibold">{fmt(s, def.isPct)}</span>
+                {hasShock && !isZero && delta !== null && (
+                  <span className={`text-[10px] ${deltaColor}`}>
+                    ({delta > 0 ? '+' : ''}
+                    {def.isPct ? `${(delta * 100).toFixed(1)}%p` : delta.toFixed(2)})
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
+  const [portfolios, setPortfolios] = useState<PortfolioProposal[]>([]);
+  const [shock, setShock] = useState<MacroShock>({ baseRateDelta: 0, krwUsdDelta: 0 });
+  const [stressedData, setStressedData] = useState<StressedPortfolio[] | null>(null);
+  const [stressLoading, setStressLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasShock = Math.abs(shock.baseRateDelta) >= 1 || Math.abs(shock.krwUsdDelta) >= 1;
+
+  useEffect(() => {
+    fetchPortfolios()
+      .then(setPortfolios)
+      .catch(() => setError(true));
+  }, []);
+
+  // 슬라이더 변경 시 스트레스 재계산 (드래그 중 과도한 호출 방지 — 400ms 디바운스)
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!hasShock) {
+      setStressedData(null);
+      setStressLoading(false);
+      return;
+    }
+    setStressLoading(true);
+    timerRef.current = setTimeout(() => {
+      fetchStressedPortfolios(shock.baseRateDelta, shock.krwUsdDelta)
+        .then(setStressedData)
+        .catch(() => setStressedData(null))
+        .finally(() => setStressLoading(false));
+    }, 400);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [shock.baseRateDelta, shock.krwUsdDelta, hasShock]);
+
+  // 예상 평가손익 = (충격 후 기대수익률 − 기준 기대수익률) × 운용자산
+  const pnl: PnlRow[] = portfolios.map(p => {
+    const s = stressedData?.find(x => x.id === p.id);
+    const delta = hasShock && s ? s.stressed.expectedReturn - s.base.expectedReturn : 0;
+    return { id: p.id, label: PORTFOLIO_LABELS[p.id] ?? p.nameKr, eok: delta * TOTAL_ASSETS_EOK };
+  });
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-gray-950 text-gray-100">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <header>
+          <h1 className="text-xl font-bold text-white">VVIP PB Advisor</h1>
+          <p className="text-sm text-gray-400">포트폴리오 제안 · 거시경제 스트레스 테스트</p>
+        </header>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
+            백엔드에 연결할 수 없습니다 — uvicorn(localhost:8000)이 켜져 있는지 확인하세요.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start">
+          {/* 중앙: 포트폴리오 카드 — 조절기 충격 반영 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {portfolios.map(p => (
+              <PortfolioCard
+                key={p.id}
+                proposal={p}
+                stressed={stressedData?.find(x => x.id === p.id)}
+                hasShock={hasShock && !!stressedData}
+              />
+            ))}
+          </div>
+
+          {/* 우측: 시나리오 Test (조절기 + 예상 평가손익) */}
+          <MacroIndicators
+            onShockChange={setShock}
+            pnl={pnl}
+            totalAssetsEok={TOTAL_ASSETS_EOK}
+            pnlLoading={stressLoading}
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

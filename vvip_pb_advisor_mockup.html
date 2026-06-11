@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VVIP PB Advisor</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<style>
+:root{
+  --blue-700:#0050D6; --blue-600:#0064FF; --blue-500:#2C7BFF; --blue-400:#5C9CFF;
+  --blue-300:#8FBCFF; --blue-200:#B8D4FF; --blue-100:#DCE9FF; --blue-50:#EEF4FF;
+  --up:#F04452;  --down:#3182F6;
+  --green:#16B47A; --green-d:#0FA06C; --green-bg:#E8F8F1; --green-soft:#C9EFDD;
+  --red-soft:#FBD5D9;
+  --ink:#171C24; --ink2:#4E5968; --ink3:#8B95A1; --ink4:#B0B8C1;
+  --line:#E8EBED; --line2:#F1F3F5; --bg:#EDEFF2; --card:#FFFFFF;
+  --shadow:0 1px 3px rgba(23,28,36,.06),0 1px 2px rgba(23,28,36,.04);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  background:var(--bg); color:var(--ink);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+  -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+}
+#scaler{transform-origin:center center;}
+#stage{
+  width:1440px; height:940px; background:var(--bg);
+  padding:14px; display:flex; flex-direction:column; gap:12px;
+}
+.num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum";}
+.up{color:var(--up)} .down{color:var(--down)}
+.card{background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);}
+.eyebrow{font-size:10px; font-weight:700; color:var(--ink3); letter-spacing:.04em;}
+.sec-title{font-size:13px; font-weight:700; color:var(--ink);}
+
+/* ---------- TOP BAR ---------- */
+.topbar{height:58px; display:flex; align-items:center; gap:18px; padding:0 18px;}
+.brand{display:flex; align-items:center; gap:11px; padding-right:18px; border-right:1px solid var(--line);}
+.logo{width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg,var(--blue-500),var(--blue-700));
+  display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:17px;}
+.brand h1{font-size:15px; font-weight:800; letter-spacing:-.02em;}
+.brand p{font-size:9px; font-weight:700; color:var(--ink3); letter-spacing:.12em;}
+.clock{font-size:11px; color:var(--ink3); font-weight:600; text-align:right; padding-right:6px;}
+.clock b{display:block; font-size:14px; color:var(--ink); font-weight:700;}
+.ticker{display:flex; gap:0; flex:1;}
+.tk{padding:0 16px; border-right:1px solid var(--line2);}
+.tk:last-child{border:none}
+.tk .lbl{font-size:9.5px; color:var(--ink3); font-weight:600; margin-bottom:2px;}
+.tk .val{font-size:16px; font-weight:800; line-height:1;}
+.tk .chg{font-size:10px; font-weight:700; margin-top:3px;}
+.pill{display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:9px; font-size:12px; font-weight:700;}
+.pill.ok{background:var(--blue-50); color:var(--blue-700);}
+.pill.ok .dot{width:7px;height:7px;border-radius:50%;background:#12B886;box-shadow:0 0 0 3px rgba(18,182,134,.18);}
+.pill.pdf{background:var(--blue-600); color:#fff; cursor:pointer;}
+
+/* ---------- BODY GRID ---------- */
+.body{flex:1; display:grid; grid-template-columns:296px 1fr 300px; gap:12px; min-height:0;}
+.col{display:flex; flex-direction:column; gap:9px; min-height:0;}
+
+/* panel base */
+.panel{padding:11px 13px;}
+.panel-h{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+
+/* ---------- LEFT: client ---------- */
+.client{display:flex; align-items:center; gap:11px;}
+.avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--blue-100),var(--blue-200));
+  display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--blue-700);font-size:18px;}
+.client .nm{font-size:15px;font-weight:800;display:flex;align-items:center;gap:7px;}
+.tag-vvip{font-size:9px;font-weight:800;color:#fff;background:var(--blue-600);padding:2px 6px;border-radius:5px;letter-spacing:.03em;}
+.client .sub{font-size:10.5px;color:var(--ink3);font-weight:600;margin-top:3px;}
+
+/* upload */
+.dropzone{border:1.5px dashed var(--blue-200); background:var(--blue-50); border-radius:12px;
+  padding:10px; text-align:center; cursor:pointer;}
+.dropzone .ic{width:30px;height:30px;border-radius:50%;background:#fff;border:1px solid var(--blue-100);
+  display:flex;align-items:center;justify-content:center;margin:0 auto 6px;}
+.dropzone .t{font-size:12.5px;font-weight:700;color:var(--blue-700);}
+.dropzone .s{font-size:10px;color:var(--ink3);font-weight:600;margin-top:3px;}
+
+/* chat log */
+.log{display:flex;flex-direction:column;gap:6px;}
+.msg{display:flex;gap:7px;align-items:flex-start;}
+.msg .who{font-size:8.5px;font-weight:800;color:#fff;padding:2px 5px;border-radius:5px;flex-shrink:0;margin-top:1px;}
+.who.pb{background:var(--blue-600);} .who.cl{background:#ADB5BD;}
+.msg .tx{font-size:11px;color:var(--ink2);font-weight:500;line-height:1.32;flex:1;}
+.msg .tm{font-size:9px;color:var(--ink4);font-weight:600;flex-shrink:0;margin-top:1px;}
+.recall{margin-top:7px;width:100%;border:1px solid var(--line);background:#fff;border-radius:9px;
+  padding:7px;font-size:11px;font-weight:700;color:var(--ink2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
+
+/* IPS tuner */
+.ips-sub{font-size:10px;color:var(--ink3);font-weight:700;letter-spacing:.06em;margin-top:2px;}
+.ips-row{display:flex;align-items:center;gap:10px;padding:2px 0;border-bottom:1px solid var(--line2);}
+.ips-row:last-child{border:none}
+.ips-k{width:54px;flex-shrink:0;}
+.ips-k b{display:block;font-size:11px;font-weight:800;}
+.ips-k span{font-size:8px;color:var(--ink3);font-weight:600;line-height:1;display:block;margin-top:1px;}
+.ips-v{flex:1;font-size:11px;font-weight:600;color:var(--ink2);line-height:1.35;}
+.seg{display:flex;background:var(--line2);border-radius:7px;padding:2px;gap:2px;}
+.seg button{flex:1;border:none;background:transparent;font-size:10px;font-weight:700;color:var(--ink3);padding:4px 0;border-radius:5px;cursor:pointer;}
+.seg button.on{background:#fff;color:var(--blue-700);box-shadow:var(--shadow);}
+.slider{position:relative;height:5px;background:var(--line);border-radius:3px;margin:5px 0 1px;}
+.slider .fill{position:absolute;left:0;top:0;height:100%;background:var(--blue-600);border-radius:3px;}
+.slider .knob{position:absolute;top:50%;width:14px;height:14px;background:#fff;border:3px solid var(--blue-600);
+  border-radius:50%;transform:translate(-50%,-50%);box-shadow:var(--shadow);}
+.slider-lab{display:flex;justify-content:space-between;font-size:9px;color:var(--ink4);font-weight:600;}
+.ips-val-strong{font-size:12px;font-weight:800;color:var(--blue-700);}
+
+.analyze{background:var(--blue-600);color:#fff;border:none;border-radius:13px;padding:13px;font-size:14px;
+  font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 14px rgba(0,100,255,.28);}
+
+/* ---------- CENTER ---------- */
+.dash-head{display:flex;align-items:baseline;gap:10px;padding:0 2px;}
+.dash-head h2{font-size:18px;font-weight:800;}
+.dash-head span{font-size:11px;color:var(--ink3);font-weight:600;}
+
+.pf-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.pf{padding:13px;position:relative;}
+.pf.best{border:2px solid var(--blue-600);box-shadow:0 6px 20px rgba(0,100,255,.14);}
+.pf-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.pf-name{font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;}
+.badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:6px;}
+.badge.best{background:var(--blue-600);color:#fff;}
+.badge.rec{background:var(--blue-50);color:var(--blue-700);}
+.badge.cur{background:var(--line2);color:var(--ink3);}
+.viewtab{display:flex;gap:4px;}
+.viewtab span{font-size:9.5px;font-weight:700;color:var(--ink4);padding:3px 7px;border-radius:6px;}
+.viewtab span.on{background:var(--ink);color:#fff;}
+.donut-wrap{display:flex;align-items:center;gap:10px;}
+.donut{width:108px;height:108px;flex-shrink:0;}
+.legend{flex:1;display:grid;grid-template-columns:1fr;gap:3px;}
+.lg{display:flex;align-items:center;gap:6px;font-size:9.5px;}
+.lg .sw{width:8px;height:8px;border-radius:3px;flex-shrink:0;}
+.lg .nm{color:var(--ink2);font-weight:600;flex:1;}
+.lg .pc{font-weight:800;color:var(--ink);}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line2);
+  border-radius:9px;overflow:hidden;margin-top:11px;}
+.mt{background:#fff;padding:7px 8px;}
+.mt .k{font-size:8.5px;color:var(--ink3);font-weight:700;margin-bottom:2px;}
+.mt .v{font-size:14px;font-weight:800;line-height:1;}
+.mt .x{font-size:8.5px;font-weight:700;margin-top:2px;}
+
+.bottom-row{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;}
+
+/* backtest (full-width strip) */
+.bt{padding:11px 13px;display:flex;flex-direction:column;height:150px;flex-shrink:0;}
+.bt-legend{display:flex;gap:12px;}
+.bt-legend i{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--ink2);}
+.bt-legend i b{width:14px;height:3px;border-radius:2px;}
+.bt-chart{flex:1;margin-top:4px;}
+
+/* TAX OPTIMIZATION (redesigned) */
+.tax{padding:13px;display:flex;flex-direction:column;}
+.tax-tabs{display:flex;gap:5px;}
+.tax-tabs span{font-size:9.5px;font-weight:700;padding:4px 9px;border-radius:7px;color:var(--ink3);background:var(--line2);}
+.tax-tabs span.on{background:var(--blue-600);color:#fff;}
+.tax-body{display:grid;grid-template-columns:128px 1fr;gap:12px;flex:1;min-height:0;margin-top:4px;}
+.tax-cards{display:flex;flex-direction:column;gap:7px;}
+.tcard{border:1px solid var(--line);border-radius:10px;padding:9px 10px;position:relative;}
+.tcard.best{border:1.5px solid var(--blue-600);background:var(--blue-50);}
+.tcard .tl{font-size:9.5px;font-weight:700;color:var(--ink3);display:flex;align-items:center;gap:5px;}
+.tcard .big{font-size:20px;font-weight:800;color:var(--ink);line-height:1;margin:5px 0 2px;}
+.tcard.best .big{color:var(--blue-700);}
+.tcard .big small{font-size:11px;font-weight:800;}
+.tcard .sub{font-size:9px;color:var(--ink3);font-weight:600;}
+.tcard .rate{font-size:9px;font-weight:800;margin-top:5px;padding-top:5px;border-top:1px dashed var(--line);
+  display:flex;justify-content:space-between;}
+.tcard .rate b{color:var(--blue-700);}
+.tcard .deltaplus{font-size:8.5px;font-weight:800;color:var(--up);}
+
+.wf-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;}
+.wf-head .t{font-size:11px;font-weight:800;}
+.wf-head .t small{color:var(--ink3);font-weight:700;}
+.rate-strip{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:800;}
+.rate-strip .old{color:var(--ink3);text-decoration:line-through;text-decoration-color:var(--ink4);}
+.rate-strip .new{color:#fff;background:var(--blue-600);padding:2px 7px;border-radius:6px;}
+.rate-strip .arr{color:var(--ink4);}
+.wf-chart{flex:1;min-height:0;}
+.tax-note{font-size:10px;color:var(--ink2);font-weight:600;line-height:1.4;margin-top:7px;
+  background:var(--blue-50);border-radius:8px;padding:7px 9px;display:flex;gap:6px;}
+.tax-note b{color:var(--blue-700);}
+.tax-note .ck{color:var(--blue-600);font-weight:800;flex-shrink:0;}
+.tax-tabs span{cursor:pointer;}
+.tax-pane{display:none;flex:1;min-height:0;flex-direction:column;}
+.tax-pane.on{display:flex;}
+/* applied tax rates */
+.rate-chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px;}
+.rchip{font-size:9px;font-weight:700;color:var(--ink2);background:var(--line2);border-radius:6px;padding:3px 7px;}
+.rchip b{color:var(--blue-700);}
+/* threshold gauge (tab 2) */
+.thr{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;}
+.thr-top{display:flex;gap:10px;align-items:stretch;}
+.thr-in{flex:1;border:1px solid var(--line);border-radius:10px;padding:9px 11px;}
+.thr-in .k{font-size:9.5px;font-weight:700;color:var(--ink3);}
+.thr-in .v{font-size:17px;font-weight:800;color:var(--ink);margin-top:3px;}
+.thr-in .v small{font-size:11px;}
+.thr-slider{margin-top:7px;}
+.thr-fixed{width:120px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--blue-50);}
+.thr-fixed .k{font-size:9.5px;font-weight:700;color:var(--ink3);}
+.thr-fixed .v{font-size:14px;font-weight:800;color:var(--blue-700);margin-top:3px;}
+.thr-fixed .s{font-size:8.5px;color:var(--ink3);font-weight:600;margin-top:2px;line-height:1.3;}
+.gauge{position:relative;height:34px;margin-top:4px;}
+.gauge-track{position:absolute;top:11px;left:0;right:0;height:13px;background:var(--line2);border-radius:7px;overflow:hidden;}
+.gauge-safe{position:absolute;top:0;left:0;height:100%;background:linear-gradient(90deg,var(--blue-500),var(--blue-600));}
+.gauge-over{position:absolute;top:0;height:100%;background:var(--up);}
+.gauge-line{position:absolute;top:2px;width:2px;height:30px;background:var(--ink);}
+.gauge-line .lab{position:absolute;top:-2px;left:6px;font-size:8.5px;font-weight:800;color:var(--ink);white-space:nowrap;}
+.gauge-cur{position:absolute;top:26px;font-size:9px;font-weight:800;transform:translateX(-50%);white-space:nowrap;}
+.thr-verdict{border-radius:10px;padding:9px 11px;display:flex;gap:9px;align-items:flex-start;}
+.thr-verdict.over{background:#FEECEE;}
+.thr-verdict.safe{background:var(--blue-50);}
+.thr-verdict .ico{font-size:14px;flex-shrink:0;line-height:1.2;}
+.thr-verdict .tt{font-size:11px;font-weight:800;line-height:1.4;}
+.thr-verdict.over .tt b{color:var(--up);} .thr-verdict.safe .tt b{color:var(--blue-700);}
+.thr-verdict .ds{font-size:9.5px;font-weight:600;color:var(--ink2);margin-top:2px;line-height:1.4;}
+.thr-rates{display:flex;gap:7px;margin-top:auto;}
+.thr-rate{flex:1;border:1px solid var(--line);border-radius:9px;padding:7px 9px;text-align:center;}
+.thr-rate.hot{border-color:#F7B2B8;background:#FEF4F5;}
+.thr-rate .rk{font-size:9px;font-weight:700;color:var(--ink3);}
+.thr-rate .rv{font-size:15px;font-weight:800;margin-top:2px;}
+/* advice cards (tab 3) */
+.adv-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;flex:1;min-height:0;}
+.acard{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;}
+.acard .ah{display:flex;align-items:center;gap:6px;}
+.acard .ai{width:21px;height:21px;border-radius:7px;background:var(--blue-50);color:var(--blue-700);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;}
+.acard .at{font-size:11px;font-weight:800;}
+.acard .am{font-size:9px;color:var(--ink2);font-weight:600;line-height:1.35;margin-top:5px;flex:1;}
+.acard .as{font-size:8.5px;color:var(--ink4);font-weight:700;}
+.acard .av{font-size:14px;font-weight:800;color:var(--up);margin-top:4px;}
+.adv-total{display:flex;justify-content:space-between;align-items:center;background:var(--blue-600);
+  border-radius:10px;padding:8px 12px;margin-top:7px;}
+.adv-total .k{font-size:11px;font-weight:700;color:#fff;}
+.adv-total .v{font-size:16px;font-weight:800;color:#fff;}
+
+/* ===== 절세 효과 카드 (tab: eff) ===== */
+.eff{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;}
+.eff-band{background:var(--green-bg);border:1px solid var(--green-soft);border-radius:12px;
+  padding:11px 14px;display:flex;align-items:center;gap:16px;}
+.eff-left{flex:1;}
+.eff-title{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--ink);}
+.eff-ic{width:22px;height:22px;border-radius:7px;background:var(--green);color:#fff;display:flex;
+  align-items:center;justify-content:center;font-weight:800;font-size:13px;}
+.eff-chip{font-size:9.5px;font-weight:700;color:var(--ink2);background:#fff;border:1px solid var(--green-soft);
+  border-radius:20px;padding:3px 9px;}
+.eff-big{font-size:11px;font-weight:700;color:var(--green-d);margin-top:7px;display:flex;align-items:baseline;gap:6px;}
+.eff-big b{font-size:30px;font-weight:800;color:var(--green-d);line-height:1;letter-spacing:-.02em;}
+.eff-big span{font-size:13px;font-weight:800;color:var(--green-d);}
+.eff-sub{font-size:9.5px;color:var(--ink3);font-weight:600;margin-top:4px;}
+.eff-stats{display:flex;gap:10px;}
+.eff-stat{background:#fff;border:1px solid var(--line);border-radius:11px;padding:9px 13px;min-width:118px;}
+.eff-stat .k{font-size:9.5px;font-weight:700;color:var(--ink3);}
+.eff-stat .v{font-size:16px;font-weight:800;color:var(--ink);margin-top:4px;line-height:1.15;}
+.eff-stat .d{font-size:10px;font-weight:800;margin-top:3px;}
+
+.eff-detail{display:grid;grid-template-columns:1.05fr 1fr;gap:14px;flex:1;min-height:0;}
+.eff-h{font-size:11px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:7px;margin-bottom:9px;}
+.eff-h .no{width:17px;height:17px;border-radius:50%;background:var(--blue-50);color:var(--blue-700);
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;}
+.eff-h small{font-weight:600;color:var(--ink3);font-size:9.5px;}
+
+/* tax flow bars */
+.flow-row{margin-bottom:11px;}
+.flow-lab{font-size:11px;font-weight:800;margin-bottom:5px;}
+.flow-bar{display:flex;height:30px;border-radius:8px;overflow:hidden;}
+.flow-seg{display:flex;align-items:center;font-size:11px;font-weight:800;color:#fff;padding:0 10px;white-space:nowrap;}
+.flow-seg.after-gray{background:#AEB5BD;justify-content:flex-start;}
+.flow-seg.after-green{background:var(--green);justify-content:flex-start;}
+.flow-seg.tax-red{background:var(--up);justify-content:center;font-size:10px;}
+.flow-seg.tax-soft{background:#F4A8AE;justify-content:center;font-size:10px;color:#fff;}
+.flow-legend{display:flex;gap:13px;margin-top:9px;flex-wrap:wrap;}
+.flow-legend i{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--ink2);}
+.flow-legend i b{width:9px;height:9px;border-radius:3px;}
+
+/* account allocation */
+.acct{margin-bottom:9px;}
+.acct-top{display:flex;align-items:center;justify-content:space-between;}
+.acct-name{font-size:12px;font-weight:800;display:flex;align-items:center;gap:7px;}
+.acct-tag{font-size:8.5px;font-weight:700;color:var(--blue-700);background:var(--blue-50);border-radius:5px;padding:2px 6px;}
+.acct-val{font-size:11px;font-weight:800;color:var(--ink);}
+.acct-val .tot{color:var(--ink4);font-weight:700;}
+.acct-track{height:8px;background:var(--line2);border-radius:5px;margin-top:5px;overflow:hidden;}
+.acct-fill{height:100%;border-radius:5px;}
+.acct-fill.full{background:linear-gradient(90deg,var(--green),var(--green-d));}
+.acct-fill.blue{background:linear-gradient(90deg,var(--blue-400),var(--blue-600));}
+.acct-cap{font-size:9px;color:var(--ink3);font-weight:600;margin-top:4px;line-height:1.3;}
+.acct-cap b{color:var(--ink2);}
+
+/* ---------- RIGHT ---------- */
+.scn-row{margin-bottom:11px;}
+.scn-row:last-child{margin-bottom:0}
+.scn-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;}
+.scn-top .k{font-size:11px;font-weight:700;color:var(--ink2);}
+.scn-top .v{font-size:14px;font-weight:800;color:var(--blue-700);}
+.scn-pnl{background:var(--blue-50);border-radius:10px;padding:11px 13px;display:flex;
+  justify-content:space-between;align-items:center;margin-top:4px;}
+.scn-pnl .k{font-size:11px;font-weight:700;color:var(--ink2);}
+.scn-pnl .v{font-size:16px;font-weight:800;color:var(--up);}
+/* 급변 시나리오 안내 — 슬라이더가 기준 시나리오(±100bp/±200원)의 2배를 넘으면 표시 */
+.scn-note{display:flex;gap:6px;align-items:flex-start;margin-top:7px;padding:8px 10px;
+  background:var(--blue-50);border-radius:9px;font-size:9.5px;font-weight:600;
+  color:var(--ink2);line-height:1.45;}
+.scn-note .ic{flex-shrink:0;font-size:11px;line-height:1.3;}
+.ai-input{display:flex;gap:6px;margin-bottom:10px;}
+.ai-input input{flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:11px;
+  font-family:inherit;color:var(--ink);outline:none;}
+.ai-input input::placeholder{color:var(--ink4);}
+.ai-input button{background:var(--blue-600);color:#fff;border:none;border-radius:9px;padding:0 15px;
+  font-size:12px;font-weight:800;cursor:pointer;}
+.ai-out{font-size:11px;line-height:1.55;color:var(--ink2);font-weight:500;}
+.ai-out b{color:var(--ink);font-weight:800;}
+.ai-out .hl{background:linear-gradient(transparent 55%,var(--blue-100) 55%);font-weight:800;color:var(--ink);}
+.src-list{display:flex;flex-direction:column;}
+.src{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line2);}
+.src:last-child{border:none}
+.src .ic{color:var(--ink4);font-size:12px;}
+.src .nm{flex:1;font-size:11px;font-weight:700;color:var(--ink2);}
+.src .dt{font-size:9.5px;font-weight:600;color:var(--ink4);}
+</style>
+</head>
+<body>
+<div id="scaler"><div id="stage">
+
+  <!-- TOP BAR -->
+  <div class="card topbar">
+    <div class="brand">
+      <div class="logo">V</div>
+      <div><h1>VVIP PB Advisor</h1><p>PORTFOLIO ADVISORY</p></div>
+    </div>
+    <div class="clock">기준<b class="num">17:20</b></div>
+    <div class="ticker">
+      <div class="tk"><div class="lbl">기준금리</div><div class="val num">3.50%</div><div class="chg down num">▼ 0.25</div></div>
+      <div class="tk"><div class="lbl">미 10Y</div><div class="val num">4.38%</div><div class="chg down num">▼ 0.05</div></div>
+      <div class="tk"><div class="lbl">원/달러</div><div class="val num">1,220</div><div class="chg down num">▼ 20</div></div>
+      <div class="tk"><div class="lbl">CPI</div><div class="val num">3.2%</div><div class="chg down num">▼ 0.25</div></div>
+      <div class="tk"><div class="lbl">KOSPI</div><div class="val num">2,790</div><div class="chg up num">▲ 31</div></div>
+      <div class="tk"><div class="lbl">S&amp;P500</div><div class="val num">5,640</div><div class="chg up num">▲ 18</div></div>
+    </div>
+    <div class="pill ok"><span class="dot"></span>포트폴리오 연동 완료</div>
+    <div class="pill pdf">▤&nbsp; PDF 추출</div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- LEFT COLUMN -->
+    <div class="col">
+      <div class="card panel">
+        <div class="eyebrow" style="margin-bottom:8px;">고객 선택</div>
+        <div class="client">
+          <div class="avatar">김</div>
+          <div><div class="nm">김오삼 <span class="tag-vvip">VVIP</span></div>
+          <div class="sub">PB-100482 · 운용자산 18억원</div></div>
+        </div>
+      </div>
+
+      <div class="card panel">
+        <div class="eyebrow" style="margin-bottom:9px;">상담 입력</div>
+        <div class="dropzone">
+          <div class="ic">↑</div>
+          <div class="t">음성 업로드</div>
+          <div class="s">mp3, wav, m4a 지원</div>
+        </div>
+      </div>
+
+      <div class="card panel">
+        <div class="panel-h"><div class="sec-title">상담 내역</div><div class="eyebrow">상담 시간 02:14</div></div>
+        <div class="log">
+          <div class="msg"><span class="who pb">PB</span><span class="tx">최근 변동성 확대에 대한 고객님의 우려를 확인했습니다.</span><span class="tm num">00:07</span></div>
+          <div class="msg"><span class="who cl">고객</span><span class="tx">세후 수익률을 높이고 변동성을 줄이는 전략이 필요해요.</span><span class="tm num">00:12</span></div>
+          <div class="msg"><span class="who pb">PB</span><span class="tx">절세 전략과 대체자산을 활용한 분산을 제안드립니다.</span><span class="tm num">00:30</span></div>
+        </div>
+        <button class="recall">↺ 지난 기록 대화 불러오기</button>
+      </div>
+
+      <div class="card panel" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+        <div class="panel-h" style="margin-bottom:6px;">
+          <div><div class="sec-title">IPS 조율기</div><div class="ips-sub">GOAL · ASSET · R-R-T-T-L-L-U</div></div>
+        </div>
+        <div style="flex:1;overflow:hidden;">
+          <div class="ips-row"><div class="ips-k"><b>Goal</b><span>목표</span></div><div class="ips-v">자녀 전세자금 및 장기 증여 준비</div></div>
+          <div class="ips-row"><div class="ips-k"><b>Asset</b><span>자산</span></div><div class="ips-v ips-val-strong num">18억원</div></div>
+          <div class="ips-row"><div class="ips-k"><b>Return</b><span>수익</span></div>
+            <div class="ips-v" style="flex:1;display:flex;align-items:center;gap:9px;">
+              <span class="ips-val-strong num" style="width:30px">8%</span>
+              <div class="slider" style="flex:1;margin:0;"><div class="fill" style="width:40%"></div><div class="knob" style="left:40%"></div></div>
+            </div></div>
+          <div class="ips-row"><div class="ips-k"><b>Risk</b><span>위험</span></div>
+            <div class="ips-v" style="flex:1"><div class="seg"><button>안정형</button><button class="on">균형형</button><button>공격형</button></div></div></div>
+          <div class="ips-row"><div class="ips-k"><b>Time</b><span>기간</span></div>
+            <div class="ips-v" style="flex:1;display:flex;align-items:center;gap:9px;">
+              <span class="ips-val-strong num" style="width:30px">10년</span>
+              <div class="slider" style="flex:1;margin:0;"><div class="fill" style="width:32%"></div><div class="knob" style="left:32%"></div></div>
+            </div></div>
+          <div class="ips-row"><div class="ips-k"><b>Tax</b><span>세제</span></div><div class="ips-v">금융소득종합과세 · 양도세 · 증여세</div></div>
+          <div class="ips-row"><div class="ips-k"><b>Liquid</b><span>유동성</span></div>
+            <div class="ips-v" style="flex:1"><div class="seg"><button>낮음</button><button class="on">중간</button><button>높음</button></div></div></div>
+          <div class="ips-row"><div class="ips-k"><b>Legal</b><span>법적</span></div><div class="ips-v">증여세법 · 자금출처조사 대비</div></div>
+          <div class="ips-row"><div class="ips-k"><b>Unique</b><span>특수</span></div><div class="ips-v">전체 자금 3억 · 미국 배당주·장기채 선호</div></div>
+        </div>
+      </div>
+
+      <button class="analyze">✦&nbsp; 분석하기</button>
+    </div>
+
+    <!-- CENTER COLUMN -->
+    <div class="col">
+      <div class="dash-head"><h2>포트폴리오 대시보드</h2><span>5년 백테스트 · 절세 최적화 포함</span></div>
+
+      <div class="pf-row">
+        <!-- 현재 -->
+        <div class="card pf">
+          <div class="pf-h">
+            <div class="pf-name">현재 <span class="badge cur">현재</span></div>
+            <div class="viewtab"><span class="on">도넛</span><span>히트맵</span></div>
+          </div>
+          <div class="donut-wrap">
+            <svg class="donut" data-donut="cur" viewBox="0 0 120 120"></svg>
+            <div class="legend" data-legend="cur"></div>
+          </div>
+          <div class="metrics">
+            <div class="mt"><div class="k">기대수익률</div><div class="v up num">4.8%</div></div>
+            <div class="mt"><div class="k">변동성</div><div class="v num">11.2%</div></div>
+            <div class="mt"><div class="k">샤프지수</div><div class="v num">0.43</div></div>
+            <div class="mt"><div class="k">소르티노</div><div class="v num">0.30</div></div>
+            <div class="mt"><div class="k">MDD</div><div class="v down num">▼14.6%</div><div class="x down num">-3,200만원</div></div>
+            <div class="mt"><div class="k">세후수익률</div><div class="v up num">4.0%</div><div class="x up num">+7,200만원</div></div>
+          </div>
+        </div>
+        <!-- A 베스트 -->
+        <div class="card pf best">
+          <div class="pf-h">
+            <div class="pf-name">포트폴리오 A <span class="badge best">베스트</span></div>
+            <div class="viewtab"><span class="on">도넛</span><span>히트맵</span></div>
+          </div>
+          <div class="donut-wrap">
+            <svg class="donut" data-donut="a" viewBox="0 0 120 120"></svg>
+            <div class="legend" data-legend="a"></div>
+          </div>
+          <div class="metrics">
+            <div class="mt"><div class="k">기대수익률</div><div class="v up num">6.4%</div></div>
+            <div class="mt"><div class="k">변동성</div><div class="v num">12.5%</div></div>
+            <div class="mt"><div class="k">샤프지수</div><div class="v num">0.61</div></div>
+            <div class="mt"><div class="k">소르티노</div><div class="v num">0.48</div></div>
+            <div class="mt"><div class="k">MDD</div><div class="v down num">▼11.2%</div><div class="x down num">-2,000만원</div></div>
+            <div class="mt"><div class="k">세후수익률</div><div class="v up num">5.5%</div><div class="x up num">+9,900만원</div></div>
+          </div>
+        </div>
+        <!-- B 추천 -->
+        <div class="card pf">
+          <div class="pf-h">
+            <div class="pf-name">포트폴리오 B <span class="badge rec">추천</span></div>
+            <div class="viewtab"><span class="on">도넛</span><span>히트맵</span></div>
+          </div>
+          <div class="donut-wrap">
+            <svg class="donut" data-donut="b" viewBox="0 0 120 120"></svg>
+            <div class="legend" data-legend="b"></div>
+          </div>
+          <div class="metrics">
+            <div class="mt"><div class="k">기대수익률</div><div class="v up num">8.7%</div></div>
+            <div class="mt"><div class="k">변동성</div><div class="v num">20.3%</div></div>
+            <div class="mt"><div class="k">샤프지수</div><div class="v num">0.43</div></div>
+            <div class="mt"><div class="k">소르티노</div><div class="v num">0.43</div></div>
+            <div class="mt"><div class="k">MDD</div><div class="v down num">▼23.3%</div><div class="x down num">-4,200만원</div></div>
+            <div class="mt"><div class="k">세후수익률</div><div class="v up num">7.2%</div><div class="x up num">+1.29억원</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-row">
+        <!-- BACKTEST -->
+        <div class="card bt">
+          <div class="panel-h" style="margin-bottom:2px;">
+            <div class="sec-title">백테스트 <small style="font-weight:600;color:var(--ink3);font-size:10px;">최근 5년</small></div>
+            <div class="bt-legend">
+              <i><b style="background:var(--ink3)"></b>현재</i>
+              <i><b style="background:var(--blue-600)"></b>A</i>
+              <i><b style="background:var(--blue-300)"></b>B</i>
+            </div>
+          </div>
+          <svg class="bt-chart" id="btchart" viewBox="0 0 360 220" preserveAspectRatio="none"></svg>
+        </div>
+
+        <!-- TAX OPTIMIZATION (3 functional tabs) -->
+        <div class="card tax">
+          <div class="panel-h" style="margin-bottom:6px;">
+            <div class="sec-title">절세 최적화 시뮬레이터</div>
+            <div class="tax-tabs">
+              <span class="on" data-tab="eff">절세 효과</span>
+              <span data-tab="thr">종합과세 임계선</span>
+              <span data-tab="adv">절세 제안</span>
+            </div>
+          </div>
+
+          <!-- TAB 1: 절세 효과 -->
+          <div class="tax-pane on" id="tab-eff">
+            <div class="eff">
+              <div class="eff-band">
+                <div class="eff-left">
+                  <div class="eff-title"><span class="eff-ic">$</span> 절세 최적화 효과
+                    <span class="eff-chip">기준 : 포트폴리오 A · 18억</span></div>
+                  <div class="eff-big"><span>연간 절세 효과</span> <b class="num">+1,080</b><span>만원</span></div>
+                  <div class="eff-sub">일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영</div>
+                </div>
+                <div class="eff-stats">
+                  <div class="eff-stat">
+                    <div class="k">세후 수익률</div>
+                    <div class="v num">5.5% → 6.1%</div>
+                    <div class="d num" style="color:var(--green-d)">+0.6%p</div>
+                  </div>
+                  <div class="eff-stat">
+                    <div class="k">실효세 절감</div>
+                    <div class="v num">1,620 → 540만</div>
+                    <div class="d num" style="color:var(--green-d)">−1,080만</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="eff-detail">
+                <!-- ① 세금 흐름 비교 -->
+                <div>
+                  <div class="eff-h"><span class="no">1</span>세금 흐름 비교 <small>· 세전 기대수익 1.15억 기준</small></div>
+                  <div class="flow-row">
+                    <div class="flow-lab" style="color:var(--ink2)">일반과세</div>
+                    <div class="flow-bar">
+                      <div class="flow-seg after-gray" style="flex:9900 1 0">세후 9,900만</div>
+                      <div class="flow-seg tax-red" style="flex:1620 1 0">세금 1,620</div>
+                    </div>
+                  </div>
+                  <div class="flow-row">
+                    <div class="flow-lab" style="color:var(--green-d)">절세전략</div>
+                    <div class="flow-bar">
+                      <div class="flow-seg after-green" style="flex:10980 1 0">세후 10,980만</div>
+                      <div class="flow-seg tax-soft" style="flex:540 1 0">540</div>
+                    </div>
+                  </div>
+                  <div class="flow-legend">
+                    <i><b style="background:var(--green)"></b>세후 수익(절세전략)</i>
+                    <i><b style="background:#AEB5BD"></b>세후 수익(일반)</i>
+                    <i><b style="background:var(--up)"></b>세금 누수</i>
+                  </div>
+                </div>
+
+                <!-- ② 절세 계좌 배치 활용도 -->
+                <div>
+                  <div class="eff-h"><span class="no">2</span>절세 계좌 배치 활용도</div>
+                  <div class="acct">
+                    <div class="acct-top">
+                      <div class="acct-name">ISA <span class="acct-tag">비과세·분리과세</span></div>
+                      <div class="acct-val num">2,000 <span class="tot">/ 2,000만</span></div>
+                    </div>
+                    <div class="acct-track"><div class="acct-fill full" style="width:100%"></div></div>
+                    <div class="acct-cap">납입 한도 100% 활용 · 비과세 <b>200만</b> + 초과분 <b>9.9%</b> 분리과세</div>
+                  </div>
+                  <div class="acct">
+                    <div class="acct-top">
+                      <div class="acct-name">연금저축 + IRP <span class="acct-tag">세액공제</span></div>
+                      <div class="acct-val num">900 <span class="tot">/ 900만</span></div>
+                    </div>
+                    <div class="acct-track"><div class="acct-fill full" style="width:100%"></div></div>
+                    <div class="acct-cap">세액공제 한도 소진 · 공제율 <b>16.5%</b> → 환급 <b>148만</b></div>
+                  </div>
+                  <div class="acct">
+                    <div class="acct-top">
+                      <div class="acct-name">일반계좌 <span class="acct-tag">분리과세 ETF</span></div>
+                      <div class="acct-val" style="color:var(--ink3)">잔여 자산 배치</div>
+                    </div>
+                    <div class="acct-track"><div class="acct-fill blue" style="width:45%"></div></div>
+                    <div class="acct-cap">국내·해외 ETF 중심으로 <b style="color:var(--blue-700)">금융소득종합과세 구간 회피</b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: 금융소득종합과세 기준선 실시간 점검 -->
+          <div class="tax-pane" id="tab-thr">
+            <div class="thr">
+              <div class="thr-top">
+                <div class="thr-in">
+                  <div class="k">고객 기타 금융소득 입력 (연 이자·배당)</div>
+                  <div class="v num"><span id="thr-other">1,650</span><small>만원</small></div>
+                  <div class="slider thr-slider" id="thr-slider">
+                    <div class="fill" id="thr-fill" style="width:59%"></div>
+                    <div class="knob" id="thr-knob" style="left:59%"></div>
+                  </div>
+                </div>
+                <div class="thr-fixed">
+                  <div class="k">포트폴리오 A<br>예상 이자·배당</div>
+                  <div class="v num">+520<small>만원</small></div>
+                  <div class="s">합산 대상 과세소득</div>
+                </div>
+              </div>
+
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:9.5px;font-weight:700;color:var(--ink3);">
+                  <span>연 금융소득 합산</span><span class="num" id="thr-sum">2,170만원</span>
+                </div>
+                <div class="gauge">
+                  <div class="gauge-track">
+                    <div class="gauge-safe" id="g-safe"></div>
+                    <div class="gauge-over" id="g-over"></div>
+                  </div>
+                  <div class="gauge-line" style="left:66.7%"><span class="lab">기준선 2,000만</span></div>
+                  <div class="gauge-cur" id="g-cur" style="left:72%;color:var(--up)">▲ 2,170만</div>
+                </div>
+              </div>
+
+              <div class="thr-verdict over" id="thr-verdict">
+                <span class="ico">⚠️</span>
+                <div>
+                  <div class="tt">기준선 <b>초과</b> — 금융소득종합과세 대상</div>
+                  <div class="ds" id="thr-desc">초과분 <b>170만원</b>은 다른 종합소득과 합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이 적용됩니다. <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을 권장합니다.</div>
+                </div>
+              </div>
+
+              <div class="thr-rates">
+                <div class="thr-rate"><div class="rk">분리과세 시</div><div class="rv num down">15.4%</div></div>
+                <div class="thr-rate hot"><div class="rk">종합과세 시 (현 상태)</div><div class="rv num up">최고 49.5%</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: 절세 제안 알고리즘 -->
+          <div class="tax-pane" id="tab-adv">
+            <div class="adv-grid">
+              <div class="acard">
+                <div class="ah"><span class="ai">I</span><span class="at">ISA 계좌 활용</span></div>
+                <div class="am">배당주 4,000만원을 ISA로 이전 — 비과세 한도 적용 후 초과분 분리과세 9.9%.</div>
+                <div class="as">비과세 자산 이전</div>
+                <div class="av num">+210만원</div>
+              </div>
+              <div class="acard">
+                <div class="ah"><span class="ai">채</span><span class="at">분리과세 채권</span></div>
+                <div class="am">저쿠폰·장기채로 이자소득을 분리과세(14%) 전환해 종합과세 합산에서 제외.</div>
+                <div class="as">분리과세 전환</div>
+                <div class="av num">+180만원</div>
+              </div>
+              <div class="acard">
+                <div class="ah"><span class="ai">배</span><span class="at">저율과세 배당주</span></div>
+                <div class="am">고배당 종목을 저율과세 ETF·우선주로 조정해 배당소득세 부담 완화.</div>
+                <div class="as">저율과세 편입</div>
+                <div class="av num">+90만원</div>
+              </div>
+              <div class="acard">
+                <div class="ah"><span class="ai">L</span><span class="at">Tax-loss Harvesting</span></div>
+                <div class="am">평가손실 1,800만원 확정 → 해외주식 양도차익과 상계해 양도세(22%) 절감.</div>
+                <div class="as">평가손실 확정</div>
+                <div class="av num">+396만원</div>
+              </div>
+            </div>
+            <div class="adv-total">
+              <span class="k">알고리즘 제안 적용 시 예상 추가 절감</span>
+              <span class="v num">+876만원</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col">
+      <div class="card panel">
+        <div class="sec-title" style="margin-bottom:11px;">시나리오 Test</div>
+        <div class="scn-row">
+          <div class="scn-top"><span class="k">금리</span><span class="v num">4.75%</span></div>
+          <div class="slider"><div class="fill" style="width:79%"></div><div class="knob" style="left:79%"></div></div>
+          <div class="slider-lab"><span>0.0%</span><span>6.0%</span></div>
+        </div>
+        <div class="scn-row">
+          <div class="scn-top"><span class="k">환율</span><span class="v num">1,420원</span></div>
+          <div class="slider"><div class="fill" style="width:42%"></div><div class="knob" style="left:42%"></div></div>
+          <div class="slider-lab"><span>1,000</span><span>2,000</span></div>
+        </div>
+        <div class="scn-pnl"><span class="k">예상 평가손익 (18억 기준)</span><span class="v num">▲ 0만원</span></div>
+        <div class="scn-note" id="scn-note">
+          <span class="ic">💡</span>
+          <span>매우 큰 폭의 변동을 가정한 시나리오입니다. 정밀한 수치보다는 전체적인 흐름을 보시는 용도로 적합합니다.</span>
+        </div>
+      </div>
+
+      <div class="card panel">
+        <div class="sec-title" style="margin-bottom:10px;">AI 인사이트</div>
+        <div class="ai-input">
+          <input placeholder="예: 금리 전망, 환율 리스크, 세액공제…">
+          <button>검색</button>
+        </div>
+        <div class="ai-out">
+          <b>금리 상승기</b>에는 단기 채권 비중 확대와 배당 성장주 편입이 유효하며, 환율 변동성 확대 시
+          <span class="hl">환헤지 비중 상향</span>을 권고합니다. 세후 기준 포트폴리오 A의 위험조정수익이 가장 우수합니다.
+        </div>
+      </div>
+
+      <div class="card panel" style="flex:1;min-height:0;">
+        <div class="sec-title" style="margin-bottom:6px;">출처 / 인용 목록</div>
+        <div class="src-list">
+          <div class="src"><span class="ic">▤</span><span class="nm">Young Creator 리서치 · 글로벌 전략</span><span class="dt num">2026.05.20</span></div>
+          <div class="src"><span class="ic">▤</span><span class="nm">yfinance Market Data API</span><span class="dt">실시간</span></div>
+          <div class="src"><span class="ic">▤</span><span class="nm">Bloomberg Macro Outlook</span><span class="dt num">2026.05</span></div>
+          <div class="src"><span class="ic">▤</span><span class="nm">국세청 금융소득 종합과세 가이드</span><span class="dt num">2026</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div></div>
+
+<script>
+/* ---------- color ramp ---------- */
+const RAMP = ['#0064FF','#2C7BFF','#5C9CFF','#8FBCFF','#B8D4FF','#DCE9FF'];
+const CATS = ['국내주식','해외배당주','해외성장주','일반채권','저쿠폰채','분리과세'];
+const PF = {
+  cur:[25,18,12,22,12,11],
+  a:  [20,22,12,18,14,14],
+  b:  [28,26,22,12,8,4]
+};
+
+/* ---------- donut ---------- */
+function drawDonut(el, data, label, sub){
+  const cx=60,cy=60,r=44,sw=18, C=2*Math.PI*r;
+  let acc=0, ns='http://www.w3.org/2000/svg', frag='';
+  data.forEach((v,i)=>{
+    const len=C*v/100;
+    frag+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${RAMP[i]}" stroke-width="${sw}"
+      stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-acc}"
+      transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"/>`;
+    acc+=len;
+  });
+  frag+=`<text x="${cx}" y="${cy-3}" text-anchor="middle" font-size="9.5" fill="#8B95A1" font-weight="700">${label}</text>`;
+  frag+=`<text x="${cx}" y="${cy+11}" text-anchor="middle" font-size="13" fill="#171C24" font-weight="800">${sub}</text>`;
+  el.innerHTML=frag;
+}
+function drawLegend(el, data){
+  el.innerHTML = data.map((v,i)=>
+    `<div class="lg"><span class="sw" style="background:${RAMP[i]}"></span>
+     <span class="nm">${CATS[i]}</span><span class="pc num">${v}%</span></div>`).join('');
+}
+document.querySelectorAll('[data-donut]').forEach(svg=>{
+  const k=svg.dataset.donut; drawDonut(svg, PF[k], '자산배분', '6개 군');
+});
+document.querySelectorAll('[data-legend]').forEach(div=>{
+  drawLegend(div, PF[div.dataset.legend]);
+});
+
+/* ---------- backtest line chart ---------- */
+(function(){
+  const W=360,H=220, padL=8,padR=8,padT=14,padB=26;
+  const years=['2021','2022','2023','2024','2025','2026'];
+  const series={
+    cur:[100,96,108,118,128,140],
+    a:  [100,103,116,131,150,176],
+    b:  [100,92,118,128,156,200]
+  };
+  const all=[].concat(series.cur,series.a,series.b);
+  const min=Math.min(...all)-6, max=Math.max(...all)+6;
+  const x=i=> padL + i*(W-padL-padR)/(years.length-1);
+  const y=v=> padT + (1-(v-min)/(max-min))*(H-padT-padB);
+  const path=arr=> arr.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+  let g='';
+  // grid
+  for(let i=0;i<years.length;i++){
+    g+=`<text x="${x(i)}" y="${H-8}" font-size="9" fill="#B0B8C1" text-anchor="middle" font-weight="600">${years[i]}</text>`;
+  }
+  // area under A
+  g+=`<path d="${path(series.a)} L ${x(5)} ${H-padB} L ${x(0)} ${H-padB} Z" fill="rgba(0,100,255,.07)"/>`;
+  g+=`<path d="${path(series.cur)}" fill="none" stroke="#8B95A1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g+=`<path d="${path(series.b)}" fill="none" stroke="#8FBCFF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g+=`<path d="${path(series.a)}" fill="none" stroke="#0064FF" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g+=`<circle cx="${x(5)}" cy="${y(series.a[5])}" r="3.4" fill="#0064FF" stroke="#fff" stroke-width="1.6"/>`;
+  document.getElementById('btchart').innerHTML=g;
+})();
+
+/* ---------- TAX WATERFALL ---------- */
+(function(){
+  if(!document.getElementById('wfchart'))return;
+  // 만원 단위
+  const steps=[
+    {label:'세전\n예상수익', sub:'1.15억', type:'total', value:11500},
+    {label:'일반과세\n기준', sub:'−2,560', type:'neg', value:-2560},
+    {label:'ISA\n비과세', sub:'+340', type:'rec', value:340},
+    {label:'연금\n과세이연', sub:'+300', type:'rec', value:300},
+    {label:'손익통산', sub:'+180', type:'rec', value:180},
+    {label:'분리·기타', sub:'+120', type:'rec', value:120},
+    {label:'세후\n실수령', sub:'9,880', type:'final', value:9880},
+  ];
+  const W=460,H=200, padT=14, padB=42, plot=H-padT-padB, baseY=H-padB;
+  const n=steps.length, gap=10;
+  const bw=(W - gap*(n+1))/n;
+  const maxV=11500;
+  const sc=v=> v/maxV*plot;
+  const COL={total:'#0064FF', neg:'#F04452', rec:'#B8D4FF', final:'#0050D6'};
+  let cum=0, g='', prevTopY=null, prevX2=null;
+
+  // baseline
+  g+=`<line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="#E8EBED" stroke-width="1"/>`;
+
+  steps.forEach((s,i)=>{
+    const x1=gap + i*(bw+gap);
+    let top, bottom, fill=COL[s.type];
+    if(s.type==='total'){ cum=s.value; top=baseY-sc(cum); bottom=baseY; }
+    else if(s.type==='final'){ top=baseY-sc(s.value); bottom=baseY; cum=s.value; }
+    else { // floating
+      const start=cum; cum+=s.value;
+      const hi=Math.max(start,cum), lo=Math.min(start,cum);
+      top=baseY-sc(hi); bottom=baseY-sc(lo);
+    }
+    const h=Math.max(bottom-top,2);
+    // connector from previous bar top-level
+    if(prevX2!==null){
+      const connY = baseY - sc( (s.type==='neg'||s.type==='rec') ? cum - s.value : (s.type==='final'? s.value : cum) );
+      // draw connector at the running level before this step (= previous cumulative)
+    }
+    g+=`<rect x="${x1.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}"
+        rx="3" fill="${fill}" ${s.type==='rec'?'stroke="#5C9CFF" stroke-width="1"':''}/>`;
+    // value sub label (above bar)
+    const subColor = s.type==='neg'?'#F04452':(s.type==='rec'?'#2C7BFF':'#171C24');
+    g+=`<text x="${(x1+bw/2).toFixed(1)}" y="${(top-5).toFixed(1)}" text-anchor="middle"
+        font-size="10" font-weight="800" fill="${subColor}" font-family="Pretendard">${s.sub}</text>`;
+    // x label (below baseline, support \n)
+    const lines=s.label.split('\n');
+    lines.forEach((ln,li)=>{
+      g+=`<text x="${(x1+bw/2).toFixed(1)}" y="${(baseY+15+li*11).toFixed(1)}" text-anchor="middle"
+          font-size="9.5" font-weight="${ (s.type==='total'||s.type==='final')?'800':'600'}"
+          fill="${(s.type==='total'||s.type==='final')?'#171C24':'#4E5968'}" font-family="Pretendard">${ln}</text>`;
+    });
+  });
+
+  // dashed connectors between step tops (running level)
+  let run=0, connectors='';
+  steps.forEach((s,i)=>{
+    const x1=gap + i*(bw+gap), x2=x1+bw;
+    let levelAfter;
+    if(s.type==='total'){ run=s.value; levelAfter=run; }
+    else if(s.type==='final'){ run=s.value; levelAfter=run; }
+    else { run+=s.value; levelAfter=run; }
+    if(i<steps.length-1){
+      const yL=baseY-sc(levelAfter);
+      const nx1=gap+(i+1)*(bw+gap);
+      connectors+=`<line x1="${x2.toFixed(1)}" y1="${yL.toFixed(1)}" x2="${nx1.toFixed(1)}" y2="${yL.toFixed(1)}"
+        stroke="#C9D1D8" stroke-width="1" stroke-dasharray="3 2.5"/>`;
+    }
+  });
+  document.getElementById('wfchart').innerHTML = connectors + g;
+})();
+
+/* ---------- TAX: tab switching ---------- */
+(function(){
+  const tabs=document.querySelectorAll('.tax-tabs span[data-tab]');
+  tabs.forEach(t=>t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.tax-pane').forEach(p=>p.classList.remove('on'));
+    t.classList.add('on');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('on');
+  }));
+})();
+
+/* ---------- TAX: 종합과세 기준선 실시간 점검 ---------- */
+(function(){
+  const PF_DIV=520;        // 포트폴리오 A 예상 이자·배당 (만원)
+  const THRESHOLD=2000;    // 금융소득종합과세 기준선
+  const SCALE=3000;        // 게이지 최대 스케일
+  const MAX_OTHER=2480;    // 슬라이더 최대 기타소득
+  let other=1650;          // 초기 기타 금융소득
+
+  const elOther=document.getElementById('thr-other');
+  const elSum=document.getElementById('thr-sum');
+  const elFill=document.getElementById('thr-fill');
+  const elKnob=document.getElementById('thr-knob');
+  const gSafe=document.getElementById('g-safe');
+  const gOver=document.getElementById('g-over');
+  const gCur=document.getElementById('g-cur');
+  const verdict=document.getElementById('thr-verdict');
+  const desc=document.getElementById('thr-desc');
+  const slider=document.getElementById('thr-slider');
+  const fmt=n=>Math.round(n).toLocaleString('ko-KR');
+
+  function render(){
+    const total=other+PF_DIV;
+    const over=Math.max(0,total-THRESHOLD);
+    elOther.textContent=fmt(other);
+    elSum.textContent=fmt(total)+'만원';
+    // slider knob (0 ~ MAX_OTHER)
+    const sp=other/MAX_OTHER*100;
+    elFill.style.width=sp+'%'; elKnob.style.left=sp+'%';
+    // gauge
+    const totPct=Math.min(total,SCALE)/SCALE*100;
+    const thrPct=THRESHOLD/SCALE*100;
+    if(total<=THRESHOLD){
+      gSafe.style.width=totPct+'%'; gOver.style.width='0%';
+    }else{
+      gSafe.style.width=thrPct+'%';
+      gOver.style.left=thrPct+'%'; gOver.style.width=(totPct-thrPct)+'%';
+    }
+    gCur.style.left=totPct+'%';
+    gCur.textContent=(total>THRESHOLD?'▲ ':'')+fmt(total)+'만';
+    gCur.style.color=total>THRESHOLD?'var(--up)':'var(--blue-700)';
+    // verdict
+    if(total>THRESHOLD){
+      verdict.className='thr-verdict over';
+      verdict.querySelector('.ico').textContent='⚠️';
+      verdict.querySelector('.tt').innerHTML='기준선 <b>초과</b> — 금융소득종합과세 대상';
+      desc.innerHTML='초과분 <b>'+fmt(over)+'만원</b>은 다른 종합소득과 합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이 적용됩니다. <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을 권장합니다.';
+    }else{
+      verdict.className='thr-verdict safe';
+      verdict.querySelector('.ico').textContent='✓';
+      verdict.querySelector('.tt').innerHTML='기준선 <b>이내</b> — 분리과세 유지';
+      desc.innerHTML='합산 금융소득이 기준선 2,000만원 이내로, <b>15.4% 분리과세</b>가 적용됩니다. 여유 한도 <b>'+fmt(THRESHOLD-total)+'만원</b>.';
+    }
+  }
+
+  // drag interaction on the slider track
+  function setFromX(clientX){
+    const r=slider.getBoundingClientRect();
+    let p=(clientX-r.left)/r.width; p=Math.max(0,Math.min(1,p));
+    other=Math.round(p*MAX_OTHER/10)*10; render();
+  }
+  let dragging=false;
+  slider.style.cursor='pointer';
+  slider.addEventListener('pointerdown',e=>{dragging=true;slider.setPointerCapture(e.pointerId);setFromX(e.clientX);});
+  slider.addEventListener('pointermove',e=>{if(dragging)setFromX(e.clientX);});
+  slider.addEventListener('pointerup',()=>dragging=false);
+
+  render();
+})();
+
+
+(function(){
+  const stage=document.getElementById('scaler');
+  function fit(){
+    const s=Math.min(window.innerWidth/1440, window.innerHeight/940);
+    stage.style.transform='scale('+s+')';
+  }
+  window.addEventListener('resize',fit); fit();
+})();
+</script>
+</body>
+</html>

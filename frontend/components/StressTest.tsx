@@ -118,6 +118,12 @@ function TunerImpactPanel({ shock }: { shock: MacroShock }) {
   const [loading, setLoading] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 충격계수는 ±100bp/±200원 기준 캘리브레이션 후 선형 비례 적용.
+  // 기준점의 2배(±200bp/±400원)를 넘으면 비선형 효과(채권 컨벡시티, 패닉 국면)로
+  // 선형 외삽 오차가 점추정 오차를 초과하기 시작하므로 "방향성 참고용"으로 안내한다.
+  const isExtrapolated =
+    Math.abs(shock.baseRateDelta) > 200 || Math.abs(shock.krwUsdDelta) > 400;
+
   useEffect(() => {
     // 슬라이더 드래그 중 과도한 호출 방지 (400ms 디바운스)
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -145,6 +151,14 @@ function TunerImpactPanel({ shock }: { shock: MacroShock }) {
             {loading && <span className="ml-2 text-yellow-400">재계산 중…</span>}
           </div>
         </div>
+        {isExtrapolated && (
+          <span
+            className="ml-auto flex-shrink-0 text-[10px] text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1"
+            title="매우 큰 폭의 변동을 가정한 시나리오로, 정밀한 수치보다는 전체적인 흐름을 보시는 용도로 적합합니다."
+          >
+            💡 급변 시나리오 — 참고용 추정치
+          </span>
+        )}
       </div>
 
       {data === null && !loading && (
