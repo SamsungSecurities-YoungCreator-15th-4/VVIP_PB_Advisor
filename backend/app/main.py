@@ -19,4 +19,5 @@ app.include_router(consultations_router)
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    # 배포 헬스체크용: 의존성·DB 호출 없이 즉답한다.
+    return {"status": "ok", "service": "vvip-pb-advisor"}
