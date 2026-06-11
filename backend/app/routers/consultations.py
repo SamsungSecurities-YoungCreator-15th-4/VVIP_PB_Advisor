@@ -10,6 +10,7 @@ from app.schemas.consultations import (
     ConsultationListResponse,
     ConsultationResponse,
     CustomerName,
+    InitialIpsResponse,
 )
 from app.services.ips import (
     build_ips_snapshot_payload,
@@ -121,6 +122,50 @@ def create_stt_consultation(
         ips_json=ips_json,
         ips_snapshot_id=snapshot["id"],
         created_at=consultation["created_at"],
+    )
+
+
+@router.get("/initial-ips", response_model=InitialIpsResponse)
+def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
+    supabase = get_supabase()
+    client = _get_client_by_name(supabase, customer_name)
+    if not client:
+        raise HTTPException(
+            status_code=404,
+            detail=f"고객 정보를 찾을 수 없습니다: {customer_name}",
+        )
+
+    result = (
+        supabase.table("ips_snapshot")
+        .select("id,client_id,source_type,raw_ips_json,created_at")
+        .eq("client_id", client["id"])
+        .eq("source_type", "initial")
+        .limit(1)
+        .execute()
+    )
+    snapshot = _first_row(result.data)
+    if not snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"최초 IPS 정보를 찾을 수 없습니다: {customer_name}",
+        )
+
+    try:
+        ips_json = flatten_ips_json(snapshot.get("raw_ips_json") or {})
+    except ValueError as exc:
+        logger.exception("Invalid initial IPS snapshot")
+        raise HTTPException(
+            status_code=500,
+            detail="최초 IPS 구조 검증 중 오류가 발생했습니다.",
+        ) from exc
+
+    return InitialIpsResponse(
+        ips_snapshot_id=snapshot["id"],
+        customer_id=snapshot["client_id"],
+        customer_name=customer_name,
+        source_type="initial",
+        ips_json=ips_json,
+        created_at=snapshot["created_at"],
     )
 
 

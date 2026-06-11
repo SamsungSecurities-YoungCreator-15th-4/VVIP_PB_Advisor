@@ -26,3 +26,14 @@ class ConsultationListResponse(BaseModel):
     consultations: list[ConsultationResponse]
 
     model_config = ConfigDict(extra="forbid")
+
+
+class InitialIpsResponse(BaseModel):
+    ips_snapshot_id: str
+    customer_id: str
+    customer_name: CustomerName
+    source_type: Literal["initial"]
+    ips_json: dict
+    created_at: str
+
+    model_config = ConfigDict(extra="forbid")
