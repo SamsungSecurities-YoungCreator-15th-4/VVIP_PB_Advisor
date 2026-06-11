@@ -1,7 +1,8 @@
 """[dev 전용] RAG 검증용 더미 문서 시드 스크립트 — 서버 코드 아님.
 
 /rag/insight 스모크 테스트를 위해 document / document_chunk 에 검증된
-국세청 문구 기반 문서 3건을 넣고, 각 청크를 OpenAI 로 실제 임베딩한다.
+국세청 문구 기반 문서 3건을 넣고, 각 청크를 Azure OpenAI 임베딩 배포
+(ai-insight-embedding)로 실제 임베딩한다(검색부 embed_query 재사용).
 문구의 사실관계는 supabase/seed.sql(tax_rule, 국세청 2026 세금절약가이드 근거)에서
 검증 완료된 수치를 재활용했다. 운영 인제스천 파이프라인은 별도 단계에서 만든다.
 
@@ -10,7 +11,8 @@
   source .venv/bin/activate
   python scripts/dev_seed_rag_chunks.py
 
-요구 환경변수(backend/.env): OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+요구 환경변수(backend/.env): AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
+SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 재실행 안전: 고정 UUID 로 document upsert + (document_id, chunk_index) upsert.
 """
 
