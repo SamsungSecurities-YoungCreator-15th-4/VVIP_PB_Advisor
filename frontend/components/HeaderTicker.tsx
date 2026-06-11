@@ -5,10 +5,10 @@ import { fetchMacroIndicators } from '@/lib/api';
 import type { IndicatorData, MacroIndicators as MacroData } from '@/lib/types';
 
 const TICKER_CONFIG = [
-  { key: 'baseRate',      label: '기준금리',   unit: '%',  fmt: (v: number) => v.toFixed(2),                                                   fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%p` },
+  { key: 'baseRate',      label: '美 기준금리', unit: '%',  fmt: (v: number) => v.toFixed(2),                                                   fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%p` },
   { key: 'treasuryYield', label: '미국 10Y',   unit: '%',  fmt: (v: number) => v.toFixed(2),                                                   fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(3)}%p` },
   { key: 'krwUsd',        label: '원/달러',    unit: '원', fmt: (v: number) => v.toLocaleString('ko-KR', { maximumFractionDigits: 0 }),         fmtChange: (v: number) => `${v > 0 ? '+' : ''}${Math.round(v).toLocaleString('ko-KR')}원` },
-  { key: 'cpi',           label: 'CPI',        unit: '%',  fmt: (v: number) => v.toFixed(1),                                                   fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%p` },
+  { key: 'cpi',           label: '美 CPI',     unit: '%',  fmt: (v: number) => v.toFixed(1),                                                   fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%p` },
   { key: 'kospi',         label: 'KOSPI',      unit: '',   fmt: (v: number) => v.toLocaleString('ko-KR', { maximumFractionDigits: 0 }),         fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}` },
   { key: 'sp500',         label: 'S&P 500',    unit: '',   fmt: (v: number) => v.toLocaleString('ko-KR', { maximumFractionDigits: 0 }),         fmtChange: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}` },
 ];
@@ -98,7 +98,18 @@ export default function HeaderTicker() {
                   </span>
                   {unit && <span className="text-gray-500 text-[9px]">{unit}</span>}
                 </div>
-                {!item.isStatic && (isPos || isNeg) ? (
+                {item.isStatic ? (
+                  <div className="text-[9px] text-gray-600" title="발표 시에만 갱신되는 지표입니다">
+                    발표 기준
+                  </div>
+                ) : item.isFallback ? (
+                  <div
+                    className="text-[9px] text-amber-500/90"
+                    title="실시간 조회 실패 — 마지막 확인된 종가입니다"
+                  >
+                    ⏱ 지연 시세
+                  </div>
+                ) : isPos || isNeg ? (
                   <div className={`flex items-center gap-0.5 text-[9px] tabular-nums ${isPos ? upColor : downColor}`}>
                     <span>{isPos ? '▲' : '▼'}</span>
                     <span>{fmtChange(item.change)}</span>

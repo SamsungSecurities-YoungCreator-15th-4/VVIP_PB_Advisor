@@ -13,9 +13,9 @@ interface Props {
 }
 
 export default function MacroIndicators({ onShockChange }: Props) {
-  const [liveBase, setLiveBase] = useState(2.75);
+  const [liveBase, setLiveBase] = useState(3.75);
   const [liveKrwUsd, setLiveKrwUsd] = useState(1531);
-  const [baseRateVal, setBaseRateVal] = useState(2.75);
+  const [baseRateVal, setBaseRateVal] = useState(3.75);
   const [krwUsdVal, setKrwUsdVal] = useState(1531);
   const [loaded, setLoaded] = useState(false);
 
@@ -27,7 +27,7 @@ export default function MacroIndicators({ onShockChange }: Props) {
   useEffect(() => {
     fetchMacroIndicators()
       .then((d) => {
-        const base = d.baseRate?.price ?? 2.75;
+        const base = d.baseRate?.price ?? 3.75;
         const fx = d.krwUsd?.price ?? 1531;
         setLiveBase(base);
         setLiveKrwUsd(Math.round(fx));
@@ -57,10 +57,10 @@ export default function MacroIndicators({ onShockChange }: Props) {
         <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded">D</span>
       </div>
 
-      {/* 기준금리 슬라이더 (0.0 ~ 6.0%) */}
+      {/* 美 기준금리 슬라이더 (0.0 ~ 6.0%) */}
       <div className="mb-5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-gray-400">기준금리</span>
+          <span className="text-xs text-gray-400">美 기준금리</span>
           <div className="flex items-center gap-2">
             {loaded && (
               <span className="text-[10px] text-gray-600">현재 {liveBase.toFixed(2)}%</span>

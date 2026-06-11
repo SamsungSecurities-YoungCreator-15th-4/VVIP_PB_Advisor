@@ -1,12 +1,24 @@
 """포트폴리오 정량 지표 계산 — frontend/lib/financial-calc.ts 이식.
 
 세금 계산 근거: 소득세법 제14조(금융소득종합과세), 소득세법 제55조(종합소득세 누진세율,
-2026년 기준 지방소득세 10% 포함), 소득세법 제129조(이자·배당소득 원천징수세율 15.4%).
+2026년 기준 지방소득세 10% 포함), 소득세법 제129조(이자·배당소득 원천징수세율 15.4%,
+만기 10년 이상 장기채권 분리과세 신청 시 30% + 지방소득세 = 33%).
 
-# TODO(채권 3분할): 회의에서 "일반채/저쿠폰채/분리과세채" 3분류 및 종합과세 산입 여부가
-# 논의 중이나 아직 확정되지 않음 (PR #19 review, kookguk/Choi-Jung-Hyeon 코멘트 참고).
-# 기준이 확정되면 AssetClass에 하위 타입을 추가하고 calc_after_tax_return의
-# `assetClass in ("dividend", "bond")` 분기를 분류별로 세분화해야 한다.
+채권 3분류(2026-06 회의 확정):
+  - bond_regular(일반채): 표면이자 전액 이자소득 → 종합과세 합산
+  - bond_low_coupon(저쿠폰채): 표면금리만 이자과세, 매매차익은 개인 비과세
+    → 과세 대상 경상소득 비중이 낮음
+  - bond_separate_tax(분리과세채): 분리과세 신청 시 33% 원천징수로 납세 종결,
+    종합과세 합산 제외
+
+스트레스 테스트(시계열 충격 주입):
+  자산군별 연간 충격 s를 실측 주간수익률 시계열에 주입해
+  기대수익률·변동성·샤프·소르티노·MDD를 "전부" 일관되게 재계산한다.
+    r'_t = mean + (r_t - mean) × vol_mult(s) + s/52
+  - 드리프트: s/52 균등 분배 (연간 충격의 주간 환산)
+  - 변동성 확대: vol_mult(s) = min(1 + VOL_STRESS_BETA·|s|, VOL_STRESS_CAP)
+    위기 국면에서 변동성이 동반 상승하는 레짐 효과의 선형 근사 (점추정 가정,
+    실측 회귀계수 아님 — 2008/2020/2022 위기 시 실현변동성 1.3~2배 확대 사례 참고).
 """
 from app.market.schemas import (
     AssetAllocation,
@@ -18,6 +30,10 @@ from app.market.schemas import (
 RISK_FREE_RATE = 0.035  # 3.5% 국고채
 
 MIN_COMMON_DATES = 10  # 공통 거래일이 이보다 적으면 실데이터 기반 계산을 포기하고 fallback 사용
+
+# 충격 1단위(|s|=100%)당 변동성 확대 계수와 상한. |s|=15% 충격이면 변동성 1.3배.
+VOL_STRESS_BETA = 2.0
+VOL_STRESS_CAP = 1.6
 
 # 자산군 간 대표 상관계수 — 실시간 시세에서 공통 거래일이 부족해 실제 공분산을
 # 계산할 수 없을 때만 사용하는 fallback 값이다.
@@ -51,12 +67,28 @@ _FALLBACK_CORRELATIONS: dict[str, float] = {
     "commodity-dividend": 0.2,
 }
 
+# 채권 3분류는 fallback 상관계수 조회 시 "bond"로 정규화한다 (시장 위험 동질 가정).
+_BOND_SUBTYPES = ("bond_regular", "bond_low_coupon", "bond_separate_tax")
+
+
+def _normalize_class(asset_class: str) -> str:
+    return "bond" if asset_class in _BOND_SUBTYPES else asset_class
+
 
 def _get_fallback_correlation(a: str, b: str) -> float:
+    a, b = _normalize_class(a), _normalize_class(b)
     if a == b:
         return 1.0
     key = "-".join(sorted((a, b)))
     return _FALLBACK_CORRELATIONS.get(key, 0.3)
+
+
+def _vol_multiplier(shock: float) -> float:
+    return min(1.0 + VOL_STRESS_BETA * abs(shock), VOL_STRESS_CAP)
+
+
+def _mean(xs: list[float]) -> float:
+    return sum(xs) / len(xs)
 
 
 def _aligned_weekly_returns(
@@ -91,41 +123,64 @@ def _aligned_weekly_returns(
     return common_dates, returns
 
 
-def _covariance(a: list[float], b: list[float]) -> float:
-    n = len(a)
-    mean_a = sum(a) / n
-    mean_b = sum(b) / n
-    return sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b)) / n
-
-
 def calc_portfolio_metrics(
     allocations: list[AssetAllocation],
     market_data: dict[str, MarketDataPoint],
+    shocks: dict[str, float] | None = None,
 ) -> PortfolioMetrics:
+    """포트폴리오 지표 계산. shocks를 주면 시계열 충격 주입 후 전 지표를 재계산한다.
+
+    shocks: 자산군(assetClass) → 연간 기대수익률 충격(예: -0.12 = -12%p).
+    shocks가 None이거나 전부 0이면 기준(base) 지표와 동일하다.
+    """
+    shocks = shocks or {}
     weights = [a.weight for a in allocations]
     tickers = [a.ticker for a in allocations]
+    alloc_shocks = [shocks.get(a.assetClass, 0.0) for a in allocations]
 
     annual_returns = [market_data[t].annualReturn if t in market_data else 0.06 for t in tickers]
-    expected_return = sum(w * r for w, r in zip(weights, annual_returns))
+    expected_return = sum(
+        w * (r + s) for w, r, s in zip(weights, annual_returns, alloc_shocks)
+    )
 
     aligned = _aligned_weekly_returns(allocations, market_data)
 
     if aligned is not None:
         common_dates, weekly_returns = aligned
 
-        # 실측 주간수익률 공분산(연율화) 기반 포트폴리오 분산
-        portfolio_variance = 0.0
-        for i, ti in enumerate(tickers):
-            for j, tj in enumerate(tickers):
-                cov_annual = _covariance(weekly_returns[ti], weekly_returns[tj]) * 52
-                portfolio_variance += weights[i] * weights[j] * cov_annual
+        # 배분(allocation)별 충격 주입 시계열. 같은 티커라도 자산군이 다르면
+        # (예: 저쿠폰채/분리과세채 동일 프록시) 충격이 다를 수 있어 배분 단위로 만든다.
+        stressed_series: list[list[float]] = []
+        for alloc, s in zip(allocations, alloc_shocks):
+            base_series = weekly_returns[alloc.ticker]
+            m = _mean(base_series)
+            vm = _vol_multiplier(s)
+            stressed_series.append([m + (r - m) * vm + s / 52 for r in base_series])
 
-        backtest_data = _backtest_from_returns(common_dates, weights, tickers, weekly_returns)
+        # 포트폴리오 주간수익률 → 분산·백테스트·MDD·소르티노를 한 시계열에서 일관 계산
+        n_periods = len(stressed_series[0])
+        portfolio_weekly = [
+            sum(weights[i] * stressed_series[i][t] for i in range(len(weights)))
+            for t in range(n_periods)
+        ]
+
+        mean_weekly = _mean(portfolio_weekly)
+        portfolio_variance = (
+            sum((r - mean_weekly) ** 2 for r in portfolio_weekly) / n_periods * 52
+        )
+
+        backtest_data = _backtest_from_portfolio_returns(common_dates, portfolio_weekly)
         max_drawdown = calc_mdd([d.value for d in backtest_data])
+        sortino_ratio = _sortino(portfolio_weekly, expected_return)
     else:
-        # 실데이터 부족 시에만 대표 상관계수 fallback 사용. 백테스트/MDD는
+        # 실데이터 부족 시에만 대표 상관계수 fallback 사용. 충격의 변동성 확대는
+        # 자산별 연변동성에 vol_mult를 곱해 반영한다. 백테스트/MDD/소르티노는
         # 가짜 시계열을 생성하지 않고 "데이터 없음(N/A)"으로 둔다.
-        vols = [market_data[t].annualVolatility if t in market_data else 0.15 for t in tickers]
+        vols = [
+            (market_data[t].annualVolatility if t in market_data else 0.15)
+            * _vol_multiplier(s)
+            for t, s in zip(tickers, alloc_shocks)
+        ]
         portfolio_variance = 0.0
         for i in range(len(weights)):
             for j in range(len(weights)):
@@ -136,6 +191,7 @@ def calc_portfolio_metrics(
 
         backtest_data = []
         max_drawdown = None
+        sortino_ratio = None
 
     volatility = (max(0.0, portfolio_variance)) ** 0.5
     sharpe_ratio = (expected_return - RISK_FREE_RATE) / volatility if volatility > 0 else 0.0
@@ -144,23 +200,34 @@ def calc_portfolio_metrics(
         expectedReturn=expected_return,
         volatility=volatility,
         sharpeRatio=sharpe_ratio,
+        sortinoRatio=sortino_ratio,
         maxDrawdown=max_drawdown,
         backtestData=backtest_data,
     )
 
 
-def _backtest_from_returns(
+def _sortino(portfolio_weekly: list[float], expected_return: float) -> float | None:
+    """소르티노 지수 = (기대수익률 - 무위험수익률) / 연율화 하방편차.
+
+    하방편차는 주간 MAR(무위험수익률/52) 미달분의 RMS를 √52로 연율화.
+    하방 이탈이 전혀 없으면(division by zero) None을 반환한다.
+    """
+    mar_weekly = RISK_FREE_RATE / 52
+    downside_sq = [min(0.0, r - mar_weekly) ** 2 for r in portfolio_weekly]
+    downside_dev = (_mean(downside_sq) ** 0.5) * (52 ** 0.5)
+    if downside_dev <= 0:
+        return None
+    return (expected_return - RISK_FREE_RATE) / downside_dev
+
+
+def _backtest_from_portfolio_returns(
     common_dates: list[str],
-    weights: list[float],
-    tickers: list[str],
-    weekly_returns: dict[str, list[float]],
+    portfolio_weekly: list[float],
 ) -> list[BacktestPoint]:
     result: list[BacktestPoint] = []
     portfolio_value = 1.0
-    n_periods = len(weekly_returns[tickers[0]])
 
-    for t in range(n_periods):
-        period_return = sum(weights[i] * weekly_returns[tickers[i]][t] for i in range(len(tickers)))
+    for t, period_return in enumerate(portfolio_weekly):
         portfolio_value *= 1 + period_return
         result.append(BacktestPoint(date=common_dates[t + 1], value=portfolio_value))
 
@@ -184,6 +251,30 @@ def calc_mdd(values: list[float]) -> float:
     return max_drawdown
 
 
+# ── 세금 계산 ────────────────────────────────────────────────────────────────
+
+# 자산군별 "총수익 중 과세 대상 경상소득(이자·배당)" 비중 가정 (자본이득 제외).
+#   - dividend: 총수익의 절반이 배당이라는 기존 가정 유지
+#   - bond_regular: 국고채 수익 대부분이 표면이자라는 가정 (85%)
+#   - bond_low_coupon: 표면금리(≈1%대)만 이자과세, 매매차익은 개인 비과세 → 15%
+#   - bond_separate_tax: 이자 비중은 일반채와 동일하나 과세 방식이 분리과세
+#   - bond(레거시): bond_regular와 동일 취급
+_TAXABLE_INCOME_PORTION: dict[str, float] = {
+    "dividend": 0.5,
+    "bond": 0.85,
+    "bond_regular": 0.85,
+    "bond_low_coupon": 0.15,
+    "bond_separate_tax": 0.85,
+}
+
+# 만기 10년 이상 장기채권 분리과세 신청 시 원천징수세율 (소득세법 §129①1,
+# 30% + 지방소득세 10% = 33%). 신청 시 종합과세 합산에서 제외되어 납세 종결.
+SEPARATE_TAX_RATE = 0.33
+
+# 이자·배당소득 원천징수세율 15.4% (소득세법 §129, 지방소득세 포함)
+WITHHOLDING_TAX_RATE = 0.154
+
+
 def calc_after_tax_return(
     gross_return: float,
     portfolio: list[AssetAllocation],
@@ -193,14 +284,20 @@ def calc_after_tax_return(
     """반환값: (afterTaxReturn, taxAmount, isComprehensive)"""
     annual_gross_income = gross_return * total_assets  # 억 원
 
-    # 이자·배당소득만 금융소득종합과세 대상 (자본이득 제외)
-    dividend_income = sum(
-        a.weight * gross_return * total_assets * 0.5
+    # 종합과세 합산 대상 경상소득 (분리과세채 제외)
+    comprehensive_income = sum(
+        a.weight * gross_return * total_assets * _TAXABLE_INCOME_PORTION[a.assetClass]
         for a in portfolio
-        if a.assetClass in ("dividend", "bond")
+        if a.assetClass in _TAXABLE_INCOME_PORTION and a.assetClass != "bond_separate_tax"
+    )
+    # 분리과세채 경상소득 (분리과세 신청 시 종합과세 합산 제외)
+    separate_income = sum(
+        a.weight * gross_return * total_assets * _TAXABLE_INCOME_PORTION[a.assetClass]
+        for a in portfolio
+        if a.assetClass == "bond_separate_tax"
     )
 
-    total_financial_income = dividend_income + other_financial_income  # 억 원
+    total_financial_income = comprehensive_income + other_financial_income  # 억 원
     COMPREHENSIVE_TAX_THRESHOLD = 0.2  # 2천만원 = 0.2억
 
     is_comprehensive = total_financial_income > COMPREHENSIVE_TAX_THRESHOLD
@@ -221,14 +318,17 @@ def calc_after_tax_return(
         else:
             total_tax_manwon = income_manwon * 0.495 - 3348.4
 
-        # 이 포트폴리오의 배당소득 비율만큼 세금 안분
+        # 이 포트폴리오의 종합과세 대상 소득 비율만큼 세금 안분
         portfolio_share = (
-            (dividend_income / total_financial_income) if total_financial_income > 0 else 0.0
+            (comprehensive_income / total_financial_income) if total_financial_income > 0 else 0.0
         )
         tax_amount = (total_tax_manwon / 10000) * portfolio_share
+
+        # 종합과세 대상자는 분리과세 신청이 유리하다고 가정 → 33% 원천징수로 종결
+        tax_amount += separate_income * SEPARATE_TAX_RATE
     else:
-        # 2천만원 이하: 원천징수세율 15.4%를 배당소득에만 부과
-        tax_amount = dividend_income * 0.154
+        # 2천만원 이하: 분리과세 신청 실익 없음(33% > 15.4%) → 전부 원천징수 15.4%
+        tax_amount = (comprehensive_income + separate_income) * WITHHOLDING_TAX_RATE
 
     after_tax_return = (
         (annual_gross_income - tax_amount) / total_assets if annual_gross_income > 0 else 0.0
@@ -242,6 +342,11 @@ def apply_stress_scenario(
     allocations: list[AssetAllocation],
     shocks: dict[str, float],
 ) -> float:
+    """(레거시) 기대수익률에만 충격을 가산하는 단순 시나리오 적용.
+
+    /api/stress-scenarios의 고정 시나리오 막대그래프용으로만 유지한다.
+    전 지표(변동성·MDD·소르티노 포함) 재계산은 calc_portfolio_metrics(shocks=...)를 사용할 것.
+    """
     stressed_return = 0.0
     for alloc in allocations:
         shock = shocks.get(alloc.assetClass, 0.0)
