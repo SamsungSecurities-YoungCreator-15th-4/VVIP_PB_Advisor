@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-REPO_ROOT = BACKEND_DIR.parent
-STT_DIR = REPO_ROOT / "AI" / "stt"
+STT_DIR = BACKEND_DIR / "app" / "stt"
 STT_AUDIO_DIR = STT_DIR / "audio"
 STT_OUTPUT_DIR = STT_DIR / "output"
 

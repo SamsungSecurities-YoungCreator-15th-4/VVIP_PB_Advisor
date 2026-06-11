@@ -1,4 +1,3 @@
-import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -7,11 +6,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import UploadFile
 
-from app.core.config import STT_AUDIO_DIR, STT_DIR, STT_OUTPUT_DIR
-
-
-if str(STT_DIR) not in sys.path:
-    sys.path.append(str(STT_DIR))
+from app.core.config import STT_AUDIO_DIR, STT_OUTPUT_DIR
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -67,7 +62,7 @@ def run_uploaded_wav_pipeline(
 
 
 def run_stt_pipeline(audio_file_path: str) -> tuple[list[dict], dict]:
-    from stt_record import (  # noqa: PLC0415
+    from app.stt.stt_record import (  # noqa: PLC0415
         extract_customer_text,
         extract_goal_rrttllu,
         map_speaker_roles,
@@ -91,6 +86,6 @@ def _save_upload_file(audio_file: UploadFile, upload_path: Path) -> None:
 
 
 def _save_json(data: list[dict] | dict, output_path: Path) -> None:
-    from stt_record import save_json  # noqa: PLC0415
+    from app.stt.stt_record import save_json  # noqa: PLC0415
 
     save_json(data, output_path)

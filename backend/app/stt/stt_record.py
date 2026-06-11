@@ -9,7 +9,11 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 
 
-load_dotenv()
+STT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = STT_DIR.parents[1]
+
+load_dotenv(BACKEND_DIR / ".env")
+load_dotenv(STT_DIR / ".env")
 
 SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
 SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION")
@@ -19,8 +23,8 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
-DEFAULT_AUDIO_DIR = "audio"
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+DEFAULT_AUDIO_DIR = STT_DIR / "audio"
+DEFAULT_OUTPUT_DIR = STT_DIR / "output"
 SUPPORTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm"}
 MAPPED_TRANSCRIPT_OUTPUT_FILE = "mapped_transcript.json"
 GOAL_RRTTLLU_OUTPUT_FILE = "goal_rrttllu_result.json"
