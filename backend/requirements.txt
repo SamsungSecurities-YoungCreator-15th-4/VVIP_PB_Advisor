@@ -7,7 +7,6 @@ numpy==2.4.6
 python-dotenv==1.2.2
 # RAG
 llama-index==0.14.22
-faiss-cpu==1.14.2
 openai==2.38.0
 pypdf==6.12.2
 # DB (Supabase 연동: A=supabase-py RPC 전용 / B=psycopg3 직접 SQL)
