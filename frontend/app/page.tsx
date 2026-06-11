@@ -26,19 +26,19 @@ const PORTFOLIO_LABELS: Record<string, string> = {
 };
 
 const PORTFOLIO_TITLE_COLORS: Record<string, string> = {
-  current: 'text-gray-300',
-  proposalA: 'text-blue-400',
-  proposalB: 'text-purple-400',
+  current: 'text-[#4E5968]',
+  proposalA: 'text-[#0064FF]',
+  proposalB: 'text-[#7C5CFF]',
 };
 
 type MetricKey = 'expectedReturn' | 'volatility' | 'sharpeRatio' | 'sortinoRatio' | 'maxDrawdown';
 
-const METRIC_DEFS: { key: MetricKey; label: string; isPct: boolean; higherIsBetter: boolean }[] = [
-  { key: 'expectedReturn', label: '기대수익률', isPct: true, higherIsBetter: true },
-  { key: 'volatility', label: '변동성', isPct: true, higherIsBetter: false },
-  { key: 'sharpeRatio', label: '샤프지수', isPct: false, higherIsBetter: true },
-  { key: 'sortinoRatio', label: '소르티노', isPct: false, higherIsBetter: true },
-  { key: 'maxDrawdown', label: 'MDD', isPct: true, higherIsBetter: false },
+const METRIC_DEFS: { key: MetricKey; label: string; isPct: boolean }[] = [
+  { key: 'expectedReturn', label: '기대수익률', isPct: true },
+  { key: 'volatility', label: '변동성', isPct: true },
+  { key: 'sharpeRatio', label: '샤프지수', isPct: false },
+  { key: 'sortinoRatio', label: '소르티노', isPct: false },
+  { key: 'maxDrawdown', label: 'MDD', isPct: true },
 ];
 
 function fmt(value: number | null | undefined, isPct: boolean): string {
@@ -60,26 +60,28 @@ function PortfolioCard({
   if (!base || !shown) return null;
 
   return (
-    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-      <div className={`text-sm font-semibold mb-1 ${PORTFOLIO_TITLE_COLORS[proposal.id]}`}>
+    <div className="bg-white rounded-2xl p-4 border border-[#E8EBED] shadow-sm">
+      <div className={`text-[13px] font-extrabold mb-0.5 ${PORTFOLIO_TITLE_COLORS[proposal.id]}`}>
         {proposal.nameKr}
       </div>
-      <div className="text-[11px] text-gray-500 mb-3">{proposal.theme}</div>
-      <div className="divide-y divide-gray-700/60">
+      <div className="text-[10px] font-semibold text-[#8B95A1] mb-3">{proposal.theme}</div>
+      <div className="divide-y divide-[#F1F3F5]">
         {METRIC_DEFS.map(def => {
           const b = base[def.key] as number | null;
           const s = shown[def.key] as number | null;
           const delta = b !== null && s !== null && b !== undefined && s !== undefined ? s - b : null;
           const isZero = delta === null || Math.abs(delta) < (def.isPct ? 0.0005 : 0.005);
-          const improved = delta !== null && (def.higherIsBetter ? delta > 0 : delta < 0);
-          const deltaColor = isZero ? 'text-gray-600' : improved ? 'text-green-400' : 'text-red-400';
+          // 국내 금융 관례: 상승(+) = 빨강, 하락(−) = 파랑
+          const deltaColor = isZero
+            ? 'text-[#B0B8C1]'
+            : (delta as number) > 0 ? 'text-[#F04452]' : 'text-[#3182F6]';
           return (
             <div key={def.key} className="flex items-center justify-between py-1.5 text-xs">
-              <span className="text-gray-400">{def.label}</span>
+              <span className="font-semibold text-[#8B95A1]">{def.label}</span>
               <span className="tabular-nums flex items-center gap-1.5">
-                <span className="text-gray-100 font-semibold">{fmt(s, def.isPct)}</span>
+                <span className="font-extrabold text-[#171C24]">{fmt(s, def.isPct)}</span>
                 {hasShock && !isZero && delta !== null && (
-                  <span className={`text-[10px] ${deltaColor}`}>
+                  <span className={`text-[10px] font-bold ${deltaColor}`}>
                     ({delta > 0 ? '+' : ''}
                     {def.isPct ? `${(delta * 100).toFixed(1)}%p` : delta.toFixed(2)})
                   </span>
@@ -137,15 +139,20 @@ export default function Home() {
   });
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <header>
-          <h1 className="text-xl font-bold text-white">VVIP PB Advisor</h1>
-          <p className="text-sm text-gray-400">포트폴리오 제안 · 거시경제 스트레스 테스트</p>
+    <main className="min-h-screen bg-[#EDEFF2] text-[#171C24]">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
+        <header className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-[9px] bg-gradient-to-br from-[#2C7BFF] to-[#0050D6] flex items-center justify-center text-white font-extrabold text-lg">
+            V
+          </div>
+          <div>
+            <h1 className="text-[15px] font-extrabold tracking-tight">VVIP PB Advisor</h1>
+            <p className="text-[9px] font-bold text-[#8B95A1] tracking-[0.12em]">PORTFOLIO ADVISORY</p>
+          </div>
         </header>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
+          <div className="bg-[#FEECEE] border border-[#FBD5D9] rounded-xl p-4 text-sm font-semibold text-[#F04452]">
             백엔드에 연결할 수 없습니다 — uvicorn(localhost:8000)이 켜져 있는지 확인하세요.
           </div>
         )}
@@ -164,12 +171,7 @@ export default function Home() {
           </div>
 
           {/* 우측: 시나리오 Test (조절기 + 예상 평가손익) */}
-          <MacroIndicators
-            onShockChange={setShock}
-            pnl={pnl}
-            totalAssetsEok={TOTAL_ASSETS_EOK}
-            pnlLoading={stressLoading}
-          />
+          <MacroIndicators onShockChange={setShock} pnl={pnl} pnlLoading={stressLoading} />
         </div>
       </div>
     </main>

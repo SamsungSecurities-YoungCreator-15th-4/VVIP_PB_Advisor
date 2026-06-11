@@ -33,13 +33,14 @@ function ImpactBar({ value, maxAbs, unit = '%p' }: { value: number; maxAbs: numb
   const isZero = Math.abs(value) < 0.0001;
   const isPositive = value > 0;
   const pct = Math.abs(value) / maxAbs * 100;
-  const textColor = isZero ? '#6b7280' : isPositive ? '#34d399' : '#f87171';
+  // 국내 금융 관례: 상승(+) = 빨강, 하락(−) = 파랑
+  const textColor = isZero ? '#6b7280' : isPositive ? '#f87171' : '#60a5fa';
   return (
     <div className="flex items-center gap-2 w-full">
       <div className="flex-1 flex justify-end">
         {!isZero && !isPositive && (
           <div
-            className="h-4 rounded-l bg-red-500/60 transition-all"
+            className="h-4 rounded-l bg-blue-500/60 transition-all"
             style={{ width: `${pct}%` }}
           />
         )}
@@ -50,7 +51,7 @@ function ImpactBar({ value, maxAbs, unit = '%p' }: { value: number; maxAbs: numb
       <div className="flex-1">
         {!isZero && isPositive && (
           <div
-            className="h-4 rounded-r bg-green-500/60 transition-all"
+            className="h-4 rounded-r bg-red-500/60 transition-all"
             style={{ width: `${pct}%` }}
           />
         )}
@@ -91,8 +92,8 @@ function MetricRow({ def, base, stressed }: {
   const hasBoth = b !== null && b !== undefined && s !== null && s !== undefined;
   const delta = hasBoth ? (s as number) - (b as number) : null;
   const isZero = delta === null || Math.abs(delta) < (def.isPct ? 0.0005 : 0.005);
-  const improved = delta !== null && (def.higherIsBetter ? delta > 0 : delta < 0);
-  const deltaColor = isZero ? 'text-gray-500' : improved ? 'text-green-400' : 'text-red-400';
+  // 국내 금융 관례: 상승(+) = 빨강, 하락(−) = 파랑
+  const deltaColor = isZero ? 'text-gray-500' : delta > 0 ? 'text-red-400' : 'text-blue-400';
 
   return (
     <div className="flex items-center justify-between text-xs py-1">
