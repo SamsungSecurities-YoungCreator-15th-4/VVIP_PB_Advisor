@@ -3,15 +3,23 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-# 채권은 과세 구조에 따라 3분류한다 (2026-06 회의 확정):
-#   bond_regular      일반채 — 표면이자 전액 이자소득 과세(종합과세 합산)
-#   bond_low_coupon   저쿠폰채 — 표면금리만 과세, 매매차익 비과세(개인) → 절세형
-#   bond_separate_tax 분리과세채 — 만기 10년 이상 장기채, 분리과세(33%) 신청 가능
-# "bond"는 레거시 호환용으로만 유지한다.
+# 자산 분류 11종 (2026-06-10 회의 확정). 절세 seed.sql(PR #27) 키와 명칭 일치.
+#
+# 주식 4:
+#   domestic_equity    국내 주식 (KOSPI200)
+#   overseas_dividend  해외 고배당주 (← dividend 개명)
+#   overseas_blue_chip 해외 우량주 — S&P500 (신규)
+#   overseas_growth    해외 성장주 — 나스닥100 (← us_equity 개명)
+# 채권 3 — 과세 구조 기준 분류:
+#   general_bond       일반채 — 표면이자 전액 이자소득 과세(종합과세 합산) (← bond 분화)
+#   low_coupon_bond    저쿠폰채 — 표면금리만 과세, 매매차익 비과세(개인) → 절세형
+#   separate_tax_bond  분리과세채 — 만기 10년 이상 장기채, 분리과세(33%) 신청 가능
+# 대체자산 4:
+#   reit / dollar(신규) / gold / commodity
 AssetClass = Literal[
-    "domestic_equity", "us_equity", "bond",
-    "bond_regular", "bond_low_coupon", "bond_separate_tax",
-    "gold", "reit", "commodity", "dividend",
+    "domestic_equity", "overseas_dividend", "overseas_blue_chip", "overseas_growth",
+    "general_bond", "separate_tax_bond", "low_coupon_bond",
+    "reit", "dollar", "gold", "commodity",
 ]
 
 

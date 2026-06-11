@@ -5,10 +5,10 @@
 만기 10년 이상 장기채권 분리과세 신청 시 30% + 지방소득세 = 33%).
 
 채권 3분류(2026-06 회의 확정):
-  - bond_regular(일반채): 표면이자 전액 이자소득 → 종합과세 합산
-  - bond_low_coupon(저쿠폰채): 표면금리만 이자과세, 매매차익은 개인 비과세
+  - general_bond(일반채): 표면이자 전액 이자소득 → 종합과세 합산
+  - low_coupon_bond(저쿠폰채): 표면금리만 이자과세, 매매차익은 개인 비과세
     → 과세 대상 경상소득 비중이 낮음
-  - bond_separate_tax(분리과세채): 분리과세 신청 시 33% 원천징수로 납세 종결,
+  - separate_tax_bond(분리과세채): 분리과세 신청 시 33% 원천징수로 납세 종결,
     종합과세 합산 제외
 
 스트레스 테스트(시계열 충격 주입):
@@ -44,35 +44,59 @@ VOL_STRESS_CAP = 1.6
 # 실제 상관관계는 위 범위를 크게 벗어날 수 있음(예: 위기 시 상관관계 수렴),
 # (3) 한국 시장 고유 특성(환헤지 여부, 거래시간 차이) 미반영.
 _FALLBACK_CORRELATIONS: dict[str, float] = {
-    "bond-domestic_equity": 0.1,
-    "bond-us_equity": -0.05,
-    "bond-gold": 0.1,
-    "bond-reit": 0.2,
-    "bond-commodity": 0.0,
-    "bond-dividend": 0.15,
-    "domestic_equity-us_equity": 0.65,
+    # 채권(general_bond로 정규화) × 나머지
+    "domestic_equity-general_bond": 0.1,
+    "general_bond-overseas_growth": -0.05,
+    "general_bond-overseas_blue_chip": -0.05,
+    "general_bond-overseas_dividend": 0.15,
+    "general_bond-gold": 0.1,
+    "general_bond-reit": 0.2,
+    "commodity-general_bond": 0.0,
+    "dollar-general_bond": -0.05,
+    # 국내 주식 × 나머지
+    "domestic_equity-overseas_growth": 0.65,
+    "domestic_equity-overseas_blue_chip": 0.65,
+    "domestic_equity-overseas_dividend": 0.6,
     "domestic_equity-gold": -0.05,
     "domestic_equity-reit": 0.5,
-    "domestic_equity-commodity": 0.3,
-    "domestic_equity-dividend": 0.6,
-    "us_equity-gold": -0.1,
-    "us_equity-reit": 0.55,
-    "us_equity-commodity": 0.25,
-    "us_equity-dividend": 0.75,
+    "commodity-domestic_equity": 0.3,
+    # 원/달러 급등 국면에서 코스피 약세가 반복되는 강한 역상관.
+    "dollar-domestic_equity": -0.4,
+    # 해외 성장주(나스닥100) × 나머지
+    "overseas_blue_chip-overseas_growth": 0.9,
+    "overseas_dividend-overseas_growth": 0.75,
+    "gold-overseas_growth": -0.1,
+    "overseas_growth-reit": 0.55,
+    "commodity-overseas_growth": 0.25,
+    "dollar-overseas_growth": -0.2,
+    # 해외 우량주(S&P500) × 나머지 — 성장주와 유사하되 배당주와 더 가깝다는 가정.
+    "overseas_blue_chip-overseas_dividend": 0.85,
+    "gold-overseas_blue_chip": -0.1,
+    "overseas_blue_chip-reit": 0.6,
+    "commodity-overseas_blue_chip": 0.25,
+    "dollar-overseas_blue_chip": -0.2,
+    # 해외 고배당주 × 나머지
+    "gold-overseas_dividend": -0.05,
+    "overseas_dividend-reit": 0.5,
+    "commodity-overseas_dividend": 0.2,
+    "dollar-overseas_dividend": -0.15,
+    # 금·리츠·원자재·달러 상호 간
     "gold-reit": 0.1,
-    "gold-commodity": 0.5,
-    "gold-dividend": -0.05,
-    "reit-commodity": 0.3,
-    "reit-dividend": 0.5,
-    "commodity-dividend": 0.2,
+    "commodity-gold": 0.5,
+    # 원화 환산 기준 금·달러 모두 환차익을 공유 → 양(+)의 상관 가정.
+    "dollar-gold": 0.25,
+    "commodity-reit": 0.3,
+    "dollar-reit": -0.15,
+    # 원자재는 달러 표시 가격이라 달러 강세 시 약세(역상관) 경향.
+    "commodity-dollar": -0.1,
 }
 
-# 채권 3분류는 fallback 상관계수 조회 시 "bond"로 정규화한다 (시장 위험 동질 가정).
-_BOND_SUBTYPES = ("bond_regular", "bond_low_coupon", "bond_separate_tax")
+# 채권 3분류는 fallback 상관계수 조회 시 "general_bond"로 정규화한다 (시장 위험 동질 가정).
+_BOND_SUBTYPES = ("general_bond", "low_coupon_bond", "separate_tax_bond")
 
 
 def _normalize_class(asset_class: str) -> str:
-    return "bond" if asset_class in _BOND_SUBTYPES else asset_class
+    return "general_bond" if asset_class in _BOND_SUBTYPES else asset_class
 
 
 def _get_fallback_correlation(a: str, b: str) -> float:
@@ -254,17 +278,19 @@ def calc_mdd(values: list[float]) -> float:
 # ── 세금 계산 ────────────────────────────────────────────────────────────────
 
 # 자산군별 "총수익 중 과세 대상 경상소득(이자·배당)" 비중 가정 (자본이득 제외).
-#   - dividend: 총수익의 절반이 배당이라는 기존 가정 유지
-#   - bond_regular: 국고채 수익 대부분이 표면이자라는 가정 (85%)
-#   - bond_low_coupon: 표면금리(≈1%대)만 이자과세, 매매차익은 개인 비과세 → 15%
-#   - bond_separate_tax: 이자 비중은 일반채와 동일하나 과세 방식이 분리과세
-#   - bond(레거시): bond_regular와 동일 취급
+#   - overseas_dividend: 총수익의 절반이 배당이라는 기존 가정 유지
+#   - overseas_blue_chip: S&P500 배당수익률(≈1.5%) / 장기 총수익(≈7%) → 20% 가정
+#   - general_bond: 국고채 수익 대부분이 표면이자라는 가정 (85%)
+#   - low_coupon_bond: 표면금리(≈1%대)만 이자과세, 매매차익은 개인 비과세 → 15%
+#   - separate_tax_bond: 이자 비중은 일반채와 동일하나 과세 방식이 분리과세
+#   - dollar: 달러 예금/RP 이자만 과세, 환차익은 개인 비과세 → 30% 가정
 _TAXABLE_INCOME_PORTION: dict[str, float] = {
-    "dividend": 0.5,
-    "bond": 0.85,
-    "bond_regular": 0.85,
-    "bond_low_coupon": 0.15,
-    "bond_separate_tax": 0.85,
+    "overseas_dividend": 0.5,
+    "overseas_blue_chip": 0.2,
+    "general_bond": 0.85,
+    "low_coupon_bond": 0.15,
+    "separate_tax_bond": 0.85,
+    "dollar": 0.3,
 }
 
 # 만기 10년 이상 장기채권 분리과세 신청 시 원천징수세율 (소득세법 §129①1,
@@ -288,13 +314,13 @@ def calc_after_tax_return(
     comprehensive_income = sum(
         a.weight * gross_return * total_assets * _TAXABLE_INCOME_PORTION[a.assetClass]
         for a in portfolio
-        if a.assetClass in _TAXABLE_INCOME_PORTION and a.assetClass != "bond_separate_tax"
+        if a.assetClass in _TAXABLE_INCOME_PORTION and a.assetClass != "separate_tax_bond"
     )
     # 분리과세채 경상소득 (분리과세 신청 시 종합과세 합산 제외)
     separate_income = sum(
         a.weight * gross_return * total_assets * _TAXABLE_INCOME_PORTION[a.assetClass]
         for a in portfolio
-        if a.assetClass == "bond_separate_tax"
+        if a.assetClass == "separate_tax_bond"
     )
 
     total_financial_income = comprehensive_income + other_financial_income  # 억 원

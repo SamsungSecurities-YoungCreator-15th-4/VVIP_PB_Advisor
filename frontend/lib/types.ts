@@ -20,19 +20,20 @@ export interface MacroIndicators {
   fetchedAt: string;
 }
 
-// 채권 3분류: 일반채(bond_regular) / 저쿠폰채(bond_low_coupon) / 분리과세채(bond_separate_tax)
-// 'bond'는 레거시 호환용
+// 자산 분류 11종 (2026-06-10 회의 확정) — backend AssetClass Literal과 1:1 동기화
+// 주식 4 / 채권 3(과세 구조 기준: 일반채·분리과세채·저쿠폰채) / 대체자산 4
 export type AssetClass =
   | 'domestic_equity'
-  | 'us_equity'
-  | 'bond'
-  | 'bond_regular'
-  | 'bond_low_coupon'
-  | 'bond_separate_tax'
-  | 'gold'
+  | 'overseas_dividend'
+  | 'overseas_blue_chip'
+  | 'overseas_growth'
+  | 'general_bond'
+  | 'separate_tax_bond'
+  | 'low_coupon_bond'
   | 'reit'
-  | 'commodity'
-  | 'dividend';
+  | 'dollar'
+  | 'gold'
+  | 'commodity';
 
 export interface AssetAllocation {
   ticker: string;

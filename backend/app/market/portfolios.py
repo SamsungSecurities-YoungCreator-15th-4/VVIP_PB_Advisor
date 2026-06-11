@@ -24,15 +24,15 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         allocations=[
             AssetAllocation(
                 ticker="148070.KS", name="KTB 10Y (Regular)", nameKr="일반채 (국고채 10년)",
-                weight=0.20, assetClass="bond_regular", color="#3B82F6",
+                weight=0.20, assetClass="general_bond", color="#3B82F6",
             ),
             AssetAllocation(
                 ticker="385560.KS", name="KTB 30Y Low-Coupon", nameKr="저쿠폰채 (장기 국고채)",
-                weight=0.10, assetClass="bond_low_coupon", color="#60A5FA",
+                weight=0.10, assetClass="low_coupon_bond", color="#60A5FA",
             ),
             AssetAllocation(
                 ticker="385560.KS", name="KTB Separate-Tax", nameKr="분리과세채 (장기 국고채)",
-                weight=0.10, assetClass="bond_separate_tax", color="#1D4ED8",
+                weight=0.10, assetClass="separate_tax_bond", color="#1D4ED8",
             ),
             AssetAllocation(
                 ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
@@ -40,7 +40,7 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
             ),
             AssetAllocation(
                 ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주",
-                weight=0.20, assetClass="dividend", color="#F59E0B",
+                weight=0.20, assetClass="overseas_dividend", color="#F59E0B",
             ),
             AssetAllocation(
                 ticker="GLD", name="SPDR Gold", nameKr="금",
@@ -57,15 +57,15 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         allocations=[
             AssetAllocation(
                 ticker="148070.KS", name="KTB 10Y (Regular)", nameKr="일반채 (국고채 10년)",
-                weight=0.14, assetClass="bond_regular", color="#3B82F6",
+                weight=0.14, assetClass="general_bond", color="#3B82F6",
             ),
             AssetAllocation(
                 ticker="385560.KS", name="KTB 30Y Low-Coupon", nameKr="저쿠폰채 (장기 국고채)",
-                weight=0.08, assetClass="bond_low_coupon", color="#60A5FA",
+                weight=0.08, assetClass="low_coupon_bond", color="#60A5FA",
             ),
             AssetAllocation(
                 ticker="385560.KS", name="KTB Separate-Tax", nameKr="분리과세채 (장기 국고채)",
-                weight=0.08, assetClass="bond_separate_tax", color="#1D4ED8",
+                weight=0.08, assetClass="separate_tax_bond", color="#1D4ED8",
             ),
             AssetAllocation(
                 ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
@@ -73,7 +73,7 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
             ),
             AssetAllocation(
                 ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주",
-                weight=0.30, assetClass="dividend", color="#F59E0B",
+                weight=0.30, assetClass="overseas_dividend", color="#F59E0B",
             ),
             AssetAllocation(
                 ticker="GLD", name="SPDR Gold", nameKr="금",
@@ -90,15 +90,15 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         allocations=[
             AssetAllocation(
                 ticker="148070.KS", name="KTB 10Y (Regular)", nameKr="일반채 (국고채 10년)",
-                weight=0.04, assetClass="bond_regular", color="#3B82F6",
+                weight=0.04, assetClass="general_bond", color="#3B82F6",
             ),
             AssetAllocation(
                 ticker="385560.KS", name="KTB 30Y Low-Coupon", nameKr="저쿠폰채 (장기 국고채)",
-                weight=0.03, assetClass="bond_low_coupon", color="#60A5FA",
+                weight=0.03, assetClass="low_coupon_bond", color="#60A5FA",
             ),
             AssetAllocation(
                 ticker="385560.KS", name="KTB Separate-Tax", nameKr="분리과세채 (장기 국고채)",
-                weight=0.03, assetClass="bond_separate_tax", color="#1D4ED8",
+                weight=0.03, assetClass="separate_tax_bond", color="#1D4ED8",
             ),
             AssetAllocation(
                 ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
@@ -106,7 +106,7 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
             ),
             AssetAllocation(
                 ticker="QQQ", name="Nasdaq 100 ETF", nameKr="미국 성장주(나스닥100)",
-                weight=0.30, assetClass="us_equity", color="#8B5CF6",
+                weight=0.30, assetClass="overseas_growth", color="#8B5CF6",
             ),
             AssetAllocation(
                 ticker="VNQ", name="Vanguard REIT", nameKr="글로벌 리츠",
@@ -145,22 +145,23 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
 RATE_SHOCKS_PER_100BP: dict[str, float] = {
     # 일반채(국고채 10년): duration ≈ 8년 → -8%이나 한·미 금리 비동조
     # 가능성을 감안해 보수적으로 -7% 사용.
-    "bond_regular": -0.07,
+    "general_bond": -0.07,
     # 저쿠폰채: 표면금리가 낮을수록 듀레이션이 만기에 근접 (장기 저쿠폰
     # 국고채 duration ≈ 20년+) → 이론상 -20%이나 보수적으로 -15%.
-    "bond_low_coupon": -0.15,
+    "low_coupon_bond": -0.15,
     # 분리과세채(만기 10년 이상 장기채): duration ≈ 12~15년 → -11%.
-    "bond_separate_tax": -0.11,
-    # 레거시 "bond"(TLT 등 해외 장기채) 호환용 — 기존 -12% 유지.
-    "bond": -0.12,
+    "separate_tax_bond": -0.11,
     # 할인율(무위험금리) 1%p 상승에 따른 성장주 밸류에이션(DCF/PER) 축소 효과.
     # 2022년 Fed 긴축 사이클 중 나스닥100 하락폭 대비 금리 상승폭 비율 참고.
-    "us_equity": -0.08,
+    "overseas_growth": -0.08,
+    # 해외 우량주(S&P500): 성장주 대비 밸류에이션 듀레이션이 짧아 충격을
+    # 나스닥100의 약 3/4 수준으로 가정 (2022년 S&P500/나스닥100 하락폭 비율 참고).
+    "overseas_blue_chip": -0.06,
     # 코스피는 미국 금리에 동조하되 환헤지·내수 비중으로 민감도가 절반 수준이라는 가정.
     "domestic_equity": -0.05,
     # 고배당주는 채권 대체재 성격으로 금리에 민감하나, 실적 기반 밸류에이션 비중이
     # 높아 성장주보다 충격이 작다는 가정.
-    "dividend": -0.04,
+    "overseas_dividend": -0.04,
     # 명목금리 상승은 통상 금에 약세 요인이나, 긴축이 인플레 기대 재상승을
     # 동반하면 실질금리 변화가 제한적이라는 가정 하에 소폭 양(+)으로 설정.
     "gold": 0.02,
@@ -170,6 +171,9 @@ RATE_SHOCKS_PER_100BP: dict[str, float] = {
     # 원자재는 금리보다 인플레이션 기대에 더 연동되며, 긴축 초기 인플레 압력
     # 지속을 가정해 소폭 양(+)으로 설정.
     "commodity": 0.03,
+    # 미국 기준금리 인상 → 한미 금리차 확대 → 달러 강세(원화 환산 가치 상승).
+    # 2022년 긴축기 금리 +4%p 대비 원/달러 상승 비율을 1%p당 근사 → +4%.
+    "dollar": 0.04,
 }
 
 # 원/달러 +200원 당 자산군별 연간 기대수익률 충격.
@@ -178,14 +182,15 @@ RATE_SHOCKS_PER_100BP: dict[str, float] = {
 FX_SHOCKS_PER_200WON: dict[str, float] = {
     # 원화표시 국고채: 환차익 없음. 원화 약세 → 외국인 채권자금 유출 +
     # 한은 인상 압력으로 소폭 음(-), 듀레이션이 길수록 민감하다는 가정.
-    "bond_regular": -0.01,
-    "bond_low_coupon": -0.03,
-    "bond_separate_tax": -0.02,
-    # 레거시 "bond"(해외 채권, 환노출) 호환용 — 기존 +8% 유지.
-    "bond": 0.08,
-    "us_equity": 0.10,
-    "dividend": 0.09,
+    "general_bond": -0.01,
+    "low_coupon_bond": -0.03,
+    "separate_tax_bond": -0.02,
+    "overseas_growth": 0.10,
+    "overseas_blue_chip": 0.10,
+    "overseas_dividend": 0.09,
     "reit": 0.07,
+    # 달러 자산은 환헤지 없이 보유한다고 가정 → +200원 절하율(≈13.3%) 전액 반영.
+    "dollar": 0.13,
     # 원화 약세는 외국인 자금 유출 압력 + 수입물가 상승에 따른 내수 부담으로
     # 코스피에 평균적으로 음(-)의 영향을 준다는 가정.
     "domestic_equity": -0.07,
@@ -263,16 +268,18 @@ HISTORICAL_CRISES: list[HistoricalCrisis] = [
         icon="🏦",
         assetReturns={
             # 국고채 10년 금리 5.8% → 3.9% 급락(한은 기준금리 5.25→2.0%) → 듀레이션별 가격 상승
-            "bond_regular": 0.10,
-            "bond_low_coupon": 0.18,
-            "bond_separate_tax": 0.13,
-            # 레거시 bond(TLT): 현지 +11% × 원/달러 +41% (1,116→1,571원)
-            "bond": 0.45,
+            "general_bond": 0.10,
+            "low_coupon_bond": 0.18,
+            "separate_tax_bond": 0.13,
             # KOSPI 1,414 → 저점 989 (2008-10)
             "domestic_equity": -0.30,
+            # 나스닥100 -43% × 원/달러 +41% (1,116→1,571원) ≈ -19%
+            "overseas_growth": -0.19,
             # S&P500 -46% (1,282→676) × 원/달러 +41% ≈ -24%
-            "us_equity": -0.24,
-            "dividend": -0.18,
+            "overseas_blue_chip": -0.24,
+            "overseas_dividend": -0.18,
+            # 원/달러 1,116 → 1,571원 (환차익 그대로 반영)
+            "dollar": 0.41,
             # 금 현지 +12% × 환율 효과 → 원화 환산 대폭 상승
             "gold": 0.45,
             # 미국 리츠(FTSE NAREIT) -55% × 환율
@@ -291,17 +298,19 @@ HISTORICAL_CRISES: list[HistoricalCrisis] = [
         icon="🦠",
         assetReturns={
             # 국고채 10년 금리 1.6% → 1.1% 하락 (한은 빅컷 1.25→0.75%)
-            "bond_regular": 0.02,
-            "bond_low_coupon": 0.05,
-            "bond_separate_tax": 0.03,
-            # TLT 현지 +14% × 원/달러 +6% (1,190→1,266원)
-            "bond": 0.20,
+            "general_bond": 0.02,
+            "low_coupon_bond": 0.05,
+            "separate_tax_bond": 0.03,
             # KOSPI 2,210 → 1,457 (2020-03-19 저점)
             "domestic_equity": -0.34,
-            # 나스닥100 -28% × 환율 +6%
-            "us_equity": -0.24,
+            # 나스닥100 -28% × 환율 +6% (1,190→1,266원)
+            "overseas_growth": -0.24,
+            # S&P500 -34% (3,386→2,237) × 환율 +6% ≈ -30%
+            "overseas_blue_chip": -0.30,
+            # 원/달러 1,190 → 1,266원
+            "dollar": 0.06,
             # 고배당주(VYM) -35% — 금융·에너지 비중이 높아 더 크게 하락
-            "dividend": -0.31,
+            "overseas_dividend": -0.31,
             # 금: 유동성 확보 매도(마진콜)로 현지 -3% × 환율 ≈ 보합
             "gold": 0.00,
             # 미국 리츠 -42% (상업용 부동산 봉쇄 직격)
@@ -320,17 +329,19 @@ HISTORICAL_CRISES: list[HistoricalCrisis] = [
         icon="📈",
         assetReturns={
             # 국고채 10년 금리 2.3% → 4.6% 급등 → 듀레이션별 가격 급락
-            "bond_regular": -0.16,
-            "bond_low_coupon": -0.35,
-            "bond_separate_tax": -0.22,
-            # TLT 현지 -33% × 원/달러 +20% (1,190→1,424원) ≈ -20%
-            "bond": -0.20,
+            "general_bond": -0.16,
+            "low_coupon_bond": -0.35,
+            "separate_tax_bond": -0.22,
             # KOSPI 2,978 → 2,294
             "domestic_equity": -0.23,
-            # 나스닥100 -33% × 환율 +20%
-            "us_equity": -0.20,
+            # 나스닥100 -33% × 환율 +20% (1,190→1,424원)
+            "overseas_growth": -0.20,
+            # S&P500 -25% (4,797→3,577) × 환율 +20% ≈ -10%
+            "overseas_blue_chip": -0.10,
+            # 원/달러 1,190 → 1,424원
+            "dollar": 0.20,
             # 고배당주(VYM) 현지 보합(-1%) × 환율 +20% → 원화 기준 플러스
-            "dividend": 0.10,
+            "overseas_dividend": 0.10,
             # 금 현지 -10% × 환율 +20%
             "gold": 0.08,
             # 미국 리츠 -28% × 환율
