@@ -19,19 +19,20 @@
 ## 레포 구조
 
 ```
-frontend/   # Next.js 프론트엔드
-backend/    # FastAPI 백엔드
-└── app/
-    ├── routers/   # API 엔드포인트 (consultations, rag 등)
-    ├── stt/       # STT·화자 매핑·RRTTLLU 추출 (구 AI/stt 에서 이동)
-    ├── rag/       # RAG 검색부 (Azure 임베딩 + pgvector)
-    ├── services/  # STT 파이프라인·IPS 추출 등 비즈니스 로직
-    ├── schemas/   # Pydantic 모델
-    ├── core/      # 설정(config)
-    └── db/        # Supabase 클라이언트
-supabase/   # DB 마이그레이션·시드 (PostgreSQL + pgvector)
-docs/       # 기획·설계·협업 규칙 문서
-.github/    # PR 템플릿 등
+VVIP_PB_Advisor/
+├── frontend/      # Next.js 프론트엔드 (PB 상담 대시보드 UI)
+├── backend/       # FastAPI 백엔드
+│   └── app/
+│       ├── routers/   # API 엔드포인트 (consultations, rag 등)
+│       ├── stt/       # STT·화자 매핑·RRTTLLU 추출 (구 AI/stt 에서 이동)
+│       ├── rag/       # RAG 검색부 (Azure 임베딩 + pgvector)
+│       ├── services/  # STT 파이프라인·IPS 추출 등 비즈니스 로직
+│       ├── schemas/   # Pydantic 모델
+│       ├── core/      # 설정(config)
+│       └── db/        # Supabase 클라이언트
+├── supabase/      # DB 마이그레이션·시드 (PostgreSQL + pgvector)
+├── docs/          # 기획·설계·협업 규칙 문서
+└── .github/       # PR 템플릿 등 GitHub 관련 설정
 ```
 
 ## 작업 규칙
