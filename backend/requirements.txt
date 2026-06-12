@@ -1,10 +1,12 @@
 # 실제 설치 버전으로 핀 (pip freeze 기준 직접 의존성 고정)
 fastapi==0.136.3
 uvicorn[standard]==0.48.0
+python-multipart==0.0.20
 yfinance==1.4.1
 pandas==3.0.3
 numpy==2.4.6
 python-dotenv==1.2.2
+azure-cognitiveservices-speech==1.50.0
 # RAG
 openai==2.38.0
 pypdf==6.12.2

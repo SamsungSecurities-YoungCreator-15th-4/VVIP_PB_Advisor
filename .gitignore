@@ -53,12 +53,9 @@ backend/faiss_index/
 # 이미 커밋된 STT 테스트 샘플은 추적 상태가 유지되며 영향받지 않는다.
 backend/data/*.txt
 backend/data/*.json
-AI/stt/*.txt
-AI/stt/*.json
-AI/stt/*.wav
-AI/stt/*.mp3
-AI/stt/*.m4a
-AI/stt/output/
+backend/app/stt/.env
+backend/app/stt/audio/
+backend/app/stt/output/
 # 공유용 더미/샘플은 파일명에 "sample" 을 넣으면 예외로 추적된다 (실데이터엔 절대 사용 금지).
 # 그 외 의도적 추가는 `git add -f <파일>` 로 강제 추가.
 !**/*sample*
