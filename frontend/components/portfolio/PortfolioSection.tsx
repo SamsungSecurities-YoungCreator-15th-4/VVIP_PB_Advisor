@@ -58,12 +58,19 @@ function PortfolioCard({
 
   return (
     <Card
-      className={`gap-0 cursor-pointer p-3 transition-shadow ${
+      tabIndex={0}
+      className={`gap-0 cursor-pointer p-3 transition-shadow focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand ${
         isSelected
           ? "border-2 border-brand shadow-[0_6px_20px_rgba(0,100,255,0.14)]"
           : "hover:shadow-md"
       }`}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[13px] font-extrabold">
