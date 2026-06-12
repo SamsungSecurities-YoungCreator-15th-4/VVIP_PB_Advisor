@@ -1,13 +1,14 @@
 import { FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BASE_TIME, MACRO_INDICATORS } from "@/lib/mockData";
+import { MACRO_INDICATORS } from "@/lib/mockData";
+import LiveClock from "@/components/LiveClock";
 
 /** 상단 헤더: 로고 · 거시지표 6개 · 포트폴리오 연동 상태 · PDF 추출 */
 export default function Header() {
   return (
-    <header className="flex h-[58px] items-center gap-4 rounded-2xl border bg-card px-4 shadow-sm">
+    <header className="flex h-14.5 items-center gap-4 rounded-2xl border bg-card px-4 shadow-sm">
       <div className="flex items-center gap-3 border-r pr-4">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#2C7BFF] to-[#0050D6] text-lg font-extrabold text-white">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-linear-to-br from-[#2C7BFF] to-[#0050D6] text-lg font-extrabold text-white">
           V
         </div>
         <div>
@@ -20,12 +21,7 @@ export default function Header() {
         </div>
       </div>
 
-      <div className="pr-1 text-right text-[11px] font-semibold text-muted-foreground">
-        기준
-        <b className="block text-sm font-bold tabular-nums text-foreground">
-          {BASE_TIME}
-        </b>
-      </div>
+      <LiveClock />
 
       <div className="flex flex-1">
         {MACRO_INDICATORS.map((m) => (
