@@ -59,7 +59,7 @@ export default function Sidebar() {
             음성 업로드
           </span>
           <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-            mp3, wav, m4a 지원
+            wav 지원
           </span>
         </button>
       </Card>

@@ -46,11 +46,7 @@ export default function Header() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg bg-brand/5 px-3 py-2 text-xs font-bold text-brand-dark">
-        <span className="size-2 rounded-full bg-positive shadow-[0_0_0_3px_rgba(22,180,122,0.18)]" />
-        포트폴리오 연동 완료
-      </div>
-      <Button className="font-bold">
+<Button className="font-bold">
         <FileDown />
         PDF 추출
       </Button>
