@@ -3,8 +3,7 @@ import Sidebar from "@/components/Sidebar";
 import PortfolioSection from "@/components/PortfolioSection";
 import BacktestChart from "@/components/BacktestChart";
 import TaxSection from "@/components/TaxSection";
-import StressTestSection from "@/components/StressTestSection";
-import InsightSection from "@/components/InsightSection";
+import RightPanel from "@/components/RightPanel";
 
 /**
  * PB 대시보드 초안.
@@ -13,7 +12,7 @@ import InsightSection from "@/components/InsightSection";
  */
 export default function Home() {
   return (
-    <div className="flex min-h-screen min-w-[1380px] flex-col gap-3 p-3.5">
+    <div className="flex min-h-screen min-w-345 flex-col gap-3 p-3.5">
       <Header />
       <div className="flex flex-1 items-start gap-3">
         <Sidebar />
@@ -22,10 +21,7 @@ export default function Home() {
           <BacktestChart />
           <TaxSection />
         </main>
-        <aside className="flex w-[320px] shrink-0 flex-col gap-3 self-stretch">
-          <StressTestSection />
-          <InsightSection />
-        </aside>
+        <RightPanel />
       </div>
     </div>
   );
