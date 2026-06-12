@@ -4,10 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import AssetDonut from "@/components/AssetDonut";
 import CorrelationHeatmap from "@/components/CorrelationHeatmap";
-import {
-  DISPLAY_GROUP_COLORS,
-  toDisplayAllocation,
-} from "@/lib/assetMapping";
+import { DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
 import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
 
 /** 중앙 상단: 현재 / 포트폴리오 A(베스트) / 포트폴리오 B(추천) 3카드 */
@@ -17,9 +14,6 @@ export default function PortfolioSection() {
       <div className="mb-2 flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2.5">
           <h2 className="text-lg font-extrabold">포트폴리오 대시보드</h2>
-          <span className="text-[11px] font-semibold text-muted-foreground">
-            5년 백테스트 · 절세 최적화 포함
-          </span>
           <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
             <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
             포트폴리오 연동 완료
@@ -146,15 +140,20 @@ function Metric({
   sub?: string;
   tone?: "up" | "down";
 }) {
-  const toneCls = tone === "up" ? "text-up" : tone === "down" ? "text-down" : "";
+  const toneCls =
+    tone === "up" ? "text-up" : tone === "down" ? "text-down" : "";
   return (
     <div className="bg-card px-2 py-1.5">
       <div className="text-[8.5px] font-bold text-muted-foreground">{k}</div>
-      <div className={`text-sm font-extrabold leading-none tabular-nums ${toneCls}`}>
+      <div
+        className={`text-sm font-extrabold leading-none tabular-nums ${toneCls}`}
+      >
         {v}
       </div>
       {sub && (
-        <div className={`mt-0.5 text-[8.5px] font-bold tabular-nums ${toneCls}`}>
+        <div
+          className={`mt-0.5 text-[8.5px] font-bold tabular-nums ${toneCls}`}
+        >
           {sub}
         </div>
       )}

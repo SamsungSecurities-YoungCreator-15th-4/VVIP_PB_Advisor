@@ -40,12 +40,42 @@ export interface Customer {
 export const CUSTOMERS: Customer[] = [
   {
     id: "cust-001",
-    name: "김오삼",
+    name: "김성삼",
     grade: "VVIP",
     pbCode: "PB-100482",
     aumLabel: "운용자산 18억원",
     aumEokwon: 18,
   },
+  {
+    id: "cust-002",
+    name: "이사조",
+    grade: "VVIP",
+    pbCode: "PB-100483",
+    aumLabel: "운용자산 52억원",
+    aumEokwon: 52,
+  },
+  {
+    id: "cust-003",
+    name: "박기업",
+    grade: "VVIP",
+    pbCode: "PB-100484",
+    aumLabel: "운용자산 31억원",
+    aumEokwon: 31,
+  },
+];
+
+// ── 지난 상담 기록 목록 (더미) ─────────────────────────────────
+export interface PastConsultation {
+  id: string;
+  title: string;
+}
+
+export const PAST_CONSULTATIONS: PastConsultation[] = [
+  { id: "pc-1", title: "20260628_김성삼_상담기록" },
+  { id: "pc-2", title: "20260615_김성삼_상담기록" },
+  { id: "pc-3", title: "20260601_김성삼_상담기록" },
+  { id: "pc-4", title: "20260528_이사조_상담기록" },
+  { id: "pc-5", title: "20260510_박기업_상담기록" },
 ];
 
 // ── 상담 내역 ──────────────────────────────────────────────────
@@ -72,6 +102,36 @@ export const CONSULT_LOG: ConsultMessage[] = [
     speaker: "PB",
     text: "절세 전략과 대체자산을 활용한 분산을 제안드립니다.",
     time: "00:30",
+  },
+  {
+    speaker: "고객",
+    text: "ISA 계좌 활용은 이전에도 말씀드렸는데, 한도가 얼마죠?",
+    time: "00:48",
+  },
+  {
+    speaker: "PB",
+    text: "연간 2,000만원 한도이며, 비과세 혜택과 분리과세 9.9%가 적용됩니다.",
+    time: "00:55",
+  },
+  {
+    speaker: "고객",
+    text: "그럼 해외 배당주 비중은 좀 더 늘릴 수 있나요?",
+    time: "01:10",
+  },
+  {
+    speaker: "PB",
+    text: "포트폴리오 A 기준 해외배당주를 22%까지 확대하면 세후 수익률이 5.5%로 개선됩니다.",
+    time: "01:20",
+  },
+  {
+    speaker: "고객",
+    text: "좋네요. 증여 계획도 같이 검토해주실 수 있나요?",
+    time: "01:45",
+  },
+  {
+    speaker: "PB",
+    text: "자녀 증여세 공제 한도(10년 5천만원)와 분할 증여 전략을 함께 안내드리겠습니다.",
+    time: "01:58",
   },
 ];
 
