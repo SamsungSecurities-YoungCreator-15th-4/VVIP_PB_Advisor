@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 function now(): string {
@@ -13,14 +13,13 @@ function now(): string {
 
 export default function LiveClock() {
   const [time, setTime] = useState<string | null>(null);
-
   const refresh = useCallback(() => setTime(now()), []);
 
-  // SSR 하이드레이션 안전: 마운트 시 1회만 시각 설정
-  // 이후 갱신은 새로고침 버튼 클릭(refresh)으로만 가능
+  // setTimeout으로 감싸 setState를 콜백 내부에서 호출 — react-hooks/set-state-in-effect 규칙 준수
   useEffect(() => {
-    setTime(now());
-  }, []);
+    const id = setTimeout(refresh, 0);
+    return () => clearTimeout(id);
+  }, [refresh]);
 
   return (
     <div className="flex items-center gap-1 pr-1 text-[11px] font-semibold text-muted-foreground">

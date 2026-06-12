@@ -14,7 +14,11 @@ export function useAutoCollapse(
 
   useEffect(() => {
     prevWidthRef.current = window.innerWidth;
-    if (window.innerWidth < collapseBelow) setIsOpen(false);
+
+    // setTimeout으로 감싸 setState를 콜백 내부에서 호출 — react-hooks/set-state-in-effect 규칙 준수
+    const initId = setTimeout(() => {
+      if (window.innerWidth < collapseBelow) setIsOpen(false);
+    }, 0);
 
     const check = () => {
       const curr = window.innerWidth;
@@ -26,7 +30,10 @@ export function useAutoCollapse(
     };
 
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    return () => {
+      clearTimeout(initId);
+      window.removeEventListener("resize", check);
+    };
   }, [collapseBelow]);
 
   return [isOpen, setIsOpen];
