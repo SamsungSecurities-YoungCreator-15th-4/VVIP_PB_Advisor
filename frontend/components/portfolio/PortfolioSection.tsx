@@ -131,7 +131,7 @@ function PortfolioCard({
         <Metric k="소르티노" v={m.sortino.toFixed(2)} />
         <Metric
           k="MDD"
-          v={`▼${m.mddPct}%`}
+          v={`${m.mddPct}%`}
           sub={m.mddAmountLabel}
           tone="down"
         />
@@ -159,12 +159,14 @@ function Metric({
 }) {
   const toneCls =
     tone === "up" ? "text-up" : tone === "down" ? "text-down" : "";
+  const arrow = tone === "up" ? "▲" : tone === "down" ? "▼" : null;
   return (
     <div className="bg-card px-2 py-1.5">
       <div className="text-[8.5px] font-bold text-muted-foreground">{k}</div>
       <div
         className={`text-sm font-extrabold leading-none tabular-nums ${toneCls}`}
       >
+        {arrow && <span className="mr-0.5 text-[10px]">{arrow}</span>}
         {v}
       </div>
       {sub && (
