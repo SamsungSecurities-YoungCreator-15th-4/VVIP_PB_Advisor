@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   ChevronDown,
   PanelLeftClose,
@@ -33,6 +33,8 @@ export default function Sidebar() {
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 
   const [isOpen, setIsOpen] = useAutoCollapse(1024);
+
+  if (!customer) return null;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
