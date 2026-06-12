@@ -69,13 +69,14 @@ export default function Sidebar() {
 
   const handleAddCustomer = () => {
     if (!newName.trim()) return;
+    const aumVal = Math.max(0, parseFloat(newAum) || 0);
     addCustomer({
       id: `cust-${Date.now()}`,
       name: newName.trim(),
       grade: "VVIP",
       pbCode: `PB-${Math.floor(100000 + Math.random() * 900000)}`,
-      aumLabel: newAum ? `운용자산 ${newAum}억원` : "운용자산 미입력",
-      aumEokwon: parseInt(newAum, 10) || 0,
+      aumLabel: aumVal > 0 ? `운용자산 ${aumVal}억원` : "운용자산 미입력",
+      aumEokwon: aumVal,
     });
     setNewName("");
     setNewAum("");
