@@ -15,7 +15,7 @@ export default function TaxSection() {
   const portfolio = PORTFOLIOS.find((p) => p.id === selectedPortfolioId);
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
-  const baseLabel = `기준 : ${portfolio?.name ?? "포트폴리오 A"} · ${customer.aumEokwon}억`;
+  const baseLabel = `기준 : ${portfolio?.name ?? "포트폴리오 A"} · ${customer?.aumEokwon ?? 0}억`;
 
   return (
     <Tabs defaultValue="effect">
@@ -126,7 +126,7 @@ export default function TaxSection() {
 
 function SummaryStat({ k, v, d }: { k: string; v: string; d: string }) {
   return (
-    <div className="min-w-[118px] rounded-xl border bg-white px-3 py-2">
+    <div className="min-w-29.5 rounded-xl border bg-white px-3 py-2">
       <p className="text-[9.5px] font-bold text-muted-foreground">{k}</p>
       <p className="mt-1 text-sm font-extrabold tabular-nums">{v}</p>
       <p className="mt-0.5 text-[10px] font-extrabold tabular-nums text-up">
