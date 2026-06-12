@@ -6,10 +6,11 @@ import AssetDonut from "@/components/AssetDonut";
 import CorrelationHeatmap from "@/components/CorrelationHeatmap";
 import { DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
 import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
 
 /** 중앙 상단: 현재 / 포트폴리오 A / 포트폴리오 B — 카드 클릭으로 선택 */
 export default function PortfolioSection() {
-  const [selectedId, setSelectedId] = useState<string>("a");
+  const { selectedPortfolioId, selectPortfolio } = useDashboardStore();
 
   return (
     <section>
@@ -30,8 +31,8 @@ export default function PortfolioSection() {
           <PortfolioCard
             key={pf.id}
             pf={pf}
-            isSelected={selectedId === pf.id}
-            onSelect={() => setSelectedId(pf.id)}
+            isSelected={selectedPortfolioId === pf.id}
+            onSelect={() => selectPortfolio(pf.id)}
           />
         ))}
       </div>

@@ -5,10 +5,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AccountAllocation from "@/components/AccountAllocation";
 import TaxGauge from "@/components/TaxGauge";
 import TaxWaterfall from "@/components/TaxWaterfall";
-import { TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
+import { PORTFOLIOS, TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
 
 /** 중앙 하단: 절세 최적화 시뮬레이터 (절세 효과 / 종합과세 임계선 / 절세 제안) */
 export default function TaxSection() {
+  const { selectedPortfolioId, selectedCustomerId, customers } =
+    useDashboardStore();
+  const portfolio = PORTFOLIOS.find((p) => p.id === selectedPortfolioId);
+  const customer =
+    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+  const baseLabel = `기준 : ${portfolio?.name ?? "포트폴리오 A"} · ${customer.aumEokwon}억`;
+
   return (
     <Tabs defaultValue="effect">
       <div className="mb-2 flex items-center justify-between px-0.5">
@@ -37,7 +45,7 @@ export default function TaxSection() {
                 </span>
                 절세 최적화 효과
                 <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[9.5px] font-bold text-muted-foreground">
-                  {TAX_EFFECT.baseLabel}
+                  {baseLabel}
                 </span>
               </div>
               <p className="mt-1.5 flex items-baseline gap-1.5 text-[11px] font-bold text-brand-dark">
