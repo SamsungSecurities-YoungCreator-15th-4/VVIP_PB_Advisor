@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { CONSULT_LOG, PAST_CONSULTATIONS } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
+import { useAutoCollapse } from "@/lib/useAutoCollapse";
 
 /** 좌측 사이드바: 고객 선택 · 상담 입력 · 상담 내역 · IPS 조율기 · 분석하기 */
 export default function Sidebar() {
@@ -31,7 +32,7 @@ export default function Sidebar() {
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useAutoCollapse(1024);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);

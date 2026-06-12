@@ -23,7 +23,7 @@ export default function PortfolioSection() {
           2026.06.08 기준
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {PORTFOLIOS.map((pf) => (
           <PortfolioCard key={pf.id} pf={pf} />
         ))}

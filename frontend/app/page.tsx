@@ -12,9 +12,9 @@ import RightPanel from "@/components/RightPanel";
  */
 export default function Home() {
   return (
-    <div className="flex min-h-screen min-w-345 flex-col gap-3 p-3.5">
+    <div className="flex min-h-screen flex-col gap-3 p-3.5">
       <Header />
-      <div className="flex flex-1 items-start gap-3">
+      <div className="flex flex-1 items-start gap-3 overflow-x-auto">
         <Sidebar />
         <main className="flex min-w-0 flex-1 flex-col gap-3">
           <PortfolioSection />

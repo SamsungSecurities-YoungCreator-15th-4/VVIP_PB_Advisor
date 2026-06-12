@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import StressTestSection from "@/components/StressTestSection";
 import InsightSection from "@/components/InsightSection";
+import { useAutoCollapse } from "@/lib/useAutoCollapse";
 
 /** 우측 패널: 시나리오 Test + AI 인사이트 — 여닫기 토글 포함 */
 export default function RightPanel() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useAutoCollapse(1280);
 
   if (!isOpen) {
     return (
