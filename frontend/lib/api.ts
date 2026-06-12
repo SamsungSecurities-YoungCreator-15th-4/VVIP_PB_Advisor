@@ -11,10 +11,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       "NEXT_PUBLIC_API_BASE_URL이 설정되지 않았습니다 (.env.local 참고)",
     );
   }
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
-  });
+  // init.headers가 Headers 인스턴스·배열이어도 안전하게 병합
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   if (!res.ok) {
     throw new Error(`API ${res.status}: ${path}`);
   }

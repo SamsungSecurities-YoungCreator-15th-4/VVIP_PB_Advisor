@@ -80,7 +80,8 @@ export function toDisplayAllocation(
     number
   >;
   for (const unit of CALC_UNITS) {
-    acc[CALC_TO_DISPLAY[unit.id]] += weights[unit.id];
+    // 백엔드 응답에 일부 자산군이 빠져도 NaN이 되지 않도록 0 처리
+    acc[CALC_TO_DISPLAY[unit.id]] += weights[unit.id] ?? 0;
   }
   return DISPLAY_GROUPS.map((group) => ({ group, weight: acc[group] }));
 }
