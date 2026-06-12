@@ -13,7 +13,7 @@
 | 프론트엔드 | Next.js (pnpm), TypeScript, TailwindCSS, shadcn/ui, recharts, Zustand |
 | 백엔드 | FastAPI (Python), yfinance |
 | DB·인증 | Supabase (PostgreSQL + pgvector) — 접근 방식 A: supabase-py(RPC 전용) / B: psycopg3(직접 SQL) |
-| 배포 | 프론트엔드 Vercel · 백엔드 Railway (`backend/railway.json`) |
+| 배포 | 프론트엔드 Vercel · 백엔드 Render |
 | 협업 | GitHub, Notion, Slack |
 
 ## 레포 구조
