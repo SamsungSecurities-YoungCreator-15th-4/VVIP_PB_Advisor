@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 STT_DIR = BACKEND_DIR / "app" / "stt"
 STT_AUDIO_DIR = STT_DIR / "audio"
-STT_OUTPUT_DIR = STT_DIR / "output"
 
 load_dotenv(BACKEND_DIR / ".env")
 load_dotenv(STT_DIR / ".env")

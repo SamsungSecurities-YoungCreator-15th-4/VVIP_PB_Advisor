@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import UploadFile
 
-from app.core.config import STT_AUDIO_DIR, STT_OUTPUT_DIR
+from app.core.config import STT_AUDIO_DIR
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -17,8 +17,6 @@ class SttPipelineResult:
     ips_json: dict
     transcript_title: str
     ips_title: str
-    transcript_output_path: Path
-    ips_output_path: Path
 
 
 def run_uploaded_wav_pipeline(
@@ -40,22 +38,15 @@ def run_uploaded_wav_pipeline(
     try:
         _save_upload_file(audio_file, upload_path)
         transcript_json, ips_json = run_stt_pipeline(str(upload_path))
-        title_prefix = f"{datetime.now(KST):%y%m%d}_{customer_name}"
+        title_prefix = f"{datetime.now(KST):%y%m%d_%H%M%S_%f}_{customer_name}"
         transcript_title = f"{title_prefix}_상담 스크립트"
         ips_title = f"{title_prefix}_ips"
-        transcript_output_path = STT_OUTPUT_DIR / f"{transcript_title}.json"
-        ips_output_path = STT_OUTPUT_DIR / f"{ips_title}.json"
-
-        _save_json(transcript_json, transcript_output_path)
-        _save_json(ips_json, ips_output_path)
 
         return SttPipelineResult(
             transcript_json=transcript_json,
             ips_json=ips_json,
             transcript_title=transcript_title,
             ips_title=ips_title,
-            transcript_output_path=transcript_output_path,
-            ips_output_path=ips_output_path,
         )
     finally:
         upload_path.unlink(missing_ok=True)
@@ -83,9 +74,3 @@ def _save_upload_file(audio_file: UploadFile, upload_path: Path) -> None:
     with upload_path.open("wb") as output:
         while chunk := audio_file.file.read(1024 * 1024):
             output.write(chunk)
-
-
-def _save_json(data: list[dict] | dict, output_path: Path) -> None:
-    from app.stt.stt_record import save_json  # noqa: PLC0415
-
-    save_json(data, output_path)

@@ -54,6 +54,8 @@ backend/faiss_index/
 backend/data/*.txt
 backend/data/*.json
 backend/app/stt/.env
+backend/app/stt/audio/
+backend/app/stt/output/
 # 공유용 더미/샘플은 파일명에 "sample" 을 넣으면 예외로 추적된다 (실데이터엔 절대 사용 금지).
 # 그 외 의도적 추가는 `git add -f <파일>` 로 강제 추가.
 !**/*sample*

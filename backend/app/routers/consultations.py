@@ -66,63 +66,63 @@ def create_stt_consultation(
             detail="IPS 구조화 결과 검증 중 오류가 발생했습니다.",
         ) from exc
 
-    consultation_payload = {
-        "client_id": client["id"],
-        "raw_note": raw_note,
-        "transcript_title": pipeline_result.transcript_title,
-        "ips_title": pipeline_result.ips_title,
-        "transcript_json": pipeline_result.transcript_json,
-        "ips_json": ips_json,
-    }
-
-    consultation_result = (
-        supabase.table("consultation")
-        .insert(consultation_payload)
-        .execute()
-    )
-    consultation = _first_row(consultation_result.data)
-    if not consultation:
-        raise HTTPException(status_code=500, detail="상담 내역 저장에 실패했습니다.")
-
     snapshot_payload = build_ips_snapshot_payload(
         client_id=client["id"],
-        consultation_id=consultation["id"],
+        consultation_id=None,
         source_type="consultation",
         raw_ips_json=ips_json,
     )
+
     try:
-        snapshot_result = (
-            supabase.table("ips_snapshot")
-            .insert(snapshot_payload)
+        created_result = (
+            supabase.rpc(
+                "create_stt_consultation_with_snapshot",
+                {
+                    "p_client_id": client["id"],
+                    "p_raw_note": raw_note,
+                    "p_transcript_title": pipeline_result.transcript_title,
+                    "p_ips_title": pipeline_result.ips_title,
+                    "p_transcript_json": pipeline_result.transcript_json,
+                    "p_ips_json": ips_json,
+                    "p_goal": snapshot_payload["goal"],
+                    "p_asset": snapshot_payload["asset"],
+                    "p_return": snapshot_payload["return"],
+                    "p_risk": snapshot_payload["risk"],
+                    "p_time": snapshot_payload["time"],
+                    "p_tax": snapshot_payload["tax"],
+                    "p_liquidity": snapshot_payload["liquidity"],
+                    "p_legal": snapshot_payload["legal"],
+                    "p_unique": snapshot_payload["unique"],
+                    "p_raw_ips_json": snapshot_payload["raw_ips_json"],
+                },
+            )
             .execute()
         )
-        snapshot = _first_row(snapshot_result.data)
+        created = _first_row(created_result.data)
     except Exception as exc:
-        _delete_consultation(supabase, consultation["id"])
-        logger.exception("IPS snapshot insert failed")
+        logger.exception("STT consultation RPC failed")
         raise HTTPException(
             status_code=500,
             detail="상담 결과 저장 중 오류가 발생했습니다.",
         ) from exc
 
-    if not snapshot:
-        _delete_consultation(supabase, consultation["id"])
+    if not created:
         raise HTTPException(
             status_code=500,
             detail="상담 결과 저장 중 오류가 발생했습니다.",
         )
 
     return ConsultationResponse(
-        consultation_id=consultation["id"],
-        customer_id=client["id"],
+        consultation_id=created["consultation_id"],
+        customer_id=created["customer_id"],
         customer_name=customer_name,
-        consultation_date=_consultation_date(consultation["created_at"]),
-        transcript_title=consultation["transcript_title"],
-        ips_title=consultation["ips_title"],
+        consultation_date=_consultation_date(created["created_at"]),
+        transcript_title=created["transcript_title"],
+        ips_title=created["ips_title"],
         transcript_json=pipeline_result.transcript_json,
         ips_json=ips_json,
-        ips_snapshot_id=snapshot["id"],
-        created_at=_to_kst_iso(consultation["created_at"]),
+        ips_snapshot_id=created["ips_snapshot_id"],
+        created_at=_to_kst_iso(created["created_at"]),
     )
 
 
@@ -302,10 +302,3 @@ def _parse_datetime(datetime_text: str) -> datetime:
         created_datetime = created_datetime.replace(tzinfo=timezone.utc)
 
     return created_datetime
-
-
-def _delete_consultation(supabase, consultation_id: str) -> None:
-    try:
-        supabase.table("consultation").delete().eq("id", consultation_id).execute()
-    except Exception:
-        logger.exception("Failed to delete orphan consultation: %s", consultation_id)

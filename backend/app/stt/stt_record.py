@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -22,6 +23,10 @@ AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+AZURE_OPENAI_TIMEOUT_SECONDS = float(os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS", "60"))
+SPEECH_TRANSCRIPTION_TIMEOUT_SECONDS = float(
+    os.getenv("SPEECH_TRANSCRIPTION_TIMEOUT_SECONDS", "300")
+)
 
 DEFAULT_AUDIO_DIR = STT_DIR / "audio"
 DEFAULT_OUTPUT_DIR = STT_DIR / "output"
@@ -29,7 +34,10 @@ SUPPORTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm"}
 MAPPED_TRANSCRIPT_OUTPUT_FILE = "mapped_transcript.json"
 GOAL_RRTTLLU_OUTPUT_FILE = "goal_rrttllu_result.json"
 TICKS_PER_SECOND = 10_000_000
+logger = logging.getLogger(__name__)
 
+# 데모 상담 음성은 PB가 먼저 말하는 흐름을 전제로 한다.
+# 실제 운영 전에는 발화 내용 기반 역할 판별 규칙으로 대체해야 한다.
 SPEAKER_ROLE_MAP = {
     "Guest-1": "PB",
     "Guest-2": "고객",
@@ -172,14 +180,12 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
                     "duration_ticks": evt.result.duration,
                 }
                 results.append(item)
-                print(f"{speaker_id}: {text}")
 
         elif evt.result.reason == speechsdk.ResultReason.NoMatch:
-            print("인식된 음성이 없습니다.")
+            logger.info("STT segment had no recognized speech")
 
     def canceled_handler(evt):
         nonlocal done, cancellation_error
-        print(f"취소됨: {evt}")
 
         result = getattr(evt, "result", None)
         cancellation_details = getattr(evt, "cancellation_details", None)
@@ -213,23 +219,30 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
             cancellation_error = RuntimeError(
                 f"STT 전사가 오류로 취소되었습니다: {detail_message}"
             )
+            logger.warning("STT transcription canceled with error: %s", error_code)
+        else:
+            logger.info("STT transcription canceled: %s", reason)
 
         done = True
 
     def session_stopped_handler(evt):
         nonlocal done
-        print("세션 종료")
+        logger.info("STT transcription session stopped")
         done = True
 
     transcriber.transcribed.connect(transcribed_handler)
     transcriber.canceled.connect(canceled_handler)
     transcriber.session_stopped.connect(session_stopped_handler)
 
-    print("1/5 STT + 화자 분리 시작...")
+    logger.info("1/5 STT + 화자 분리 시작")
     transcriber.start_transcribing_async().get()
 
     try:
+        started_at = time.monotonic()
         while not done:
+            elapsed = time.monotonic() - started_at
+            if elapsed > SPEECH_TRANSCRIPTION_TIMEOUT_SECONDS:
+                raise RuntimeError("STT 전사가 제한 시간을 초과했습니다.")
             time.sleep(0.5)
     finally:
         # 루프 중 예외(KeyboardInterrupt 등)가 나도 세션을 반드시 종료해 리소스 누수 방지.
@@ -237,11 +250,12 @@ def transcribe_with_diarization(audio_file_path: str) -> list[dict]:
         try:
             transcriber.stop_transcribing_async().get()
         except Exception as cleanup_error:
-            print(f"STT 세션 종료 중 오류 발생: {cleanup_error}")
+            logger.warning("STT session cleanup failed: %s", cleanup_error)
 
     if cancellation_error:
         raise cancellation_error
 
+    logger.info("STT transcription completed with %s segments", len(results))
     return results
 
 
@@ -256,7 +270,7 @@ def format_ticks_as_mmss(ticks: int | None) -> str:
 
 
 def map_speaker_roles(transcript: list[dict]) -> list[dict]:
-    print("2/5 화자 역할 매핑 시작...")
+    logger.info("2/5 화자 역할 매핑 시작")
 
     mapped_result = []
 
@@ -283,7 +297,7 @@ def map_speaker_roles(transcript: list[dict]) -> list[dict]:
 
 
 def extract_customer_text(mapped_transcript: list[dict]) -> str:
-    print("3/5 고객 발화 추출 시작...")
+    logger.info("3/5 고객 발화 추출 시작")
 
     customer_texts = [
         f"[{item.get('utterance_time', '00:00')}] {item['text']}"
@@ -300,11 +314,12 @@ def get_openai_client() -> AzureOpenAI:
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_key=AZURE_OPENAI_API_KEY,
         api_version=AZURE_OPENAI_API_VERSION,
+        timeout=AZURE_OPENAI_TIMEOUT_SECONDS,
     )
 
 
 def extract_goal_rrttllu(customer_text: str) -> dict:
-    print("4/5 Goal + RRTTLLU JSON 구조화 시작...")
+    logger.info("4/5 Goal + RRTTLLU JSON 구조화 시작")
 
     if not customer_text.strip():
         raise ValueError("고객 발화가 비어 있어 Goal/RRTTLLU를 추출할 수 없습니다.")
@@ -385,14 +400,14 @@ def save_json(data, output_path: str | Path):
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    print(f"저장 완료: {output_path}")
+    logger.info("JSON saved")
 
 
 def run_pipeline(audio_dir: str, output_dir: str | Path):
     validate_env()
 
     audio_file_path = find_latest_wav_file(audio_dir)
-    print(f"전사 대상 음성 파일: {audio_file_path}")
+    logger.info("전사 대상 음성 파일을 확인했습니다")
     output_path = Path(output_dir)
 
     transcript = transcribe_with_diarization(audio_file_path)
@@ -407,9 +422,11 @@ def run_pipeline(audio_dir: str, output_dir: str | Path):
     goal_rrttllu_output = output_path / GOAL_RRTTLLU_OUTPUT_FILE
     save_json(goal_rrttllu, goal_rrttllu_output)
 
-    print("5/5 STT 통합 파이프라인 완료")
-    print(f"출력 파일: {mapped_transcript_output}, {goal_rrttllu_output}")
-    print(json.dumps(goal_rrttllu, ensure_ascii=False, indent=2))
+    logger.info(
+        "5/5 STT 통합 파이프라인 완료: %s, %s",
+        mapped_transcript_output.name,
+        goal_rrttllu_output.name,
+    )
 
 
 def parse_args():
@@ -433,5 +450,6 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = parse_args()
     run_pipeline(args.audio_dir, args.output_dir)
