@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
@@ -72,6 +72,11 @@ def create_stt_consultation(
         source_type="consultation",
         raw_ips_json=ips_json,
     )
+    transcript_title, ips_title = _build_stt_titles(
+        supabase=supabase,
+        client_id=client["id"],
+        customer_name=customer_name,
+    )
 
     try:
         created_result = (
@@ -80,8 +85,8 @@ def create_stt_consultation(
                 {
                     "p_client_id": client["id"],
                     "p_raw_note": raw_note,
-                    "p_transcript_title": pipeline_result.transcript_title,
-                    "p_ips_title": pipeline_result.ips_title,
+                    "p_transcript_title": transcript_title,
+                    "p_ips_title": ips_title,
                     "p_transcript_json": pipeline_result.transcript_json,
                     "p_ips_json": ips_json,
                     "p_goal": snapshot_payload["goal"],
@@ -260,6 +265,38 @@ def _get_client_by_name(supabase, customer_name: str) -> dict | None:
         .execute()
     )
     return _first_row(result.data)
+
+
+def _build_stt_titles(
+    *,
+    supabase,
+    client_id: str,
+    customer_name: str,
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    now_kst = (now or datetime.now(KST)).astimezone(KST)
+    start_kst = datetime.combine(now_kst.date(), time.min, tzinfo=KST)
+    end_kst = start_kst + timedelta(days=1)
+
+    result = (
+        supabase.table("consultation")
+        .select("id", count="exact")
+        .eq("client_id", client_id)
+        .gte("created_at", start_kst.astimezone(timezone.utc).isoformat())
+        .lt("created_at", end_kst.astimezone(timezone.utc).isoformat())
+        .execute()
+    )
+    existing_count = result.count
+    if existing_count is None:
+        existing_count = len(result.data or [])
+
+    sequence = existing_count + 1
+    title_prefix = f"{now_kst:%y%m%d}_{customer_name}"
+
+    return (
+        f"{title_prefix}_상담 스크립트({sequence})",
+        f"{title_prefix}_ips({sequence})",
+    )
 
 
 def _first_row(rows: list[dict] | None) -> dict | None:

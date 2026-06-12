@@ -15,8 +15,6 @@ KST = ZoneInfo("Asia/Seoul")
 class SttPipelineResult:
     transcript_json: list[dict]
     ips_json: dict
-    transcript_title: str
-    ips_title: str
 
 
 def run_uploaded_wav_pipeline(
@@ -38,15 +36,10 @@ def run_uploaded_wav_pipeline(
     try:
         _save_upload_file(audio_file, upload_path)
         transcript_json, ips_json = run_stt_pipeline(str(upload_path))
-        title_prefix = f"{datetime.now(KST):%y%m%d_%H%M%S_%f}_{customer_name}"
-        transcript_title = f"{title_prefix}_상담 스크립트"
-        ips_title = f"{title_prefix}_ips"
 
         return SttPipelineResult(
             transcript_json=transcript_json,
             ips_json=ips_json,
-            transcript_title=transcript_title,
-            ips_title=ips_title,
         )
     finally:
         upload_path.unlink(missing_ok=True)
