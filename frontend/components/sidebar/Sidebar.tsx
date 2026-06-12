@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   PanelLeftClose,
@@ -33,8 +33,6 @@ export default function Sidebar() {
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 
   const [isOpen, setIsOpen] = useAutoCollapse(1024);
-
-  if (!customer) return null;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -47,6 +45,20 @@ export default function Sidebar() {
   // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+
+  // 드롭다운이 열린 상태에서 스크롤·리사이즈 시 자동 닫기 (fixed 드롭다운 위치 이탈 방지)
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const close = () => setDropdownOpen(false);
+    window.addEventListener("scroll", close, { capture: true, passive: true });
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [dropdownOpen]);
+
+  if (!customer) return null;
 
   const handleDropdownToggle = () => {
     if (!dropdownOpen && dropdownTriggerRef.current) {
