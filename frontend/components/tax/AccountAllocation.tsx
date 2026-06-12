@@ -12,7 +12,6 @@ export default function AccountAllocation() {
       </p>
       <div className="flex flex-col gap-2.5">
         {TAX_EFFECT.accounts.map((acct) => {
-          const full = acct.used !== null && acct.used === acct.limit;
           const pct =
             acct.used !== null && acct.limit
               ? (acct.used / acct.limit) * 100
@@ -41,10 +40,10 @@ export default function AccountAllocation() {
               </div>
               <div className="mt-1 h-2 overflow-hidden rounded-md bg-muted">
                 <div
-                  className={`h-full rounded-md ${
-                    full
-                      ? "bg-gradient-to-r from-positive to-positive-dark"
-                      : "bg-gradient-to-r from-[#5C9CFF] to-brand"
+                  className={`h-full rounded-md bg-linear-to-r ${
+                    acct.name === "일반계좌"
+                      ? "from-[#B8D4FF] to-[#7AABFF]"
+                      : "from-[#5C9CFF] to-brand"
                   }`}
                   style={{ width: `${pct}%` }}
                 />

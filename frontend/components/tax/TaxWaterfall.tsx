@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { TAX_EFFECT } from "@/lib/mockData";
 
-const AFTER_TAX_COLORS = ["#AEB5BD", "#16B47A"]; // 일반과세(회색) / 절세전략(초록)
+const AFTER_TAX_COLORS = ["#AEB5BD", "#0064FF"]; // 일반과세(회색) / 절세전략(브랜드 블루)
 const TAX_COLORS = ["#F04452", "#F4A8AE"]; // 세금 누수(빨강) / 절세 후 잔여 세금
 
 /**
@@ -36,7 +36,7 @@ export default function TaxWaterfall() {
           · {TAX_EFFECT.flow.pretaxLabel}
         </span>
       </p>
-      <div className="h-[110px]">
+      <div className="h-27.5">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
@@ -79,7 +79,7 @@ export default function TaxWaterfall() {
         </ResponsiveContainer>
       </div>
       <div className="mt-1.5 flex flex-wrap gap-3">
-        <LegendDot color="#16B47A" label="세후 수익(절세전략)" />
+        <LegendDot color="#0064FF" label="세후 수익(절세전략)" />
         <LegendDot color="#AEB5BD" label="세후 수익(일반)" />
         <LegendDot color="#F04452" label="세금 누수" />
       </div>
