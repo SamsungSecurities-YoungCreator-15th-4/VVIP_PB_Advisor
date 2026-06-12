@@ -7,8 +7,10 @@ import CorrelationHeatmap from "@/components/CorrelationHeatmap";
 import { DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
 import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
 
-/** 중앙 상단: 현재 / 포트폴리오 A(베스트) / 포트폴리오 B(추천) 3카드 */
+/** 중앙 상단: 현재 / 포트폴리오 A / 포트폴리오 B — 카드 클릭으로 선택 */
 export default function PortfolioSection() {
+  const [selectedId, setSelectedId] = useState<string>("a");
+
   return (
     <section>
       <div className="mb-2 flex items-center justify-between px-0.5">
@@ -25,51 +27,65 @@ export default function PortfolioSection() {
       </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {PORTFOLIOS.map((pf) => (
-          <PortfolioCard key={pf.id} pf={pf} />
+          <PortfolioCard
+            key={pf.id}
+            pf={pf}
+            isSelected={selectedId === pf.id}
+            onSelect={() => setSelectedId(pf.id)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-const BADGE_STYLE: Record<Portfolio["badge"], string> = {
-  현재: "bg-muted text-muted-foreground",
-  베스트: "bg-brand text-white",
-  추천: "bg-brand/10 text-brand-dark",
-};
-
-function PortfolioCard({ pf }: { pf: Portfolio }) {
+function PortfolioCard({
+  pf,
+  isSelected,
+  onSelect,
+}: {
+  pf: Portfolio;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
   const [view, setView] = useState<"donut" | "heatmap">("donut");
   const allocation = toDisplayAllocation(pf.weights);
   const m = pf.metrics;
 
+  // 선택된 카드에만 "선택됨" 배지 표시
+  const badgeLabel = isSelected ? "선택됨" : null;
+
   return (
     <Card
-      className={`gap-0 p-3 ${
-        pf.badge === "베스트"
+      className={`gap-0 cursor-pointer p-3 transition-shadow ${
+        isSelected
           ? "border-2 border-brand shadow-[0_6px_20px_rgba(0,100,255,0.14)]"
-          : ""
+          : "hover:shadow-md"
       }`}
+      onClick={onSelect}
     >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[13px] font-extrabold">
           {pf.name}
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold ${BADGE_STYLE[pf.badge]}`}
-          >
-            {pf.badge}
-          </span>
+          {badgeLabel && (
+            <span className="rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+              {badgeLabel}
+            </span>
+          )}
         </div>
-        <div className="flex gap-1">
+        <div
+          className="flex rounded-lg bg-muted p-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           {(["donut", "heatmap"] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={`rounded-md px-2 py-0.5 text-[9.5px] font-bold ${
+              className={`rounded-md px-2 py-0.5 text-[9.5px] font-bold transition-colors ${
                 view === v
-                  ? "bg-foreground text-white"
-                  : "text-muted-foreground/70"
+                  ? "bg-[#DCE9FF] text-brand-dark shadow-sm"
+                  : "text-muted-foreground/70 hover:text-foreground"
               }`}
             >
               {v === "donut" ? "도넛" : "히트맵"}
@@ -86,7 +102,7 @@ function PortfolioCard({ pf }: { pf: Portfolio }) {
               {allocation.map((d) => (
                 <div
                   key={d.group}
-                  className="flex items-center gap-1.5 text-[9.5px]"
+                  className="flex items-center gap-1.5 text-[11px]"
                 >
                   <span
                     className="size-2 shrink-0 rounded-[3px]"

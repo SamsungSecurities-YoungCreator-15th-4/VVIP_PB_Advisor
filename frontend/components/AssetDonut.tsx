@@ -30,10 +30,10 @@ export default function AssetDonut({ allocation }: Props) {
         </Pie>
       </PieChart>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[9px] font-bold text-muted-foreground">
+        <span className="text-[10px] font-bold text-muted-foreground">
           자산배분
         </span>
-        <span className="text-[13px] font-extrabold">
+        <span className="text-[14px] font-extrabold">
           {allocation.length}개 군
         </span>
       </div>
