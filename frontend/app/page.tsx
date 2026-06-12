@@ -1,9 +1,9 @@
-import Header from "@/components/Header";
-import Sidebar from "@/components/Sidebar";
-import PortfolioSection from "@/components/PortfolioSection";
-import BacktestChart from "@/components/BacktestChart";
-import TaxSection from "@/components/TaxSection";
-import RightPanel from "@/components/RightPanel";
+import Header from "@/components/header/Header";
+import Sidebar from "@/components/sidebar/Sidebar";
+import PortfolioSection from "@/components/portfolio/PortfolioSection";
+import BacktestChart from "@/components/portfolio/BacktestChart";
+import TaxSection from "@/components/tax/TaxSection";
+import RightPanel from "@/components/right-panel/RightPanel";
 
 /**
  * PB 대시보드 초안.

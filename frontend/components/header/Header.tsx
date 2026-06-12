@@ -1,7 +1,7 @@
 import { FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MACRO_INDICATORS } from "@/lib/mockData";
-import LiveClock from "@/components/LiveClock";
+import LiveClock from "@/components/header/LiveClock";
 
 /** 상단 헤더: 로고 · 거시지표 6개 · 포트폴리오 연동 상태 · PDF 추출 */
 export default function Header() {

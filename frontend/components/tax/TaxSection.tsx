@@ -2,9 +2,9 @@
 
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AccountAllocation from "@/components/AccountAllocation";
-import TaxGauge from "@/components/TaxGauge";
-import TaxWaterfall from "@/components/TaxWaterfall";
+import AccountAllocation from "@/components/tax/AccountAllocation";
+import TaxGauge from "@/components/tax/TaxGauge";
+import TaxWaterfall from "@/components/tax/TaxWaterfall";
 import { PORTFOLIOS, TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 

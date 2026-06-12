@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import AssetDonut from "@/components/AssetDonut";
-import CorrelationHeatmap from "@/components/CorrelationHeatmap";
+import AssetDonut from "@/components/portfolio/AssetDonut";
+import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
 import { DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
 import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
