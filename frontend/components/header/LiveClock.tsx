@@ -16,10 +16,10 @@ export default function LiveClock() {
 
   const refresh = useCallback(() => setTime(now()), []);
 
+  // SSR 하이드레이션 안전: 마운트 시 1회만 시각 설정
+  // 이후 갱신은 새로고침 버튼 클릭(refresh)으로만 가능
   useEffect(() => {
     setTime(now());
-    const id = setInterval(() => setTime(now()), 60_000);
-    return () => clearInterval(id);
   }, []);
 
   return (
