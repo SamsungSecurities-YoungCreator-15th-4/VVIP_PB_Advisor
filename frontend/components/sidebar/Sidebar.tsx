@@ -1,0 +1,525 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RotateCcw,
+  Sparkles,
+  Upload,
+  UserPlus,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { CONSULT_LOG, PAST_CONSULTATIONS } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
+import { useAutoCollapse } from "@/lib/useAutoCollapse";
+
+/** 좌측 사이드바: 고객 선택 · 상담 입력 · 상담 내역 · IPS 조율기 · 분석하기 */
+export default function Sidebar() {
+  const {
+    customers,
+    selectedCustomerId,
+    ips,
+    setIps,
+    selectCustomer,
+    addCustomer,
+  } = useDashboardStore();
+  const customer =
+    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+
+  const [isOpen, setIsOpen] = useAutoCollapse(1024);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newAum, setNewAum] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
+  const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+
+  // 드롭다운이 열린 상태에서 스크롤·리사이즈 시 자동 닫기 (fixed 드롭다운 위치 이탈 방지)
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const close = () => setDropdownOpen(false);
+    window.addEventListener("scroll", close, { capture: true, passive: true });
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [dropdownOpen]);
+
+  if (!customer) return null;
+
+  const handleDropdownToggle = () => {
+    if (!dropdownOpen && dropdownTriggerRef.current) {
+      setDropdownRect(dropdownTriggerRef.current.getBoundingClientRect());
+    }
+    setDropdownOpen((o) => !o);
+  };
+
+  const handleAddCustomer = () => {
+    if (!newName.trim()) return;
+    const aumVal = Math.max(0, parseFloat(newAum) || 0);
+    addCustomer({
+      id: `cust-${Date.now()}`,
+      name: newName.trim(),
+      grade: "VVIP",
+      pbCode: `PB-${Math.floor(100000 + Math.random() * 900000)}`,
+      aumLabel: aumVal > 0 ? `운용자산 ${aumVal}억원` : "운용자산 미입력",
+      aumEokwon: aumVal,
+    });
+    setNewName("");
+    setNewAum("");
+    setAddModalOpen(false);
+  };
+
+  // 사이드바가 닫혔을 때: 하나의 패널임을 시각적으로 표현하는 좁은 카드 스트립
+  if (!isOpen) {
+    return (
+      <div className="flex w-10 shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
+        <button
+          onClick={() => setIsOpen(true)}
+          title="사이드바 열기"
+          className="flex flex-col items-center gap-2 rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <PanelLeftOpen className="size-4" />
+          <span
+            className="text-[9px] font-bold leading-none text-muted-foreground"
+            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+          >
+            고객·IPS
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <aside className="flex w-[300px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
+        {/* 패널 헤더 */}
+        <div className="flex items-center justify-between px-0.5 pb-0.5">
+          <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
+            고객 IPS
+          </span>
+          <button
+            onClick={() => setIsOpen(false)}
+            title="사이드바 닫기"
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+          >
+            <PanelLeftClose className="size-4" />
+          </button>
+        </div>
+
+        {/* 고객 선택 */}
+        <Card className="gap-0 p-3">
+          <div className="mb-2">
+            <p className="text-[10px] font-bold tracking-wider text-muted-foreground">
+              고객 선택
+            </p>
+          </div>
+
+          {/* 드롭다운 트리거 */}
+          <button
+            ref={dropdownTriggerRef}
+            type="button"
+            onClick={handleDropdownToggle}
+            className="flex w-full items-center gap-3 rounded-xl px-1 py-1 hover:bg-muted"
+          >
+            <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-[#DCE9FF] to-[#B8D4FF] text-lg font-extrabold text-brand-dark">
+              {customer.name[0]}
+            </div>
+            <div className="flex-1 text-left">
+              <div className="flex items-center gap-2 text-[15px] font-extrabold">
+                {customer.name}
+                <span className="rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+                  {customer.grade}
+                </span>
+              </div>
+              <div className="mt-0.5 text-[11px] font-semibold text-muted-foreground">
+                {customer.pbCode} · {customer.aumLabel}
+              </div>
+            </div>
+            <ChevronDown
+              className={`size-4 shrink-0 text-muted-foreground transition-transform ${
+                dropdownOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </Card>
+
+        {/* 상담 입력 */}
+        <Card className="gap-0 p-3">
+          <p className="mb-2 text-[10px] font-bold tracking-wider text-muted-foreground">
+            상담 입력
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".wav"
+            className="hidden"
+            onChange={(e) => setUploadedFile(e.target.files?.[0] ?? null)}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 p-3 text-center"
+          >
+            <span className="mx-auto mb-1.5 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+              <Upload className="size-4 text-brand" />
+            </span>
+            <span className="block text-[13px] font-bold text-brand-dark">
+              음성 업로드
+            </span>
+            {uploadedFile ? (
+              <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
+                {uploadedFile.name}
+              </span>
+            ) : (
+              <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
+                wav 지원
+              </span>
+            )}
+          </button>
+        </Card>
+
+        {/* 상담 내역 */}
+        <Card className="gap-0 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[13px] font-bold">상담 내역</p>
+          </div>
+          <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-0.5">
+            {CONSULT_LOG.map((m, i) => (
+              <div key={i} className="flex items-start gap-1.5">
+                <span
+                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[8.5px] font-extrabold ${
+                    m.speaker === "고객"
+                      ? "bg-[#DCE9FF] text-brand-dark"
+                      : "bg-[#ADB5BD] text-white"
+                  }`}
+                >
+                  {m.speaker}
+                </span>
+                <span className="flex-1 text-[11px] font-medium leading-snug text-muted-foreground">
+                  {m.text}
+                </span>
+                <span className="mt-0.5 shrink-0 text-[9px] font-semibold tabular-nums text-muted-foreground/60">
+                  {m.time}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 w-full font-bold"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <RotateCcw />
+            지난 기록 대화 불러오기
+          </Button>
+        </Card>
+
+        {/* IPS 조율기 */}
+        <Card className="flex-1 gap-0 p-3">
+          <div className="mb-1">
+            <p className="text-[13px] font-bold">IPS 조율기</p>
+          </div>
+          <IpsRow k="Goal" sub="목표">
+            <Input
+              value={ips.goal}
+              onChange={(e) => setIps({ goal: e.target.value })}
+              className="h-6 text-[11px]"
+            />
+          </IpsRow>
+          <IpsRow k="Asset" sub="자산">
+            <span className="text-xs font-extrabold tabular-nums text-brand-dark">
+              {customer.aumEokwon}억원
+            </span>
+          </IpsRow>
+          <IpsRow k="Return" sub="수익">
+            <div className="flex flex-1 items-center gap-2">
+              <span className="w-8 text-xs font-extrabold tabular-nums text-brand-dark">
+                {ips.returnPct}%
+              </span>
+              <Slider
+                value={[ips.returnPct]}
+                onValueChange={([v]) => setIps({ returnPct: v })}
+                min={0}
+                max={20}
+                step={1}
+                className="flex-1"
+              />
+            </div>
+          </IpsRow>
+          <IpsRow k="Risk" sub="위험">
+            <Segment
+              options={["안정형", "균형형", "공격형"] as const}
+              value={ips.risk}
+              onChange={(v) => setIps({ risk: v })}
+            />
+          </IpsRow>
+          <IpsRow k="Time" sub="기간">
+            <div className="flex flex-1 items-center gap-2">
+              <span className="w-8 text-xs font-extrabold tabular-nums text-brand-dark">
+                {ips.timeYears}년
+              </span>
+              <Slider
+                value={[ips.timeYears]}
+                onValueChange={([v]) => setIps({ timeYears: v })}
+                min={1}
+                max={30}
+                step={1}
+                className="flex-1"
+              />
+            </div>
+          </IpsRow>
+          <IpsRow k="Tax" sub="세제">
+            <Input
+              value={ips.tax}
+              onChange={(e) => setIps({ tax: e.target.value })}
+              className="h-6 text-[11px]"
+            />
+          </IpsRow>
+          <IpsRow k="Liquid" sub="유동성">
+            <Segment
+              options={["낮음", "중간", "높음"] as const}
+              value={ips.liquidity}
+              onChange={(v) => setIps({ liquidity: v })}
+            />
+          </IpsRow>
+          <IpsRow k="Legal" sub="법적">
+            <Input
+              value={ips.legal}
+              onChange={(e) => setIps({ legal: e.target.value })}
+              className="h-6 text-[11px]"
+            />
+          </IpsRow>
+          <IpsRow k="Unique" sub="특수" last>
+            <Input
+              value={ips.unique}
+              onChange={(e) => setIps({ unique: e.target.value })}
+              className="h-6 text-[11px]"
+            />
+          </IpsRow>
+        </Card>
+
+        <Button
+          size="lg"
+          className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
+        >
+          <Sparkles />
+          분석하기
+        </Button>
+      </aside>
+
+      {/* ── 고객 드롭다운 (Card overflow-hidden 밖에 fixed로 렌더링) ── */}
+      {dropdownOpen && dropdownRect && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setDropdownOpen(false)}
+          />
+          <div
+            className="fixed z-50 overflow-hidden rounded-xl border bg-card shadow-xl"
+            style={{
+              top: dropdownRect.bottom + 4,
+              left: dropdownRect.left,
+              width: dropdownRect.width,
+            }}
+          >
+            {customers.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  selectCustomer(c.id);
+                  setDropdownOpen(false);
+                }}
+                className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted ${
+                  c.id === selectedCustomerId ? "bg-brand/5" : ""
+                }`}
+              >
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-[#DCE9FF] to-[#B8D4FF] text-sm font-extrabold text-brand-dark">
+                  {c.name[0]}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-extrabold">{c.name}</div>
+                  <div className="text-[10px] font-semibold text-muted-foreground">
+                    {c.aumLabel}
+                  </div>
+                </div>
+                {c.id === selectedCustomerId && (
+                  <span className="shrink-0 text-[9px] font-bold text-brand">
+                    선택됨
+                  </span>
+                )}
+              </button>
+            ))}
+            <div className="border-t p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setAddModalOpen(true);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold text-brand hover:bg-brand/5"
+              >
+                <UserPlus className="size-3.5" />
+                고객 추가
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── 지난 기록 모달 ── */}
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-[440px] rounded-2xl bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[15px] font-extrabold">지난 상담 기록</h3>
+              <button
+                onClick={() => setHistoryOpen(false)}
+                className="rounded p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto">
+              {PAST_CONSULTATIONS.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between rounded-xl border px-3 py-2"
+                >
+                  <span className="text-[13px] font-semibold">{c.title}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 text-[11px] font-bold"
+                    onClick={() => setHistoryOpen(false)}
+                  >
+                    불러오기
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 고객 추가 모달 ── */}
+      {addModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-[360px] rounded-2xl bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[15px] font-extrabold">고객 추가</h3>
+              <button
+                onClick={() => setAddModalOpen(false)}
+                className="rounded p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-bold text-muted-foreground">
+                  고객명
+                </label>
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="예: 홍길동"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddCustomer()}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold text-muted-foreground">
+                  운용자산 (억원)
+                </label>
+                <Input
+                  type="number"
+                  value={newAum}
+                  onChange={(e) => setNewAum(e.target.value)}
+                  placeholder="예: 20"
+                />
+              </div>
+              <Button
+                onClick={handleAddCustomer}
+                className="w-full font-bold"
+                disabled={!newName.trim()}
+              >
+                추가하기
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function IpsRow({
+  k,
+  sub,
+  last,
+  children,
+}: {
+  k: string;
+  sub: string;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 py-1.5 ${last ? "" : "border-b border-muted"}`}
+    >
+      <div className="w-14 shrink-0">
+        <b className="block text-[11px] font-extrabold">{k}</b>
+        <span className="block text-[8px] font-semibold leading-none text-muted-foreground">
+          {sub}
+        </span>
+      </div>
+      <div className="flex flex-1 items-center">{children}</div>
+    </div>
+  );
+}
+
+function Segment<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly T[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex flex-1 gap-0.5 rounded-lg bg-muted p-0.5">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          className={`flex-1 rounded-md py-1 text-[10px] font-bold transition-colors ${
+            value === opt
+              ? "bg-white text-brand-dark shadow-sm"
+              : "text-muted-foreground"
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+}

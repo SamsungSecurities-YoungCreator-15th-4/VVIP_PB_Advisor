@@ -71,7 +71,7 @@ export default function TaxGauge() {
         <div className="relative mt-1 h-9">
           <div className="absolute inset-x-0 top-2.5 h-3 overflow-hidden rounded-md bg-muted">
             <div
-              className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#2C7BFF] to-brand"
+              className="absolute left-0 top-0 h-full bg-linear-to-r from-[#2C7BFF] to-brand"
               style={{ width: `${Math.min(totalPct, thresholdPct)}%` }}
             />
             {isOver && (

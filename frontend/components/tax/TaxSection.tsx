@@ -2,45 +2,53 @@
 
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AccountAllocation from "@/components/AccountAllocation";
-import TaxGauge from "@/components/TaxGauge";
-import TaxWaterfall from "@/components/TaxWaterfall";
-import { TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
+import AccountAllocation from "@/components/tax/AccountAllocation";
+import TaxGauge from "@/components/tax/TaxGauge";
+import TaxWaterfall from "@/components/tax/TaxWaterfall";
+import { PORTFOLIOS, TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
 
 /** 중앙 하단: 절세 최적화 시뮬레이터 (절세 효과 / 종합과세 임계선 / 절세 제안) */
 export default function TaxSection() {
-  return (
-    <Card className="gap-0 p-3">
-      <Tabs defaultValue="effect">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[13px] font-bold">절세 최적화 시뮬레이터</p>
-          <TabsList className="h-7">
-            <TabsTrigger value="effect" className="px-2.5 text-[10px] font-bold">
-              절세 효과
-            </TabsTrigger>
-            <TabsTrigger value="threshold" className="px-2.5 text-[10px] font-bold">
-              종합과세 임계선
-            </TabsTrigger>
-            <TabsTrigger value="advice" className="px-2.5 text-[10px] font-bold">
-              절세 제안
-            </TabsTrigger>
-          </TabsList>
-        </div>
+  const { selectedPortfolioId, selectedCustomerId, customers } =
+    useDashboardStore();
+  const portfolio = PORTFOLIOS.find((p) => p.id === selectedPortfolioId);
+  const customer =
+    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+  const baseLabel = `기준 : ${portfolio?.name ?? "포트폴리오 A"} · ${customer?.aumEokwon ?? 0}억`;
 
+  return (
+    <Tabs defaultValue="effect">
+      <div className="mb-2 flex items-center justify-between px-0.5">
+        <h2 className="text-lg font-extrabold">절세 최적화 시뮬레이터</h2>
+        <TabsList className="h-7">
+          <TabsTrigger value="effect" className="px-2.5 text-[10px] font-bold">
+            절세 효과
+          </TabsTrigger>
+          <TabsTrigger value="threshold" className="px-2.5 text-[10px] font-bold">
+            종합과세 임계선
+          </TabsTrigger>
+          <TabsTrigger value="advice" className="px-2.5 text-[10px] font-bold">
+            절세 제안
+          </TabsTrigger>
+        </TabsList>
+      </div>
+
+      <Card className="gap-0 p-3">
         {/* 탭 1: 절세 효과 */}
         <TabsContent value="effect" className="flex flex-col gap-3">
-          <div className="flex items-center gap-4 rounded-xl border border-[#C9EFDD] bg-[#E8F8F1] px-3.5 py-3">
+          <div className="flex items-center gap-4 rounded-xl border border-brand/20 bg-brand/5 px-3.5 py-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 text-xs font-extrabold">
-                <span className="flex size-5 items-center justify-center rounded-md bg-positive text-[13px] font-extrabold text-white">
+                <span className="flex size-5 items-center justify-center rounded-md bg-brand text-[13px] font-extrabold text-white">
                   $
                 </span>
                 절세 최적화 효과
-                <span className="rounded-full border border-[#C9EFDD] bg-white px-2 py-0.5 text-[9.5px] font-bold text-muted-foreground">
-                  {TAX_EFFECT.baseLabel}
+                <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[9.5px] font-bold text-muted-foreground">
+                  {baseLabel}
                 </span>
               </div>
-              <p className="mt-1.5 flex items-baseline gap-1.5 text-[11px] font-bold text-positive-dark">
+              <p className="mt-1.5 flex items-baseline gap-1.5 text-[11px] font-bold text-brand-dark">
                 연간 절세 효과
                 <b className="text-3xl font-extrabold tabular-nums tracking-tight">
                   +{TAX_EFFECT.annualSavingManwon.toLocaleString()}
@@ -111,17 +119,17 @@ export default function TaxSection() {
             </span>
           </div>
         </TabsContent>
-      </Tabs>
-    </Card>
+      </Card>
+    </Tabs>
   );
 }
 
 function SummaryStat({ k, v, d }: { k: string; v: string; d: string }) {
   return (
-    <div className="min-w-[118px] rounded-xl border bg-white px-3 py-2">
+    <div className="min-w-29.5 rounded-xl border bg-white px-3 py-2">
       <p className="text-[9.5px] font-bold text-muted-foreground">{k}</p>
       <p className="mt-1 text-sm font-extrabold tabular-nums">{v}</p>
-      <p className="mt-0.5 text-[10px] font-extrabold tabular-nums text-positive-dark">
+      <p className="mt-0.5 text-[10px] font-extrabold tabular-nums text-up">
         {d}
       </p>
     </div>
