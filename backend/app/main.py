@@ -1,11 +1,23 @@
-# 이 파일은 뼈대다. 실제 엔드포인트는 기획 확정 후 추가한다.
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import settings
+from app.routers.consultations import router as consultations_router
+
+from app.routers import rag
 
 app = FastAPI(title="VVIP Asset Advisor Hub API")
 
-# TODO(다음 PR): 프론트(Vercel)에서 호출 시작하면 CORSMiddleware 추가 필요.
-#   from fastapi.middleware.cors import CORSMiddleware
-#   허용 origin은 환경변수로 받아 하드코딩 금지. 이번 PR(헬스체크 전용)에서는 불필요.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(consultations_router)
+app.include_router(rag.router)
 
 
 @app.get("/health")
