@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
-CustomerName = Literal["김성삼", "이사조", "박기업"]
+CustomerName = str
 
 
 class ConsultationResponse(BaseModel):
