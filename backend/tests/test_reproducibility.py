@@ -63,7 +63,11 @@ TRANSCRIPT = [
 ]
 
 CHUNKS = [
-    {"title": "국세청 2026 세금가이드 1권", "chunk": "ISA 일반형 200만원 비과세.", "similarity": 0.91},
+    {
+        "title": "국세청 2026 세금가이드 1권",
+        "chunk": "ISA 일반형 200만원 비과세.",
+        "similarity": 0.91,
+    },
     {"title": "삼성증권 저쿠폰 채권 전략", "chunk": "채권 자본차익은 비과세.", "similarity": 0.83},
 ]
 
@@ -192,7 +196,12 @@ class TestRagSearchTransformDeterminism:
             {"document_id": "d2", "content": "채권 자본차익 비과세.", "similarity": 0.8},
         ]
         docs = [
-            {"id": "d1", "title": "세금가이드 1권", "source_type": "tax", "meta": {"published_date": "2026-01-01"}},
+            {
+                "id": "d1",
+                "title": "세금가이드 1권",
+                "source_type": "tax",
+                "meta": {"published_date": "2026-01-01"},
+            },
             {"id": "d2", "title": "채권 전략", "source_type": "house_view", "meta": {}},
         ]
 
@@ -321,36 +330,95 @@ PURE_CALC_MODULES = [
     APP_DIR / "rag" / "generate.py",
 ]
 
-_FORBIDDEN_CALLS = {
+# (모듈 힌트, 메서드명): 메서드명이 체인의 끝이고 모듈 힌트가 체인 앞쪽 어디든
+# 등장하면 탐지. datetime.now / datetime.datetime.now / date.today /
+# datetime.date.today / time.time / uuid.uuid4 같은 중첩 형태를 모두 잡는다.
+_FORBIDDEN_METHODS = {
     ("datetime", "now"),
+    ("datetime", "utcnow"),
     ("date", "today"),
     ("time", "time"),
-    ("random",),  # random.* 전체
-    ("np", "random"),
-    ("numpy", "random"),
+    ("time", "monotonic"),
+    ("time", "perf_counter"),
+    ("uuid", "uuid1"),
+    ("uuid", "uuid4"),
 }
+
+# 체인 어디에든 이 세그먼트가 있으면 비결정으로 본다(random.* / np.random.* /
+# numpy.random.* 전체를 한 번에 커버).
+_FORBIDDEN_MODULE_SEGMENTS = {"random"}
+
+# from uuid import uuid4 처럼 직접 import 해 호출하는 이름.
+_FORBIDDEN_BARE_NAMES = {"uuid1", "uuid4"}
+
+
+def _attr_chain(node: ast.Attribute) -> tuple[str, ...]:
+    """a.b.c() 의 ast.Attribute 를 ('a','b','c') 튜플로 평탄화한다."""
+    parts: list[str] = []
+    cur: ast.expr = node
+    while isinstance(cur, ast.Attribute):
+        parts.append(cur.attr)
+        cur = cur.value
+    if isinstance(cur, ast.Name):
+        parts.append(cur.id)
+    return tuple(reversed(parts))
 
 
 def _nondeterministic_calls(source: str) -> list[str]:
-    """AST 로 비결정 호출(now/today/random 등)을 찾아 'lineno:이름' 목록을 반환."""
+    """AST 로 비결정 호출(now/today/random/uuid 등)을 찾아 'lineno:이름' 목록 반환.
+
+    탐지 규칙(접두사 정확일치에 의존하지 않아 중첩/모듈형 우회를 막는다):
+    - 메서드형: 체인 끝이 금지 메서드이고 모듈 힌트가 체인 앞쪽에 등장
+      → datetime.datetime.now() 같은 doubled 형태도 탐지.
+    - 모듈형: 체인 앞쪽에 random 세그먼트 존재 → random.* / np.random.* 모두 탐지.
+    - 직접 import 형: uuid4/uuid1 단독 이름 호출.
+    """
     tree = ast.parse(source)
     hits = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute):
-            parts = []
-            cur = node
-            while isinstance(cur, ast.Attribute):
-                parts.append(cur.attr)
-                cur = cur.value
-            if isinstance(cur, ast.Name):
-                parts.append(cur.id)
-            chain = tuple(reversed(parts))
-            for forbidden in _FORBIDDEN_CALLS:
-                if chain[: len(forbidden)] == forbidden and len(forbidden) > 1:
-                    hits.append(f"{node.lineno}:{'.'.join(chain)}")
-        if isinstance(node, ast.Name) and node.id == "uuid4":
-            hits.append(f"{node.lineno}:uuid4")
+            chain = _attr_chain(node)
+            if not chain:
+                continue
+            label = f"{node.lineno}:{'.'.join(chain)}"
+            method, prefix = chain[-1], chain[:-1]
+            if any(hint in prefix and method == attr for hint, attr in _FORBIDDEN_METHODS):
+                hits.append(label)
+            elif any(seg in _FORBIDDEN_MODULE_SEGMENTS for seg in prefix):
+                hits.append(label)
+        elif isinstance(node, ast.Name) and node.id in _FORBIDDEN_BARE_NAMES:
+            hits.append(f"{node.lineno}:{node.id}")
     return hits
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "import random\nx = random.random()",  # random.* (len-1 규칙)
+        "import numpy as np\nx = np.random.seed(1)",  # np.random.*
+        "import uuid\nx = uuid.uuid4()",  # 모듈형 uuid
+        "from uuid import uuid4\nx = uuid4()",  # 직접 import
+        "import datetime\nx = datetime.datetime.now()",  # doubled 우회
+        "import datetime\nx = datetime.date.today()",  # doubled date.today
+        "import datetime\nx = datetime.now()",  # from datetime import datetime 형
+        "import time\nx = time.time()",
+    ],
+)
+def test_static_checker_detects_nondeterministic_forms(snippet):
+    # 검사기 자체가 우회 형태(중첩/모듈형/직접 import)를 잡는지 회귀로 고정.
+    assert _nondeterministic_calls(snippet), f"미탐지: {snippet!r}"
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "d = {}\nd['time'] = 1",  # dict 키 'time' — 메서드 호출 아님
+        "obj.time\nobj.now",  # 모듈 힌트 없는 단순 속성 접근
+        "from datetime import time\nx = time.min",  # time.min 은 비결정 아님
+    ],
+)
+def test_static_checker_no_false_positive(snippet):
+    assert _nondeterministic_calls(snippet) == [], f"오탐: {snippet!r}"
 
 
 @pytest.mark.parametrize("module_path", PURE_CALC_MODULES, ids=lambda p: p.name)
