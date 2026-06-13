@@ -1,3 +1,5 @@
+# ruff: noqa: E501
+
 from fastapi import APIRouter, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal, Tuple, Any
