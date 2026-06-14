@@ -10,20 +10,29 @@
 
 | 영역 | 사용 기술 |
 | --- | --- |
-| 프론트엔드 | Next.js, TypeScript, TailwindCSS |
+| 프론트엔드 | Next.js (pnpm), TypeScript, TailwindCSS, shadcn/ui, recharts, Zustand |
 | 백엔드 | FastAPI (Python), yfinance |
-| DB·인증 | Supabase (PostgreSQL) |
-| 배포 | Vercel |
+| DB·인증 | Supabase (PostgreSQL + pgvector) — 접근 방식 A: supabase-py(RPC 전용) / B: psycopg3(직접 SQL) |
+| 배포 | 프론트엔드 Vercel · 백엔드 Render |
 | 협업 | GitHub, Notion, Slack |
 
 ## 레포 구조
 
 ```
-frontend/   # Next.js 프론트엔드
-backend/    # FastAPI 백엔드
-AI/stt/     # STT·화자 매핑·RRTTLLU 추출 작업 파일 보관
-docs/       # 기획·설계·협업 규칙 문서
-.github/    # PR 템플릿 등
+VVIP_PB_Advisor/
+├── frontend/      # Next.js 프론트엔드 (PB 상담 대시보드 UI)
+├── backend/       # FastAPI 백엔드
+│   └── app/
+│       ├── routers/   # API 엔드포인트 (consultations, rag 등)
+│       ├── stt/       # STT·화자 매핑·RRTTLLU 추출 (구 AI/stt 에서 이동)
+│       ├── rag/       # RAG 검색부 (Azure 임베딩 + pgvector)
+│       ├── services/  # STT 파이프라인·IPS 추출 등 비즈니스 로직
+│       ├── schemas/   # Pydantic 모델
+│       ├── core/      # 설정(config)
+│       └── db/        # Supabase 클라이언트
+├── supabase/      # DB 마이그레이션·시드 (PostgreSQL + pgvector)
+├── docs/          # 기획·설계·협업 규칙 문서
+└── .github/       # PR 템플릿 등 GitHub 관련 설정
 ```
 
 ## 작업 규칙
@@ -31,7 +40,7 @@ docs/       # 기획·설계·협업 규칙 문서
 - **디렉터리 경계**: 프론트엔드 작업은 `frontend/`, 백엔드 작업은 `backend/` 안에서만 한다. 두 영역을 동시에 건드리는 변경은 PR을 분리하는 것을 우선 고려한다.
 - **커밋 메시지**: 한국어로, `타입: 설명` 형식. 타입은 `feat`, `fix`, `docs`, `chore`, `refactor`, `test` 중 하나.
   - 예) `feat: 포트폴리오 시뮬레이션 입력 폼 추가`
-- **빌드/실행 확인**: 푸시 전 반드시 로컬에서 빌드와 실행이 되는지 확인한다. 프론트엔드는 `npm run build`, 백엔드는 최소 `uvicorn app.main:app`이 떠야 한다.
+- **빌드/실행 확인**: 푸시 전 반드시 로컬에서 빌드와 실행이 되는지 확인한다. 프론트엔드는 `pnpm build`, 백엔드는 최소 `uvicorn app.main:app`이 떠야 한다.
 - **덮어쓰기 알림**: 기존 파일을 지우거나 덮어쓰기 전 사용자에게 먼저 알리고 동의를 받는다.
 - **비밀 정보 금지**: `.env` 파일과 모든 비밀키는 절대 커밋하지 않는다. `.env.example`만 추적 대상이다.
 
