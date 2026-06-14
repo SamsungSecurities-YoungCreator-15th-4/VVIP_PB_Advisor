@@ -1,6 +1,6 @@
 ﻿# ruff: noqa: E501
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal, Tuple, Any
 import uuid
@@ -10,11 +10,6 @@ import pandas as pd
 import yfinance as yf
 
 
-app = FastAPI(
-    title="AI IPS Portfolio Analysis API",
-    description="PB 보조용 포트폴리오 추천 및 분석 API",
-    version="8.0.0",
-)
 router = APIRouter(tags=["portfolio"])
 logger = logging.getLogger(__name__)
 
