@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 from supabase import Client, create_client
 
+from app.core.azure_openai import build_azure_client
+
 load_dotenv()
 
 # 임베딩 모델은 명세 확정값. 변경 시 document_chunk.embedding(vector(1536)) 차원과
@@ -39,19 +41,8 @@ DEFAULT_SIMILARITY_THRESHOLD = 0.5
 
 @lru_cache(maxsize=1)
 def get_openai_client() -> AzureOpenAI:
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    if not endpoint or not api_key:
-        # 키·엔드포인트 값 자체는 절대 메시지/로그에 포함하지 않는다.
-        raise RuntimeError(
-            "AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY 환경변수가 설정되지 "
-            "않았습니다. backend/.env 에 추가하세요 (.env.example 참고)."
-        )
-    return AzureOpenAI(
-        azure_endpoint=endpoint,
-        api_key=api_key,
-        api_version=EMBEDDING_API_VERSION,
-    )
+    # 엔드포인트·키 읽기와 클라이언트 생성은 공용 팩토리로 일원화(임베딩/LLM 공통).
+    return build_azure_client(EMBEDDING_API_VERSION)
 
 
 @lru_cache(maxsize=1)

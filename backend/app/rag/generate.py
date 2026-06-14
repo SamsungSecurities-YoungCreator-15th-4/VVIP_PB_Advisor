@@ -8,6 +8,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.core.azure_openai import get_llm_client, get_llm_deployment
+
 
 class Generator(ABC):
     """answer 생성기 인터페이스. chunks 는 retrieval.search_chunks 의 citation 구조."""
@@ -38,14 +40,57 @@ class ExtractiveGenerator(Generator):
         return "\n".join(lines)
 
 
-class LLMGenerator(Generator):
-    """LLM 생성기 스텁 — 미구현.
+def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> str:
+    """검색된 청크를 LLM 프롬프트용 근거 블록으로 묶는다(원문 그대로, 가공 없음)."""
+    blocks = []
+    for i, chunk in enumerate(chunks, start=1):
+        title = chunk.get("title") or "제목 없음"
+        blocks.append(f"[근거 {i} · {title}]\n{chunk['chunk'].strip()}")
+    return "\n\n".join(blocks)
 
-    6/14 회의 결정 반영, Google AI Studio 연동 예정.
-    구현 시에도 검색된 청크 밖의 내용 생성 금지 원칙은 동일하게 적용한다.
+
+class LLMGenerator(Generator):
+    """LLM 생성기 — Azure OpenAI gpt-4o(배포 ai-insight-llm)로 답변을 생성한다.
+
+    "할루시네이션=즉사" 원칙: 검색된 청크(chunks) 밖의 사실·숫자를 새로 만들지 않는다.
+    LLM 은 청크 내용을 한국어로 '설명·요약'만 하고, 계산·사실은 청크에서만 가져온다.
+    재현성을 위해 temperature=0 으로 호출한다. citations 는 라우터가 chunks 에서
+    생성하므로 이 생성기는 answer 문자열만 반환한다.
+
+    호출/타임아웃/키 미설정 등으로 실패하면 예외를 그대로 올린다 — 라우터가 받아
+    ExtractiveGenerator 로 폴백한다(데모가 죽지 않게).
     """
 
+    _SYSTEM_PROMPT = (
+        "너는 삼성증권 PB가 VVIP 고객에게 설명할 답변을 작성하는 보조자다.\n"
+        "반드시 다음 규칙을 지킨다.\n"
+        "1. 아래 '근거 문서'에 있는 내용만 사용한다. 근거 밖의 사실·숫자·통계·날짜를 "
+        "지어내지 않는다.\n"
+        "2. 근거에서 답을 찾을 수 없으면 '제공된 자료로는 확인되지 않습니다'라고 답한다.\n"
+        "3. 수치·계산·사실은 근거에서 그대로 인용하고, 너는 설명·요약·정리만 한다.\n"
+        "4. 한국어로, PB가 고객에게 설명하듯 정중하고 명확하게 쓴다.\n"
+        "5. 단정적 수익 보장이나 투자 권유 표현은 피하고 자료 근거 설명에 한정한다."
+    )
+
     def generate(self, query: str, chunks: list[dict[str, Any]]) -> str:
-        raise NotImplementedError(
-            "LLMGenerator 는 6/14 회의 결정 반영 후 Google AI Studio 로 연동 예정입니다."
+        if not chunks:
+            raise ValueError("청크가 없으면 answer 를 생성할 수 없습니다 (라우터에서 404 처리).")
+
+        context = _format_chunks_for_prompt(chunks)
+        user_prompt = (
+            f"[근거 문서]\n{context}\n\n"
+            f"[질의]\n{query}\n\n"
+            "위 근거 문서만을 사용해 한국어로 답변을 작성하라."
         )
+        response = get_llm_client().chat.completions.create(
+            model=get_llm_deployment(),
+            messages=[
+                {"role": "system", "content": self._SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0,
+        )
+        answer = response.choices[0].message.content
+        if not answer or not answer.strip():
+            raise ValueError("LLM 이 빈 answer 를 반환했습니다.")
+        return answer.strip()

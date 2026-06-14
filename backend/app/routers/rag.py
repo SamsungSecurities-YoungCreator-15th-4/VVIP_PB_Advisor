@@ -5,6 +5,7 @@ OpenAI·supabase 호출이 블로킹이므로 핸들러는 동기 def 로 작성
 (FastAPI 가 스레드풀에서 실행 — async def 로 바꾸면 이벤트루프가 막힌다, #26 리뷰 참고).
 """
 
+import logging
 from datetime import date, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -12,15 +13,30 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.rag.generate import ExtractiveGenerator, Generator
+from app.rag.generate import ExtractiveGenerator, Generator, LLMGenerator
 from app.rag.retrieval import embed_query, search_chunks
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
 KST = ZoneInfo("Asia/Seoul")
 
-# 생성기는 인터페이스로 추상화 — LLM 생성기 확정(6/14 회의) 시 여기만 교체한다.
-_generator: Generator = ExtractiveGenerator()
+# 기본 생성기는 LLM(gpt-4o). 실패(타임아웃·rate limit·키 미설정 등) 시 추출형으로
+# 폴백해 답이라도 나오게 한다(Render Free·Azure 장애 대비 — 데모가 죽지 않게).
+_generator: Generator = LLMGenerator()
+_fallback_generator: Generator = ExtractiveGenerator()
+
+
+def _generate_answer(query: str, chunks: list[dict]) -> str:
+    """LLM 생성 시도 후 실패하면 추출형으로 폴백한다(폴백 발생 시 로그)."""
+    try:
+        return _generator.generate(query, chunks)
+    except Exception:
+        # 예외 메시지에 키·민감정보가 섞일 수 있으나 우리 RuntimeError 는 값을 담지
+        # 않는다. exception() 으로 스택만 남기고 추출형으로 폴백한다.
+        logger.exception("LLMGenerator 생성 실패 — ExtractiveGenerator 로 폴백합니다.")
+        return _fallback_generator.generate(query, chunks)
 
 
 class InsightContext(BaseModel):
@@ -61,7 +77,7 @@ def create_insight(request: InsightRequest) -> InsightResponse:
     if not chunks:
         raise HTTPException(status_code=404, detail="관련 문서 없음(임계값 미달)")
 
-    answer = _generator.generate(query, chunks)
+    answer = _generate_answer(query, chunks)
     return InsightResponse(
         answer=answer,
         citations=[Citation(**chunk) for chunk in chunks],
