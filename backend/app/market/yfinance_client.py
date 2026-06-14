@@ -247,18 +247,25 @@ async def fetch_usd_krw() -> ForexResult:
 
 # ── 과거 데이터 (포트폴리오 백테스트용) ─────────────────────────────────────
 
+# 첫 부팅부터 네트워크 불가 시에만 쓰는 대표 상수. 티커는 계산 로직 측
+# (portfolio_logic_8th.py) ASSET_TICKERS와 동일하게 맞춘다.
 FALLBACKS: dict[str, dict[str, float]] = {
     "TLT": {"annualReturn": 0.032, "annualVolatility": 0.138},
-    # 일반채 프록시: KOSEF 국고채10년 — 5년 대표값 (듀레이션 ≈ 8년)
-    "148070.KS": {"annualReturn": 0.034, "annualVolatility": 0.062},
-    # 저쿠폰·분리과세채 프록시: KBSTAR KIS국고채30년Enhanced — 5년 대표값 (듀레이션 ≈ 20년)
-    "385560.KS": {"annualReturn": 0.040, "annualVolatility": 0.155},
-    "069500.KS": {"annualReturn": 0.068, "annualVolatility": 0.185},
-    "VYM": {"annualReturn": 0.091, "annualVolatility": 0.148},
+    # 일반채 프록시: KODEX 국고채10년액티브 — 5년 대표값 (듀레이션 ≈ 7.99년)
+    "471230.KS": {"annualReturn": 0.034, "annualVolatility": 0.062},
+    # 분리과세채 프록시: KODEX 국고채30년액티브 — 5년 대표값 (듀레이션 ≈ 19.53년)
+    "439870.KS": {"annualReturn": 0.040, "annualVolatility": 0.165},
+    # 저쿠폰채 프록시: KODEX 미국30년국채액티브(H) — 환헤지 (듀레이션 ≈ 15.39년)
+    "484790.KS": {"annualReturn": 0.030, "annualVolatility": 0.140},
+    # 국내주식 프록시: KOSPI 지수
+    "^KS11": {"annualReturn": 0.060, "annualVolatility": 0.180},
+    # 해외배당 프록시: SCHD
+    "SCHD": {"annualReturn": 0.105, "annualVolatility": 0.150},
     "GLD": {"annualReturn": 0.085, "annualVolatility": 0.142},
     "QQQ": {"annualReturn": 0.158, "annualVolatility": 0.235},
     "VNQ": {"annualReturn": 0.072, "annualVolatility": 0.198},
-    "GSG": {"annualReturn": 0.045, "annualVolatility": 0.220},
+    # 원자재 프록시: Invesco DB Commodity (DBC)
+    "DBC": {"annualReturn": 0.045, "annualVolatility": 0.180},
 }
 
 

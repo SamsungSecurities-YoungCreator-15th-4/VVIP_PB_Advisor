@@ -92,6 +92,9 @@ _FALLBACK_CORRELATIONS: dict[str, float] = {
 }
 
 # 채권 3분류는 fallback 상관계수 조회 시 "general_bond"로 정규화한다 (시장 위험 동질 가정).
+# ※ 한계: low_coupon_bond는 환헤지 미국 장기국채(484790.KS)라 실제로는 국내 국고채와
+#   상관관계가 다르다(미국 금리 연동). 이 fallback은 실시세 공통 거래일이 부족할 때만
+#   쓰이며, 평시에는 실측 공분산을 사용하므로 영향이 제한적이다.
 _BOND_SUBTYPES = ("general_bond", "low_coupon_bond", "separate_tax_bond")
 
 
@@ -276,91 +279,108 @@ def calc_mdd(values: list[float]) -> float:
 
 
 # ── 세금 계산 ────────────────────────────────────────────────────────────────
+#
+# 세금 모델은 계산 로직 측(portfolio_logic_8th.py, PR #30)과 동일한 방법론·상수를
+# 사용한다. 기존 "누진세율+누진공제 안분" / "분리과세채 33% 특례" 방식은 폐기하고
+# PR #30 방식으로 통일했다:
+#   1) 자산별 income yield 가정으로 이자·배당성 금융소득 = weight × 자산 × min(수익률, yield)
+#      → 원천징수 15.4% (소득세법 §129, 지방소득세 포함)
+#   2) 금융소득 합계가 2,000만 원 초과 시 초과분에 (한계세율 − 15.4%) 추가과세
+#   3) 해외상장 주식/ETF 가격차익은 기본공제 250만 원 후 22% 분리과세
+#   ※ 분리과세채는 PR #30과 동일하게 별도 33% 특례 없이 income yield(2.5%) 차등으로만 구분.
+#   ※ ISA/IRP 절세 효과는 계좌 배분 최적화 영역이라 이 헬퍼 범위 밖(계산 로직 모듈에서 처리).
 
-# 자산군별 "총수익 중 과세 대상 경상소득(이자·배당)" 비중 가정 (자본이득 제외).
-#   - overseas_dividend: 총수익의 절반이 배당이라는 기존 가정 유지
-#   - overseas_blue_chip: S&P500 배당수익률(≈1.5%) / 장기 총수익(≈7%) → 20% 가정
-#   - general_bond: 국고채 수익 대부분이 표면이자라는 가정 (85%)
-#   - low_coupon_bond: 표면금리(≈1%대)만 이자과세, 매매차익은 개인 비과세 → 15%
-#   - separate_tax_bond: 이자 비중은 일반채와 동일하나 과세 방식이 분리과세
-#   - dollar: 달러 예금/RP 이자만 과세, 환차익은 개인 비과세 → 30% 가정
-_TAXABLE_INCOME_PORTION: dict[str, float] = {
-    "overseas_dividend": 0.5,
-    "overseas_blue_chip": 0.2,
-    "general_bond": 0.85,
-    "low_coupon_bond": 0.15,
-    "separate_tax_bond": 0.85,
-    "dollar": 0.3,
+# 금융소득종합과세 검토 기준: 이자·배당 금융소득 2,000만 원 (원 단위)
+FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD = 20_000_000
+# 해외주식 양도소득 기본공제 250만 원 및 기본세율 22%
+OVERSEAS_STOCK_GAIN_DEDUCTION = 2_500_000
+OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE = 0.22
+# 국내 이자·배당 원천징수 기본세율 15.4%
+DEFAULT_WITHHOLDING_TAX_RATE = 0.154
+# 종합과세 초과분 추가과세에 쓰는 한계세율 가정(지방소득세 포함). 실제로는 고객
+# 전체 소득 구간에 따라 달라지므로 호출 시 인자로 덮어쓸 수 있게 둔다.
+DEFAULT_MARGINAL_INCOME_TAX_RATE = 0.385
+
+# 배당·이자 수익률 간이 가정. 기대수익률 중 이 수준까지만 이자·배당성 금융소득으로 본다.
+# (portfolio_logic_8th.ASSET_INCOME_YIELD_ASSUMPTIONS와 동일. cash는 market 측 미사용)
+ASSET_INCOME_YIELD_ASSUMPTIONS: dict[str, float] = {
+    "general_bond": 0.030,
+    "low_coupon_bond": 0.015,
+    "separate_tax_bond": 0.025,
+    "overseas_dividend": 0.035,
+    "reit": 0.040,
 }
-
-# 만기 10년 이상 장기채권 분리과세 신청 시 원천징수세율 (소득세법 §129①1,
-# 30% + 지방소득세 10% = 33%). 신청 시 종합과세 합산에서 제외되어 납세 종결.
-SEPARATE_TAX_RATE = 0.33
-
-# 이자·배당소득 원천징수세율 15.4% (소득세법 §129, 지방소득세 포함)
-WITHHOLDING_TAX_RATE = 0.154
+# 이자·배당 성격이 강해 금융소득종합과세 검토 대상에 넣을 자산.
+INCOME_TAXABLE_ASSETS = set(ASSET_INCOME_YIELD_ASSUMPTIONS)
+# 해외상장 주식/ETF — 가격차익에 양도소득세(분리과세 22%) 적용 대상.
+OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS = {
+    "overseas_blue_chip",
+    "overseas_growth",
+    "overseas_dividend",
+    "reit",
+}
 
 
 def calc_after_tax_return(
     gross_return: float,
     portfolio: list[AssetAllocation],
     total_assets: float,  # 억 원
-    other_financial_income: float,  # 억 원
+    other_financial_income: float = 0.0,  # 억 원
+    marginal_income_tax_rate: float = DEFAULT_MARGINAL_INCOME_TAX_RATE,
+    overseas_stock_realized_gain_rate: float = 0.0,
 ) -> tuple[float, float, bool]:
-    """반환값: (afterTaxReturn, taxAmount, isComprehensive)"""
-    annual_gross_income = gross_return * total_assets  # 억 원
+    """세후 수익률 추정 — portfolio_logic_8th.calculate_after_tax_return 방법론 이식.
 
-    # 종합과세 합산 대상 경상소득 (분리과세채 제외)
-    comprehensive_income = sum(
-        a.weight * gross_return * total_assets * _TAXABLE_INCOME_PORTION[a.assetClass]
-        for a in portfolio
-        if a.assetClass in _TAXABLE_INCOME_PORTION and a.assetClass != "separate_tax_bond"
+    반환값: (afterTaxReturn, taxAmount[억 원], isComprehensive)
+    overseas_stock_realized_gain_rate: 해외주식 평가익 중 당해 실현(양도) 비율(0~1).
+      0이면 미실현으로 보아 양도소득세를 매기지 않는다.
+    """
+    total_won = total_assets * 1e8
+    if total_won <= 0:
+        return 0.0, 0.0, False
+
+    gross_profit_won = 0.0
+    withholding_tax_won = 0.0
+    taxable_financial_income_won = other_financial_income * 1e8
+    overseas_realized_gain_won = 0.0
+
+    for a in portfolio:
+        asset_profit = a.weight * total_won * gross_return
+        gross_profit_won += asset_profit
+        if gross_return <= 0:
+            continue
+
+        # 이자·배당성 금융소득 = min(수익률, income yield) 까지만 인정
+        income_profit_won = 0.0
+        if a.assetClass in INCOME_TAXABLE_ASSETS:
+            income_yield = ASSET_INCOME_YIELD_ASSUMPTIONS[a.assetClass]
+            income_return = min(gross_return, max(income_yield, 0.0))
+            income_profit_won = a.weight * total_won * income_return
+            withholding_tax_won += income_profit_won * DEFAULT_WITHHOLDING_TAX_RATE
+            taxable_financial_income_won += income_profit_won
+
+        # 해외주식·ETF 가격차익(= 총이익 − 이자·배당분)에 양도소득세
+        if a.assetClass in OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS:
+            total_positive = a.weight * total_won * gross_return
+            capital_gain = max(total_positive - income_profit_won, 0.0)
+            overseas_realized_gain_won += capital_gain * overseas_stock_realized_gain_rate
+
+    is_comprehensive = (
+        taxable_financial_income_won > FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD
     )
-    # 분리과세채 경상소득 (분리과세 신청 시 종합과세 합산 제외)
-    separate_income = sum(
-        a.weight * gross_return * total_assets * _TAXABLE_INCOME_PORTION[a.assetClass]
-        for a in portfolio
-        if a.assetClass == "separate_tax_bond"
+    # 2천만 원 초과분 추가과세 (한계세율 − 원천징수세율)
+    excess = max(taxable_financial_income_won - FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD, 0.0)
+    additional_comprehensive_tax_won = excess * max(
+        marginal_income_tax_rate - DEFAULT_WITHHOLDING_TAX_RATE, 0.0
     )
+    # 해외주식 양도소득세 (250만 원 공제 후 22%)
+    taxable_overseas_gain = max(overseas_realized_gain_won - OVERSEAS_STOCK_GAIN_DEDUCTION, 0.0)
+    overseas_tax_won = taxable_overseas_gain * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
 
-    total_financial_income = comprehensive_income + other_financial_income  # 억 원
-    COMPREHENSIVE_TAX_THRESHOLD = 0.2  # 2천만원 = 0.2억
+    total_tax_won = withholding_tax_won + additional_comprehensive_tax_won + overseas_tax_won
+    after_tax_return = (gross_profit_won - total_tax_won) / total_won
 
-    is_comprehensive = total_financial_income > COMPREHENSIVE_TAX_THRESHOLD
-
-    tax_amount = 0.0  # 억 원
-
-    if is_comprehensive:
-        # 억 원 → 만원 변환 후 누진세율 + 누진공제 적용 (지방소득세 10% 포함)
-        income_manwon = total_financial_income * 10000
-        if income_manwon <= 1400:
-            total_tax_manwon = income_manwon * 0.066
-        elif income_manwon <= 5000:
-            total_tax_manwon = income_manwon * 0.165 - 138.6
-        elif income_manwon <= 8800:
-            total_tax_manwon = income_manwon * 0.264 - 633.6
-        elif income_manwon <= 15000:
-            total_tax_manwon = income_manwon * 0.385 - 1698.4
-        else:
-            total_tax_manwon = income_manwon * 0.495 - 3348.4
-
-        # 이 포트폴리오의 종합과세 대상 소득 비율만큼 세금 안분
-        portfolio_share = (
-            (comprehensive_income / total_financial_income) if total_financial_income > 0 else 0.0
-        )
-        tax_amount = (total_tax_manwon / 10000) * portfolio_share
-
-        # 종합과세 대상자는 분리과세 신청이 유리하다고 가정 → 33% 원천징수로 종결
-        tax_amount += separate_income * SEPARATE_TAX_RATE
-    else:
-        # 2천만원 이하: 분리과세 신청 실익 없음(33% > 15.4%) → 전부 원천징수 15.4%
-        tax_amount = (comprehensive_income + separate_income) * WITHHOLDING_TAX_RATE
-
-    after_tax_return = (
-        (annual_gross_income - tax_amount) / total_assets if annual_gross_income > 0 else 0.0
-    )
-
-    return after_tax_return, tax_amount, is_comprehensive
+    return after_tax_return, total_tax_won / 1e8, is_comprehensive
 
 
 def apply_stress_scenario(

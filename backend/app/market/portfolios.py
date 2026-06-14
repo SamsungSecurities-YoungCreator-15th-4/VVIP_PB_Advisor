@@ -1,11 +1,16 @@
 """기본 포트폴리오·스트레스 시나리오·과거 위기 시나리오 정의 — frontend/lib/portfolios.ts 이식.
 
 채권 슬리브는 과세 구조 기준 3분류(일반채/저쿠폰채/분리과세채)로 구성한다
-(2026-06 회의 확정). 시장 프록시:
-  - 일반채: KOSEF 국고채10년 (148070.KS), 듀레이션 ≈ 8년
-  - 저쿠폰채/분리과세채: KBSTAR KIS국고채30년Enhanced (385560.KS) — 저쿠폰
-    장기 국고채(듀레이션 ≈ 20년)의 가격 민감도 프록시. 두 분류는 시장 위험은
-    같고 과세 처리(financial_calc.calc_after_tax_return)만 다르다.
+(2026-06 회의 확정). 시장 프록시는 계산 로직 측(portfolio_logic_8th.py,
+PR #30)의 ASSET_TICKERS와 동일하게 맞춘다 — 세 분류 모두 별도의 실제 ETF
+시계열을 사용하므로 같은 시계열이 중복되지 않는다.
+  - 일반채: KODEX 국고채10년액티브 (471230.KS), 듀레이션 ≈ 7.99년
+  - 분리과세채: KODEX 국고채30년액티브 (439870.KS), 듀레이션 ≈ 19.53년
+    (잔존만기 20년+ 한국 국고채. 시세는 30년 국고채로 근사하되 과세 처리만
+    분리과세로 본다 — financial_calc.calc_after_tax_return)
+  - 저쿠폰채: KODEX 미국30년국채액티브(H) (484790.KS), 듀레이션 ≈ 15.39년
+    ※ 환헤지(H) 상품이므로 환율(FX) 충격에서 제외한다. 금리 민감도는
+      듀레이션 기반으로 반영(미국 장기금리에 연동).
 """
 from app.market.schemas import (
     AssetAllocation,
@@ -23,23 +28,23 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         theme="안정형",
         allocations=[
             AssetAllocation(
-                ticker="148070.KS", name="KTB 10Y (Regular)", nameKr="일반채 (국고채 10년)",
+                ticker="471230.KS", name="KODEX KTB 10Y Active", nameKr="일반채 (국고채 10년)",
                 weight=0.20, assetClass="general_bond", color="#3B82F6",
             ),
             AssetAllocation(
-                ticker="385560.KS", name="KTB 30Y Low-Coupon", nameKr="저쿠폰채 (장기 국고채)",
+                ticker="484790.KS", name="KODEX US30Y(H)", nameKr="저쿠폰채 (미국30년국채H)",
                 weight=0.10, assetClass="low_coupon_bond", color="#60A5FA",
             ),
             AssetAllocation(
-                ticker="385560.KS", name="KTB Separate-Tax", nameKr="분리과세채 (장기 국고채)",
+                ticker="439870.KS", name="KODEX KTB 30Y Active", nameKr="분리과세채 (국고채 30년)",
                 weight=0.10, assetClass="separate_tax_bond", color="#1D4ED8",
             ),
             AssetAllocation(
-                ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
+                ticker="^KS11", name="KOSPI Index", nameKr="국내 주식(KOSPI)",
                 weight=0.30, assetClass="domestic_equity", color="#10B981",
             ),
             AssetAllocation(
-                ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주",
+                ticker="SCHD", name="Schwab US Dividend", nameKr="해외배당 ETF(SCHD)",
                 weight=0.20, assetClass="overseas_dividend", color="#F59E0B",
             ),
             AssetAllocation(
@@ -56,23 +61,23 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         theme="고배당 인컴형",
         allocations=[
             AssetAllocation(
-                ticker="148070.KS", name="KTB 10Y (Regular)", nameKr="일반채 (국고채 10년)",
+                ticker="471230.KS", name="KODEX KTB 10Y Active", nameKr="일반채 (국고채 10년)",
                 weight=0.14, assetClass="general_bond", color="#3B82F6",
             ),
             AssetAllocation(
-                ticker="385560.KS", name="KTB 30Y Low-Coupon", nameKr="저쿠폰채 (장기 국고채)",
+                ticker="484790.KS", name="KODEX US30Y(H)", nameKr="저쿠폰채 (미국30년국채H)",
                 weight=0.08, assetClass="low_coupon_bond", color="#60A5FA",
             ),
             AssetAllocation(
-                ticker="385560.KS", name="KTB Separate-Tax", nameKr="분리과세채 (장기 국고채)",
+                ticker="439870.KS", name="KODEX KTB 30Y Active", nameKr="분리과세채 (국고채 30년)",
                 weight=0.08, assetClass="separate_tax_bond", color="#1D4ED8",
             ),
             AssetAllocation(
-                ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
+                ticker="^KS11", name="KOSPI Index", nameKr="국내 주식(KOSPI)",
                 weight=0.25, assetClass="domestic_equity", color="#10B981",
             ),
             AssetAllocation(
-                ticker="VYM", name="Vanguard High Dividend", nameKr="미국 고배당주",
+                ticker="SCHD", name="Schwab US Dividend", nameKr="해외배당 ETF(SCHD)",
                 weight=0.30, assetClass="overseas_dividend", color="#F59E0B",
             ),
             AssetAllocation(
@@ -89,19 +94,19 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
         theme="글로벌 성장/대체자산",
         allocations=[
             AssetAllocation(
-                ticker="148070.KS", name="KTB 10Y (Regular)", nameKr="일반채 (국고채 10년)",
+                ticker="471230.KS", name="KODEX KTB 10Y Active", nameKr="일반채 (국고채 10년)",
                 weight=0.04, assetClass="general_bond", color="#3B82F6",
             ),
             AssetAllocation(
-                ticker="385560.KS", name="KTB 30Y Low-Coupon", nameKr="저쿠폰채 (장기 국고채)",
+                ticker="484790.KS", name="KODEX US30Y(H)", nameKr="저쿠폰채 (미국30년국채H)",
                 weight=0.03, assetClass="low_coupon_bond", color="#60A5FA",
             ),
             AssetAllocation(
-                ticker="385560.KS", name="KTB Separate-Tax", nameKr="분리과세채 (장기 국고채)",
+                ticker="439870.KS", name="KODEX KTB 30Y Active", nameKr="분리과세채 (국고채 30년)",
                 weight=0.03, assetClass="separate_tax_bond", color="#1D4ED8",
             ),
             AssetAllocation(
-                ticker="069500.KS", name="KODEX 200", nameKr="국내 주식(KOSPI200)",
+                ticker="^KS11", name="KOSPI Index", nameKr="국내 주식(KOSPI)",
                 weight=0.10, assetClass="domestic_equity", color="#10B981",
             ),
             AssetAllocation(
@@ -117,7 +122,7 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
                 weight=0.15, assetClass="gold", color="#EF4444",
             ),
             AssetAllocation(
-                ticker="GSG", name="iShares Commodity", nameKr="원자재",
+                ticker="DBC", name="Invesco DB Commodity", nameKr="원자재",
                 weight=0.15, assetClass="commodity", color="#F97316",
             ),
         ],
@@ -142,15 +147,16 @@ DEFAULT_PORTFOLIOS: list[PortfolioProposal] = [
 # 기준금리 +100bp 당 자산군별 연간 기대수익률 충격.
 # 채권은 듀레이션 근사식 ΔP/P ≈ -duration × Δy 적용
 # (출처: Fabozzi, "Bond Markets, Analysis, and Strategies").
+# 채권 듀레이션은 계산 로직 측(portfolio_logic_8th.py)의 ASSET_DURATION_YEARS와
+# 동일하게 맞춰 -duration × 0.01(=100bp)로 산출한다.
 RATE_SHOCKS_PER_100BP: dict[str, float] = {
-    # 일반채(국고채 10년): duration ≈ 8년 → -8%이나 한·미 금리 비동조
-    # 가능성을 감안해 보수적으로 -7% 사용.
-    "general_bond": -0.07,
-    # 저쿠폰채: 표면금리가 낮을수록 듀레이션이 만기에 근접 (장기 저쿠폰
-    # 국고채 duration ≈ 20년+) → 이론상 -20%이나 보수적으로 -15%.
-    "low_coupon_bond": -0.15,
-    # 분리과세채(만기 10년 이상 장기채): duration ≈ 12~15년 → -11%.
-    "separate_tax_bond": -0.11,
+    # 일반채(KODEX 국고채10년액티브, 471230.KS): duration 7.99년 → -7.99% × 1.
+    "general_bond": -0.080,
+    # 저쿠폰채(KODEX 미국30년국채액티브 H, 484790.KS): duration 15.39년 → -15.4%.
+    # 환헤지 미국 장기국채라 충격 기준금리를 미국 장기금리 변동으로 해석한다.
+    "low_coupon_bond": -0.154,
+    # 분리과세채(KODEX 국고채30년액티브, 439870.KS): duration 19.53년 → -19.5%.
+    "separate_tax_bond": -0.195,
     # 할인율(무위험금리) 1%p 상승에 따른 성장주 밸류에이션(DCF/PER) 축소 효과.
     # 2022년 Fed 긴축 사이클 중 나스닥100 하락폭 대비 금리 상승폭 비율 참고.
     "overseas_growth": -0.08,
@@ -182,8 +188,9 @@ RATE_SHOCKS_PER_100BP: dict[str, float] = {
 FX_SHOCKS_PER_200WON: dict[str, float] = {
     # 원화표시 국고채: 환차익 없음. 원화 약세 → 외국인 채권자금 유출 +
     # 한은 인상 압력으로 소폭 음(-), 듀레이션이 길수록 민감하다는 가정.
+    # ※ low_coupon_bond(484790.KS)는 환헤지(H) 상품이라 FX 충격에서 제외한다
+    #   (계산 로직 측 FX_SENSITIVE_ASSETS 정의와 일치).
     "general_bond": -0.01,
-    "low_coupon_bond": -0.03,
     "separate_tax_bond": -0.02,
     "overseas_growth": 0.10,
     "overseas_blue_chip": 0.10,
@@ -240,7 +247,7 @@ STRESS_SCENARIOS: list[StressScenario] = [
     ),
 ]
 
-ALL_TICKERS = ["148070.KS", "385560.KS", "069500.KS", "VYM", "GLD", "QQQ", "VNQ", "GSG"]
+ALL_TICKERS = ["471230.KS", "439870.KS", "484790.KS", "^KS11", "SCHD", "GLD", "QQQ", "VNQ", "DBC"]
 
 # ── 과거 주요 경제 위기 재현 시나리오 ───────────────────────────────────────
 #
@@ -269,8 +276,10 @@ HISTORICAL_CRISES: list[HistoricalCrisis] = [
         assetReturns={
             # 국고채 10년 금리 5.8% → 3.9% 급락(한은 기준금리 5.25→2.0%) → 듀레이션별 가격 상승
             "general_bond": 0.10,
-            "low_coupon_bond": 0.18,
             "separate_tax_bond": 0.13,
+            # 저쿠폰채=환헤지 미국30년국채(484790.KS). 안전자산 선호로 미국 장기국채
+            # 급등(US 30Y 금리 4.5%→2.7%), 환헤지라 원화 효과 제거 → 듀레이션 기반 +20%.
+            "low_coupon_bond": 0.20,
             # KOSPI 1,414 → 저점 989 (2008-10)
             "domestic_equity": -0.30,
             # 나스닥100 -43% × 원/달러 +41% (1,116→1,571원) ≈ -19%
@@ -299,8 +308,10 @@ HISTORICAL_CRISES: list[HistoricalCrisis] = [
         assetReturns={
             # 국고채 10년 금리 1.6% → 1.1% 하락 (한은 빅컷 1.25→0.75%)
             "general_bond": 0.02,
-            "low_coupon_bond": 0.05,
             "separate_tax_bond": 0.03,
+            # 저쿠폰채=환헤지 미국30년국채(484790.KS). 미국 장기국채는 초기 급등 후
+            # 3월 유동성 위기 매도로 일부 반납, 기간 순효과 소폭(+) → +8%.
+            "low_coupon_bond": 0.08,
             # KOSPI 2,210 → 1,457 (2020-03-19 저점)
             "domestic_equity": -0.34,
             # 나스닥100 -28% × 환율 +6% (1,190→1,266원)
@@ -330,8 +341,11 @@ HISTORICAL_CRISES: list[HistoricalCrisis] = [
         assetReturns={
             # 국고채 10년 금리 2.3% → 4.6% 급등 → 듀레이션별 가격 급락
             "general_bond": -0.16,
-            "low_coupon_bond": -0.35,
             "separate_tax_bond": -0.22,
+            # 저쿠폰채=환헤지 미국30년국채(484790.KS). 美 장기금리 +2%p대 급등
+            # (duration ≈ 15~17) → 환헤지라 환차익 쿠션 없이 가격 급락 -33%
+            # (TLT 약 -31%, EDV 약 -40% 구간 참고).
+            "low_coupon_bond": -0.33,
             # KOSPI 2,978 → 2,294
             "domestic_equity": -0.23,
             # 나스닥100 -33% × 환율 +20% (1,190→1,424원)
