@@ -2810,6 +2810,5 @@ def analyze_portfolio(request: PortfolioRequest):
     except Exception as e:
         raise public_http_exception(e)
 
-app.include_router(router)
 
 
