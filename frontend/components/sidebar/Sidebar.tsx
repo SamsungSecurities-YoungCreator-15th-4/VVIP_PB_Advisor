@@ -95,9 +95,9 @@ export default function Sidebar() {
           <PanelLeftOpen className="size-4" />
           <span
             className="text-[9px] font-bold leading-none text-muted-foreground"
-            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+            style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            고객·IPS
+            고객IPS
           </span>
         </button>
       </div>
@@ -124,9 +124,7 @@ export default function Sidebar() {
         {/* 고객 선택 */}
         <Card className="gap-0 p-3">
           <div className="mb-2">
-            <p className="text-[14px] font-bold">
-              고객 선택
-            </p>
+            <p className="text-[14px] font-bold">고객 선택</p>
           </div>
 
           {/* 드롭다운 트리거 */}
@@ -160,9 +158,7 @@ export default function Sidebar() {
 
         {/* 상담 입력 */}
         <Card className="gap-0 p-3">
-          <p className="mb-2 text-[14px] font-bold">
-            상담 입력
-          </p>
+          <p className="mb-2 text-[14px] font-bold">상담 입력</p>
           <input
             ref={fileInputRef}
             type="file"
