@@ -45,7 +45,8 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> str:
     blocks = []
     for i, chunk in enumerate(chunks, start=1):
         title = chunk.get("title") or "제목 없음"
-        blocks.append(f"[근거 {i} · {title}]\n{chunk['chunk'].strip()}")
+        chunk_text = chunk.get("chunk") or ""
+        blocks.append(f"[근거 {i} · {title}]\n{chunk_text.strip()}")
     return "\n\n".join(blocks)
 
 
@@ -90,6 +91,9 @@ class LLMGenerator(Generator):
             ],
             temperature=0,
         )
+        # content 필터·정책 등으로 choices 가 비어 올 수 있어 접근 전에 검증한다.
+        if not response.choices:
+            raise ValueError("LLM 응답에 choices 가 없습니다.")
         answer = response.choices[0].message.content
         if not answer or not answer.strip():
             raise ValueError("LLM 이 빈 answer 를 반환했습니다.")

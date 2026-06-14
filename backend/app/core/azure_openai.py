@@ -29,10 +29,14 @@ def build_azure_client(api_version: str) -> AzureOpenAI:
             "AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY 환경변수가 설정되지 "
             "않았습니다. backend/.env 에 추가하세요 (.env.example 참고)."
         )
+    # 타임아웃 미설정 시 동기 핸들러가 스레드풀을 무한 점유할 수 있어 기본값을 둔다.
+    timeout_raw = os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS")
+    timeout = float(timeout_raw) if timeout_raw else 60.0
     return AzureOpenAI(
         azure_endpoint=endpoint,
         api_key=api_key,
         api_version=api_version,
+        timeout=timeout,
     )
 
 
