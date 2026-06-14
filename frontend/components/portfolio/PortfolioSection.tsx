@@ -132,7 +132,7 @@ function PortfolioCard({
       </div>
 
       <div className="mt-2.5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-muted">
-        <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} tone="up" />
+        <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} />
         <Metric k="샤프지수" v={m.sharpe.toFixed(2)} />
         <Metric k="소르티노" v={m.sortino.toFixed(2)} />
         <Metric
@@ -141,7 +141,7 @@ function PortfolioCard({
           sub={m.afterTaxAmountLabel}
           tone="up"
         />
-        <Metric k="변동성" v={`${m.volatilityPct}%`} />
+        <Metric k="변동성" v={`${m.volatilityPct}%`} sub={m.volatilityAmountLabel} />
         <Metric
           k="MDD"
           v={`${m.mddPct}%`}

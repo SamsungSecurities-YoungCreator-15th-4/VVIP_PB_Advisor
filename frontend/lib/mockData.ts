@@ -154,6 +154,7 @@ export interface PortfolioMetrics {
   volatilityPct: number;
   sharpe: number;
   sortino: number;
+  volatilityAmountLabel: string;
   mddPct: number; // 양수로 보관, 표시 시 ▼ 접두
   mddAmountLabel: string;
   afterTaxReturnPct: number;
@@ -192,6 +193,7 @@ export const PORTFOLIOS: Portfolio[] = [
     metrics: {
       expectedReturnPct: 4.8,
       volatilityPct: 11.2,
+      volatilityAmountLabel: "±3,200만원",
       sharpe: 0.43,
       sortino: 0.3,
       mddPct: 14.6,
@@ -220,6 +222,7 @@ export const PORTFOLIOS: Portfolio[] = [
     metrics: {
       expectedReturnPct: 6.4,
       volatilityPct: 12.5,
+      volatilityAmountLabel: "±3,800만원",
       sharpe: 0.61,
       sortino: 0.48,
       mddPct: 11.2,
@@ -248,6 +251,7 @@ export const PORTFOLIOS: Portfolio[] = [
     metrics: {
       expectedReturnPct: 8.7,
       volatilityPct: 20.3,
+      volatilityAmountLabel: "±6,100만원",
       sharpe: 0.43,
       sortino: 0.43,
       mddPct: 23.3,
