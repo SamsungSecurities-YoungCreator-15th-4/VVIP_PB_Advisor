@@ -93,7 +93,7 @@ export default function StressTestSection() {
       {isExtreme && (
         <div className="mt-2 flex items-start gap-2 rounded-xl bg-muted p-3">
           <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <p className="text-[10px] font-semibold leading-snug text-muted-foreground">
+          <p className="text-[12px] font-semibold leading-snug text-muted-foreground">
             {SCENARIO_WARN.message}
           </p>
         </div>
