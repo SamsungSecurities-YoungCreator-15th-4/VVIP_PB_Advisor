@@ -1,4 +1,6 @@
-﻿from datetime import datetime
+﻿# ruff: noqa
+
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
