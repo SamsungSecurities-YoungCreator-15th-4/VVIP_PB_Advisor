@@ -18,7 +18,12 @@ const LINES = [
   { key: "b", name: "B", color: "#8FBCFF", width: 2 },
 ] as const;
 
-/** 중앙 중단: 현재/A/B 백테스트 다중 선그래프 (최근 5년, 더미 지수) */
+const pctFmt = (v: number) => {
+  const ret = v - 100;
+  return `${ret >= 0 ? "+" : ""}${ret}%`;
+};
+
+/** 중앙 중단: 현재/A/B 백테스트 다중 선그래프 (최근 5년, 누적 수익률 표시) */
 export default function BacktestChart() {
   return (
     <Card className="gap-0 p-3">
@@ -28,15 +33,18 @@ export default function BacktestChart() {
           <span className="text-[12px] font-semibold text-muted-foreground">
             최근 5년
           </span>
+          <span className="ml-1.5 text-[11px] font-semibold text-muted-foreground/60">
+            (누적 수익률, 2021년 기준)
+          </span>
         </p>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           {LINES.map((l) => (
             <span
               key={l.key}
               className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground"
             >
               <span
-                className="h-[3px] w-3.5 rounded-sm"
+                className="h-0.75 w-3.5 rounded-sm"
                 style={{ backgroundColor: l.color }}
               />
               {l.name}
@@ -44,7 +52,7 @@ export default function BacktestChart() {
           ))}
         </div>
       </div>
-      <div className="h-[150px]">
+      <div className="h-37.5">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={BACKTEST_SERIES}
@@ -60,7 +68,7 @@ export default function BacktestChart() {
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip
               formatter={(value, name) => [
-                value,
+                `${pctFmt(Number(value))} (${value})`,
                 LINES.find((l) => l.key === name)?.name ?? String(name),
               ]}
               contentStyle={{ fontSize: 12, borderRadius: 8 }}
