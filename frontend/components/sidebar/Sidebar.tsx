@@ -124,7 +124,7 @@ export default function Sidebar() {
         {/* 고객 선택 */}
         <Card className="gap-0 p-3">
           <div className="mb-2">
-            <p className="text-[10px] font-bold tracking-wider text-muted-foreground">
+            <p className="text-[13px] font-bold">
               고객 선택
             </p>
           </div>
@@ -160,7 +160,7 @@ export default function Sidebar() {
 
         {/* 상담 입력 */}
         <Card className="gap-0 p-3">
-          <p className="mb-2 text-[10px] font-bold tracking-wider text-muted-foreground">
+          <p className="mb-2 text-[13px] font-bold">
             상담 입력
           </p>
           <input

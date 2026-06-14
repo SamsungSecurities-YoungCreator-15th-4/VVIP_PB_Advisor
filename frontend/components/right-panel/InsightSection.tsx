@@ -44,7 +44,7 @@ export default function InsightSection() {
         </p>
       </div>
 
-      <p className="mb-1 mt-3.5 text-[11px] font-bold text-muted-foreground">
+      <p className="mb-1 mt-3.5 text-[13px] font-bold">
         출처 / 인용 목록
       </p>
       <div>
