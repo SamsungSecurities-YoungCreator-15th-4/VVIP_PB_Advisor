@@ -1,10 +1,12 @@
-﻿# ruff: noqa: E501
+﻿from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal, Tuple, Any
 import uuid
 import logging
+import re
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -12,6 +14,7 @@ import yfinance as yf
 
 router = APIRouter(tags=["portfolio"])
 logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 
 # ============================================================
@@ -391,7 +394,7 @@ class IPSRequest(BaseModel):
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(..., ge=1, le=50)
     tax_sensitivity: Literal["low", "medium", "high"] = Field(...)
-    liquidity_need: Literal["low", "medium", "high"] = Field(...)
+    liquidity_need: Literal["low", "mid", "high"] = Field(...)
 
     current_weights: Optional[Dict[str, float]] = Field(None)
 
@@ -463,7 +466,7 @@ class PortfolioRequest(BaseModel):
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(10, ge=1, le=50)
     tax_sensitivity: Literal["low", "medium", "high"] = Field("medium")
-    liquidity_need: Literal["low", "medium", "high"] = Field("medium")
+    liquidity_need: Literal["low", "mid", "high"] = Field("mid")
     current_weights: Optional[Dict[str, float]] = Field(None)
 
     risk_free_rate: float = Field(DEFAULT_RISK_FREE_RATE)
@@ -626,8 +629,12 @@ def save_session_request(session_id: str, payload: Dict[str, Any]) -> None:
 def public_http_exception(exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
+
     if isinstance(exc, RuntimeError):
-        return HTTPException(status_code=503, detail=str(exc))
+        message = str(exc)
+        if "기준표와 고객 위험성향" in message:
+            return HTTPException(status_code=422, detail=message)
+        return HTTPException(status_code=503, detail=message)
 
     logger.exception("Unhandled portfolio API error", exc_info=True)
     return HTTPException(
@@ -2625,6 +2632,608 @@ def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
     return core
 
 
+
+# ============================================================
+# 12-1. API 입력 어댑터
+# ============================================================
+# 프론트 연동용 보조 로직.
+# 검증된 사실: consultations API의 ips_json은 Goal/Asset/Return/Risk/Time/Tax/Liquidity/Legal/Unique
+# 형태이고, 포트폴리오 계산 로직은 AnalysisRequest 형태를 사용한다.
+# 프로젝트용 처리: /portfolio/calculate는 AnalysisRequest와 consultations 응답/ips_json을 모두 받을 수 있게 정규화한다.
+
+KOREAN_MONEY_UNITS = {
+    "억": 100_000_000,
+    "만": 10_000,
+    "천": 1_000,
+}
+
+
+def parse_amount_krw(value: Any, default: float = 0.0) -> float:
+    """숫자, dict, '3억', '2,000만 원' 같은 문자열에서 원화 금액/숫자를 추출한다.
+
+    단위가 없는 숫자 문자열은 그대로 숫자로 본다. 해석할 수 없으면 default를 반환한다.
+    """
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        return default
+
+    if isinstance(value, (int, float)):
+        return safe_float(value, default)
+
+    if isinstance(value, dict):
+        for key in (
+            "amount",
+            "need_amount",
+            "unique_need_amount",
+            "total_asset",
+            "Asset",
+            "asset",
+            "value",
+        ):
+            if key in value:
+                parsed = parse_amount_krw(value.get(key), default=None)
+                if parsed is not None:
+                    return parsed
+        return default
+
+    text_value = str(value).strip()
+    if not text_value:
+        return default
+
+    normalized = text_value.replace(",", "")
+    total = 0.0
+    matched_unit = False
+    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", normalized):
+        matched_unit = True
+        total += float(number_text) * KOREAN_MONEY_UNITS[unit]
+
+    if matched_unit:
+        return float(total)
+
+    number_match = re.search(r"-?[0-9]+(?:\.[0-9]+)?", normalized)
+    if number_match:
+        return safe_float(number_match.group(0), default)
+
+    return default
+
+
+def normalize_risk_profile_value(value: Any) -> str:
+    text_value = str(value or "").strip().lower()
+    mapping = {
+        "안정형": "conservative",
+        "보수형": "conservative",
+        "conservative": "conservative",
+        "균형형": "balanced",
+        "중립형": "balanced",
+        "balanced": "balanced",
+        "공격형": "aggressive",
+        "적극형": "aggressive",
+        "aggressive": "aggressive",
+    }
+    if text_value in mapping:
+        return mapping[text_value]
+    raise ValueError(f"투자성향 값을 해석할 수 없습니다: {value}")
+
+
+def normalize_liquidity_value(value: Any) -> str:
+    text_value = str(value or "").strip().lower()
+    mapping = {
+        "낮음": "low",
+        "낮은": "low",
+        "low": "low",
+        "중간": "mid",
+        "보통": "mid",
+        "중": "mid",
+        "medium": "mid",
+        "mid": "mid",
+        "높음": "high",
+        "높은": "high",
+        "high": "high",
+    }
+    if text_value in mapping:
+        return mapping[text_value]
+    raise ValueError(f"유동성 값을 해석할 수 없습니다: {value}")
+
+
+def normalize_tax_sensitivity_value(value: Any) -> str:
+    text_value = str(value or "").strip().lower()
+    mapping = {
+        "낮음": "low",
+        "낮은": "low",
+        "low": "low",
+        "중간": "medium",
+        "보통": "medium",
+        "중": "medium",
+        "mid": "medium",
+        "medium": "medium",
+        "높음": "high",
+        "높은": "high",
+        "high": "high",
+    }
+    if text_value in mapping:
+        return mapping[text_value]
+    raise ValueError(f"세금 민감도 값을 해석할 수 없습니다: {value}")
+
+
+def normalize_unique_asset_value(value: Any) -> str:
+    if value is None:
+        return "cash"
+
+    if isinstance(value, dict):
+        for key in ("unique_asset", "asset_class", "asset", "type"):
+            if key in value:
+                return normalize_unique_asset_value(value.get(key))
+        return "cash"
+
+    text_value = str(value).strip()
+    canonical = canonicalize_asset_key(text_value)
+    if canonical in UNIQUE_ASSETS:
+        return canonical
+
+    if "분리" in text_value:
+        return "separate_tax_bond"
+    if "저쿠폰" in text_value:
+        return "low_coupon_bond"
+    if "채" in text_value or "국채" in text_value:
+        return "general_bond"
+    return "cash"
+
+
+def extract_flat_ips_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """상담 API 응답 또는 ips_json 자체에서 flat IPS dict를 꺼낸다."""
+    candidate = payload
+
+    if "ips_json" in candidate and isinstance(candidate["ips_json"], dict):
+        candidate = candidate["ips_json"]
+    elif "ips" in candidate and isinstance(candidate["ips"], dict):
+        candidate = candidate["ips"]
+
+    rrttllu = candidate.get("RRTTLLU")
+    if isinstance(rrttllu, dict):
+        flattened = {
+            "Goal": candidate.get("Goal"),
+            "Asset": candidate.get("Asset"),
+        }
+        flattened.update(rrttllu)
+        candidate = flattened
+
+    required_keys = {"Asset", "Risk", "Time", "Tax", "Liquidity"}
+    if not required_keys.issubset(candidate.keys()):
+        missing = sorted(required_keys - set(candidate.keys()))
+        raise ValueError(
+            "AnalysisRequest 또는 상담 IPS 형식으로 해석할 수 없습니다. "
+            f"필수 IPS 키 누락: {missing}"
+        )
+
+    return candidate
+
+
+
+def extract_request_metadata(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """명세서 ⑤ 요청에서 고객·상담 식별자를 추출한다."""
+    client_id = payload.get("client_id") or payload.get("customer_id")
+    consultation_id = payload.get("consultation_id")
+
+    nested_consultation = payload.get("consultation")
+    if not consultation_id and isinstance(nested_consultation, dict):
+        consultation_id = nested_consultation.get("consultation_id")
+
+    return {
+        "client_id": str(client_id) if client_id else None,
+        "consultation_id": str(consultation_id) if consultation_id else None,
+    }
+
+
+def extract_current_weights_from_portfolio(
+    payload: Dict[str, Any],
+    adapter_warnings: List[str],
+) -> Optional[Dict[str, float]]:
+    """명세서 current_portfolio 배열을 내부 current_weights dict로 변환한다."""
+    current_portfolio = payload.get("current_portfolio")
+
+    if current_portfolio is None:
+        ips_payload = payload.get("ips")
+        if isinstance(ips_payload, dict):
+            current_portfolio = ips_payload.get("current_portfolio")
+
+    if current_portfolio is None:
+        explicit_weights = payload.get("current_weights")
+        if explicit_weights is not None:
+            return normalize_weights(explicit_weights)
+
+        ips_payload = payload.get("ips")
+        if isinstance(ips_payload, dict) and ips_payload.get("current_weights") is not None:
+            return normalize_weights(ips_payload["current_weights"])
+
+        adapter_warnings.append(
+            "current_portfolio/current_weights 입력이 없어 현재 포트폴리오는 "
+            "현금 100%로 계산했습니다."
+        )
+        return None
+
+    if not isinstance(current_portfolio, list) or len(current_portfolio) == 0:
+        raise ValueError("current_portfolio는 비어 있지 않은 배열이어야 합니다.")
+
+    weights: Dict[str, float] = {}
+    total_weight_percent = 0.0
+
+    for item in current_portfolio:
+        if not isinstance(item, dict):
+            raise ValueError("current_portfolio의 각 항목은 객체여야 합니다.")
+
+        asset_class = item.get("asset_class")
+        if asset_class is None:
+            raise ValueError("current_portfolio 항목에 asset_class가 필요합니다.")
+
+        asset = canonicalize_asset_key(str(asset_class))
+        if asset not in ASSET_TICKERS:
+            raise ValueError(f"지원하지 않는 current_portfolio 자산군입니다: {asset_class}")
+
+        weight_percent = safe_float(item.get("weight"), default=np.nan)
+        if not np.isfinite(weight_percent) or weight_percent < 0:
+            raise ValueError("current_portfolio.weight는 0 이상의 숫자여야 합니다.")
+
+        total_weight_percent += weight_percent
+        weights[asset] = weights.get(asset, 0.0) + weight_percent / 100.0
+
+    if abs(total_weight_percent - 100.0) > 1e-6:
+        raise ValueError(
+            "current_portfolio weight 합계는 100이어야 합니다. "
+            f"현재 합계: {total_weight_percent}"
+        )
+
+    return normalize_weights(weights)
+
+def normalize_analysis_request_payload(
+    payload: Dict[str, Any],
+) -> Tuple[AnalysisRequest, Dict[str, Any]]:
+    """명세서 ⑤용 payload를 내부 AnalysisRequest로 정규화한다.
+
+    허용 입력:
+    1. 기존 AnalysisRequest: {"ips": {...}, "scenario": {...}}
+    2. 상담 API 응답: {"ips_json": {Goal, Asset, ...}, ...}
+    3. flat IPS dict: {Goal, Asset, Return, Risk, Time, Tax, Liquidity, Legal, Unique}
+    """
+    adapter_warnings: List[str] = []
+    request_metadata = extract_request_metadata(payload)
+    current_weights_from_portfolio = extract_current_weights_from_portfolio(
+        payload,
+        adapter_warnings,
+    )
+
+    has_analysis_ips = (
+        "ips" in payload
+        and isinstance(payload.get("ips"), dict)
+        and "total_asset" in payload["ips"]
+    )
+    if has_analysis_ips:
+        normalized_payload = dict(payload)
+        normalized_ips = dict(normalized_payload["ips"])
+        normalized_ips["liquidity_need"] = normalize_liquidity_value(
+            normalized_ips.get("liquidity_need")
+        )
+        if current_weights_from_portfolio is not None:
+            normalized_ips["current_weights"] = current_weights_from_portfolio
+        normalized_payload["ips"] = normalized_ips
+        return AnalysisRequest(**normalized_payload), {
+            "source": "analysis_request",
+            "client_id": request_metadata["client_id"],
+            "consultation_id": request_metadata["consultation_id"],
+            "warnings": adapter_warnings,
+        }
+
+    flat_ips = extract_flat_ips_payload(payload)
+
+    total_asset = parse_amount_krw(flat_ips.get("Asset"))
+    if total_asset <= 0:
+        raise ValueError("IPS의 Asset 값을 총자산으로 해석할 수 없습니다.")
+
+    investment_horizon = int(max(parse_amount_krw(flat_ips.get("Time")), 1))
+    unique_value = flat_ips.get("Unique")
+    unique_need_amount = parse_amount_krw(unique_value)
+    if unique_need_amount <= 0:
+        adapter_warnings.append(
+            "IPS의 Unique 값에서 별도 필요자금을 숫자로 추출하지 못해 unique_need_amount=0으로 계산했습니다."
+        )
+
+    scenario_input = payload.get("scenario") if isinstance(payload.get("scenario"), dict) else {}
+    if not scenario_input:
+        adapter_warnings.append(
+            "scenario 입력이 없어 stress shock은 0으로 두고, 기준 금리는 기본 risk_free_rate를 사용했습니다."
+        )
+
+    base_fx_rate = safe_float(
+        scenario_input.get("base_fx_rate_krw_per_usd", payload.get("base_fx_rate_krw_per_usd")),
+        1.0,
+    )
+    if base_fx_rate == 1.0 and "base_fx_rate_krw_per_usd" not in scenario_input:
+        adapter_warnings.append(
+            "base_fx_rate_krw_per_usd가 없어 1.0을 표시용 기본값으로 사용했습니다. 스트레스 테스트 화면에서는 실제 환율 입력을 넘겨야 합니다."
+        )
+
+    analysis_payload = {
+        "ips": {
+            "total_asset": total_asset,
+            "unique_need_amount": unique_need_amount,
+            "unique_asset": normalize_unique_asset_value(unique_value),
+            "risk_profile": normalize_risk_profile_value(flat_ips.get("Risk")),
+            "investment_horizon_years": investment_horizon,
+            "tax_sensitivity": normalize_tax_sensitivity_value(flat_ips.get("Tax")),
+            "liquidity_need": normalize_liquidity_value(flat_ips.get("Liquidity")),
+            "current_weights": current_weights_from_portfolio,
+            "risk_free_rate": safe_float(
+                scenario_input.get("risk_free_rate", payload.get("risk_free_rate")),
+                DEFAULT_RISK_FREE_RATE,
+            ),
+            "cash_return": safe_float(
+                payload.get("cash_return"),
+                DEFAULT_CASH_RETURN,
+            ),
+            "period": str(payload.get("period", "5y")),
+            "num_simulations": int(safe_float(payload.get("num_simulations"), 5000)),
+            "expected_return_haircut": safe_float(
+                payload.get("expected_return_haircut"),
+                0.75,
+            ),
+            "random_seed": int(safe_float(payload.get("random_seed"), 42)),
+        },
+        "scenario": {
+            "base_interest_rate": safe_float(
+                scenario_input.get(
+                    "base_interest_rate",
+                    payload.get("base_interest_rate"),
+                ),
+                DEFAULT_RISK_FREE_RATE,
+            ),
+            "base_fx_rate_krw_per_usd": base_fx_rate,
+            "stress_interest_rate_shock": safe_float(
+                scenario_input.get(
+                    "stress_interest_rate_shock",
+                    payload.get("stress_interest_rate_shock"),
+                ),
+                0.0,
+            ),
+            "stress_fx_shock": safe_float(
+                scenario_input.get("stress_fx_shock", payload.get("stress_fx_shock")),
+                0.0,
+            ),
+            "rrttllu": payload.get("rrttllu") or payload.get("RRTTLLU") or {},
+            "stress_affects_scoring": bool(
+                scenario_input.get(
+                    "stress_affects_scoring",
+                    payload.get("stress_affects_scoring", False),
+                )
+            ),
+        },
+    }
+
+    return AnalysisRequest(**analysis_payload), {
+        "source": "consultation_ips_adapter",
+        "client_id": request_metadata["client_id"],
+        "consultation_id": request_metadata["consultation_id"],
+        "flat_ips_keys_used": sorted(flat_ips.keys()),
+        "warnings": adapter_warnings,
+    }
+
+
+# ============================================================
+# 12-2. API 명세서 ⑤ 응답 포맷터
+# ============================================================
+
+
+def rate_to_percent(value: Any, digits: int = 2) -> float:
+    return safe_round(safe_float(value) * 100.0, digits)
+
+
+def build_allocation_payload(portfolio: Dict[str, Any]) -> List[Dict[str, Any]]:
+    allocation = []
+    for asset, info in portfolio["weights"].items():
+        weight = safe_float(info.get("weight"))
+        if weight <= 1e-12:
+            continue
+        allocation.append(
+            {
+                "asset_class": asset,
+                "name": info.get("label", ASSET_NAMES_KR.get(asset, asset)),
+                "weight": safe_round(weight * 100.0, 2),
+            }
+        )
+    return allocation
+
+
+def build_backtest_payload(
+    cumulative_returns: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    monthly_points: Dict[str, Dict[str, Any]] = {}
+    for point in cumulative_returns:
+        date_text = str(point.get("date", ""))
+        if not date_text:
+            continue
+        month_key = date_text[:7]
+        value = (1.0 + safe_float(point.get("value"))) * 100.0
+        monthly_points[month_key] = {
+            "date": month_key,
+            "value": safe_round(value, 2),
+        }
+
+    return list(monthly_points.values())
+
+
+def build_metrics_payload(
+    portfolio: Dict[str, Any],
+) -> Dict[str, Any]:
+    metrics = portfolio["metrics"]
+    return {
+        "expected_return": rate_to_percent(metrics["expected_return"]),
+        "volatility": rate_to_percent(metrics["volatility"]),
+        "sharpe": safe_round(metrics["sharpe_ratio"], 4),
+        "sortino": safe_round(metrics["sortino_ratio"], 4),
+        "mdd": rate_to_percent(metrics["mdd"]),
+        "after_tax_return": rate_to_percent(metrics["after_tax_return"]),
+    }
+
+
+def build_metrics_krw_payload(
+    portfolio: Dict[str, Any],
+    total_asset: float,
+) -> Dict[str, Any]:
+    metrics = portfolio["metrics"]
+    return {
+        "after_tax_return": safe_round(
+            safe_float(metrics["after_tax_return"]) * total_asset,
+            0,
+        ),
+        "mdd": safe_round(safe_float(metrics["mdd"]) * total_asset, 0),
+        "volatility_band": safe_round(
+            safe_float(metrics["volatility"]) * total_asset,
+            0,
+        ),
+    }
+
+
+def build_tax_summary(
+    portfolio: Dict[str, Any],
+    tax_saving: float,
+) -> str:
+    tax_breakdown = portfolio["tax_breakdown"]
+    comprehensive_status = tax_breakdown["financial_income_comprehensive_tax"]
+
+    if comprehensive_status["is_over_threshold"]:
+        return "금융소득 2,000만원 초과 가능성이 있어 종합과세 검토가 필요합니다."
+
+    if tax_saving > 0:
+        return "ISA·IRP 배치 효과를 반영해 현재 대비 세후 결과가 개선됩니다."
+
+    return "이자·배당 금융소득은 2,000만원 기준 이하로 간이 추정됩니다."
+
+
+def build_tax_payload(
+    portfolio: Dict[str, Any],
+    current_portfolio: Dict[str, Any],
+) -> Dict[str, Any]:
+    tax_breakdown = portfolio["tax_breakdown"]
+    current_tax = current_portfolio["tax_breakdown"]
+    overseas_tax = tax_breakdown["overseas_stock_capital_gains_tax"]
+
+    gross_profit = safe_float(tax_breakdown["gross_profit"])
+    dividend_interest_tax = -safe_float(tax_breakdown["withholding_tax_estimate"])
+    capital_gains_tax = -safe_float(overseas_tax["estimated_tax"])
+    total_tax_after_saving = safe_float(tax_breakdown["total_tax_after_saving"])
+    after_tax_profit = safe_float(tax_breakdown["after_tax_profit"])
+
+    current_total_tax = safe_float(current_tax["total_tax_after_saving"])
+    saved_vs_current = max(current_total_tax - total_tax_after_saving, 0.0)
+
+    return {
+        "waterfall": {
+            "gross_return": safe_round(gross_profit, 0),
+            "dividend_interest_tax": safe_round(dividend_interest_tax, 0),
+            "capital_gains_tax": safe_round(capital_gains_tax, 0),
+            "transaction_cost": 0.0,
+            "fx_cost": 0.0,
+            "after_tax": safe_round(after_tax_profit, 0),
+        },
+        "saved_vs_current": safe_round(saved_vs_current, 0),
+        "summary": build_tax_summary(portfolio, saved_vs_current),
+        "calculation_notes": [
+            "transaction_cost와 fx_cost는 현재 계산 로직에 별도 모델이 없어 0으로 표시합니다.",
+            "세금 계산은 하드코딩 규칙표 기반 간이 추정입니다.",
+        ],
+    }
+
+
+def build_spec_portfolio_item(
+    kind: str,
+    rank: Optional[int],
+    label: str,
+    badge: Optional[str],
+    portfolio: Dict[str, Any],
+    current_portfolio: Dict[str, Any],
+    total_asset: float,
+) -> Dict[str, Any]:
+    item = {
+        "kind": kind,
+        "rank": rank,
+        "label": label,
+        "badge": badge,
+        "allocation": build_allocation_payload(portfolio),
+        "metrics": build_metrics_payload(portfolio),
+        "metrics_krw": build_metrics_krw_payload(portfolio, total_asset),
+        "backtest": build_backtest_payload(portfolio["cumulative_returns"]),
+        "tax": build_tax_payload(portfolio, current_portfolio),
+    }
+    return item
+
+
+def build_portfolio_calculate_response(
+    full_response: Dict[str, Any],
+    adapter_info: Dict[str, Any],
+) -> Dict[str, Any]:
+    portfolios = full_response["portfolios"]
+    current = portfolios["current"]
+    total_asset = safe_float(full_response["input_summary"]["total_asset"])
+    calculation_session_id = full_response["session_id"]
+    consultation_id = adapter_info.get("consultation_id") or calculation_session_id
+
+    warnings = list(adapter_info.get("warnings", []))
+    if not adapter_info.get("consultation_id"):
+        warnings.append(
+            "consultation_id가 없어 계산 session_id를 consultation_id 필드에 넣었습니다. "
+            "실제 상담 ID가 필요하면 ④ 응답의 consultation_id를 함께 전달해야 합니다."
+        )
+
+    return {
+        "client_id": adapter_info.get("client_id"),
+        "consultation_id": consultation_id,
+        "calculation_session_id": calculation_session_id,
+        "as_of": datetime.now(KST).isoformat(timespec="seconds"),
+        "risk_profile": full_response["input_summary"]["risk_profile"],
+        "risk_profile_label": RISK_LEVEL_NAME[
+            full_response["input_summary"]["client_risk_level"]
+        ],
+        "portfolios": [
+            build_spec_portfolio_item(
+                kind="current",
+                rank=None,
+                label="현재 포트폴리오",
+                badge=None,
+                portfolio=current,
+                current_portfolio=current,
+                total_asset=total_asset,
+            ),
+            build_spec_portfolio_item(
+                kind="A",
+                rank=1,
+                label="포트폴리오 A",
+                badge="베스트",
+                portfolio=portfolios["recommended_1"],
+                current_portfolio=current,
+                total_asset=total_asset,
+            ),
+            build_spec_portfolio_item(
+                kind="B",
+                rank=2,
+                label="포트폴리오 B",
+                badge="추천",
+                portfolio=portfolios["recommended_2"],
+                current_portfolio=current,
+                total_asset=total_asset,
+            ),
+        ],
+        "search_summary": full_response["search_summary"],
+        "scenario_summary": full_response["scenario_summary"],
+        "input_adapter": {
+            **adapter_info,
+            "warnings": warnings,
+        },
+        "methodology": full_response["methodology"],
+        "notes": full_response["notes"],
+    }
+
+
+
 # ============================================================
 # 13. API Endpoints
 # ============================================================
@@ -2661,6 +3270,38 @@ def get_assets():
 @router.get("/guidelines")
 def get_guidelines():
     return get_guideline_definition()
+
+
+@router.post("/portfolio/calculate")
+def portfolio_calculate(request: Dict[str, Any]):
+    """API 명세서 ⑤ 포트폴리오 계산."""
+    try:
+        normalized_request, adapter_info = normalize_analysis_request_payload(request)
+        full = run_full_analysis(normalized_request)
+        return build_portfolio_calculate_response(full, adapter_info)
+    except Exception as e:
+        raise public_http_exception(e)
+
+
+@router.post("/portfolio/stress-test")
+def portfolio_stress_test(request: Dict[str, Any]):
+    """API 명세서 ⑥ 스트레스 테스트."""
+    try:
+        normalized_request, adapter_info = normalize_analysis_request_payload(request)
+        full = run_full_analysis(normalized_request)
+        response = build_portfolio_calculate_response(full, adapter_info)
+        return {
+            "consultation_id": response["consultation_id"],
+            "calculation_session_id": response["calculation_session_id"],
+            "as_of": response["as_of"],
+            "risk_profile": response["risk_profile"],
+            "risk_profile_label": response["risk_profile_label"],
+            "portfolios": response["portfolios"],
+            "scenario_summary": response["scenario_summary"],
+            "input_adapter": response["input_adapter"],
+        }
+    except Exception as e:
+        raise public_http_exception(e)
 
 
 @router.post("/api/portfolio/all")
@@ -2809,6 +3450,4 @@ def analyze_portfolio(request: PortfolioRequest):
         return run_analysis_core(request)
     except Exception as e:
         raise public_http_exception(e)
-
-
 
