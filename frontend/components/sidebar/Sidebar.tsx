@@ -173,9 +173,9 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 p-3 text-center"
+            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
           >
-            <span className="mx-auto mb-1.5 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+            <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
               <Upload className="size-4 text-brand" />
             </span>
             <span className="block text-[13px] font-bold text-brand-dark">
@@ -222,7 +222,7 @@ export default function Sidebar() {
           <Button
             variant="outline"
             size="sm"
-            className="mt-2 w-full font-bold"
+            className="mt-2 w-full border-muted font-bold text-muted-foreground hover:text-muted-foreground"
             onClick={() => setHistoryOpen(true)}
           >
             <RotateCcw />
