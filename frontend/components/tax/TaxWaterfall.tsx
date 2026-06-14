@@ -41,7 +41,7 @@ export default function TaxWaterfall() {
           <BarChart
             data={data}
             layout="vertical"
-            margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
+            margin={{ top: 0, right: 40, bottom: 0, left: 0 }}
             barSize={28}
           >
             <XAxis type="number" hide />
@@ -70,9 +70,9 @@ export default function TaxWaterfall() {
               ))}
               <LabelList
                 dataKey="tax"
-                position="insideRight"
+                position="right"
                 formatter={(v) => Number(v).toLocaleString()}
-                style={{ fontSize: 10, fontWeight: 800, fill: "#fff" }}
+                style={{ fontSize: 11, fontWeight: 800, fill: "#F04452" }}
               />
             </Bar>
           </BarChart>

@@ -15,7 +15,7 @@ import { BACKTEST_SERIES } from "@/lib/mockData";
 const LINES = [
   { key: "current", name: "현재", color: "#8B95A1", width: 2 },
   { key: "a", name: "A", color: "#0064FF", width: 2.6 },
-  { key: "b", name: "B", color: "#8FBCFF", width: 2 },
+  { key: "b", name: "B", color: "#5B9BFF", width: 2 },
 ] as const;
 
 const pctFmt = (v: number) => {
@@ -72,6 +72,10 @@ export default function BacktestChart() {
                 `${pctFmt(Number(value))} (${value})`,
                 LINES.find((l) => l.key === name)?.name ?? String(name),
               ]}
+              itemSorter={(item) => {
+                const order: Record<string, number> = { current: 0, a: 1, b: 2 };
+                return order[String(item.dataKey)] ?? 99;
+              }}
               contentStyle={{ fontSize: 12, borderRadius: 8 }}
             />
             {LINES.map((l) => (
