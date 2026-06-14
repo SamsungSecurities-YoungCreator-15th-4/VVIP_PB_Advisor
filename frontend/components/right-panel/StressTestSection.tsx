@@ -29,7 +29,7 @@ export default function StressTestSection() {
 
   return (
     <Card className="gap-0 p-3.5">
-      <p className="mb-3 text-[13px] font-bold">시나리오 Test</p>
+      <p className="mb-3 text-[14px] font-bold">시나리오 Test</p>
 
       <ScenarioSlider
         label="금리"
@@ -64,14 +64,14 @@ export default function StressTestSection() {
       />
 
       <div className="mt-1 rounded-xl bg-brand/5 p-3">
-        <p className="mb-2 text-[11px] font-extrabold">예상 평가손익 (연간)</p>
+        <p className="mb-2 text-[13px] font-extrabold">예상 평가손익 (연간)</p>
         {PORTFOLIOS.map((pf) => {
           const v = pnlEok(pf.id);
           const label = pf.id === "current" ? "현재" : `제안 ${pf.id.toUpperCase()}`;
           return (
             <div
               key={pf.id}
-              className="flex items-center justify-between py-1 text-[12px]"
+              className="flex items-center justify-between py-1 text-[13px]"
             >
               <span className="font-semibold text-muted-foreground">
                 {label}
@@ -134,7 +134,7 @@ function ScenarioSlider({
   return (
     <div className="mb-3.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-bold text-muted-foreground">
+        <span className="text-[13px] font-bold text-muted-foreground">
           {label}
         </span>
         <span
@@ -143,7 +143,7 @@ function ScenarioSlider({
           }`}
         >
           {valueLabel}{" "}
-          {delta !== 0 && <span className="text-[11px]">({deltaLabel})</span>}
+          {delta !== 0 && <span className="text-[13px]">({deltaLabel})</span>}
         </span>
       </div>
       <Slider
