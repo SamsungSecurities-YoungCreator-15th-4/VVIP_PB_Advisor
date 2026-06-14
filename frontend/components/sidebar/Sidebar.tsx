@@ -222,7 +222,7 @@ export default function Sidebar() {
           <Button
             variant="outline"
             size="sm"
-            className="mt-2 w-full border-muted font-bold text-muted-foreground hover:text-muted-foreground"
+            className="mt-2 w-full border-muted font-bold text-foreground/60 hover:text-foreground/60"
             onClick={() => setHistoryOpen(true)}
           >
             <RotateCcw />

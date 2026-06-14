@@ -1,7 +1,16 @@
 "use client";
 
-import { DISPLAY_GROUPS } from "@/lib/assetMapping";
+import { DISPLAY_GROUPS, type DisplayGroup } from "@/lib/assetMapping";
 import { CORRELATION_MATRIX } from "@/lib/mockData";
+
+const GROUP_ABBR: Record<DisplayGroup, string> = {
+  국내주식: "국내",
+  해외배당주: "배당",
+  해외성장주: "성장",
+  일반채권: "일반",
+  저쿠폰채: "저쿠",
+  분리과세: "분리",
+};
 
 export default function CorrelationHeatmap() {
   return (
@@ -20,7 +29,7 @@ export default function CorrelationHeatmap() {
             className="truncate text-center text-[10px] font-semibold text-muted-foreground"
             title={g}
           >
-            {g.slice(0, 2)}
+            {GROUP_ABBR[g]}
           </span>
         ))}
         {CORRELATION_MATRIX.map((row, i) => (
@@ -28,7 +37,7 @@ export default function CorrelationHeatmap() {
         ))}
       </div>
       <p className="mt-1 text-right text-[8px] font-semibold text-muted-foreground">
-        상관계수 (더미)
+        상관계수
       </p>
     </div>
   );
