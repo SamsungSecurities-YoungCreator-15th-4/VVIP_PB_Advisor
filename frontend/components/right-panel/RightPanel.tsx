@@ -20,9 +20,9 @@ export default function RightPanel() {
           <PanelRightOpen className="size-4" />
           <span
             className="text-[9px] font-bold leading-none text-muted-foreground"
-            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+            style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            시나리오·AI
+            시나리오·AI인사이트
           </span>
         </button>
       </div>

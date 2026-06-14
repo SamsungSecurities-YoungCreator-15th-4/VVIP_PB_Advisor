@@ -7,19 +7,19 @@ interface Props {
   allocation: { group: DisplayGroup; weight: number }[];
 }
 
-/** 포트폴리오 카드의 자산배분 도넛 (6분류 표시) */
+/** 포트폴리오 카드 자산배분 도넛 — 180×180px 고정 */
 export default function AssetDonut({ allocation }: Props) {
   return (
-    <div className="relative size-[110px] shrink-0">
-      <PieChart width={110} height={110}>
+    <div className="relative size-45 shrink-0">
+      <PieChart width={180} height={180}>
         <Pie
           data={allocation}
           dataKey="weight"
           nameKey="group"
           cx="50%"
           cy="50%"
-          innerRadius={36}
-          outerRadius={54}
+          innerRadius={57}
+          outerRadius={86}
           startAngle={90}
           endAngle={-270}
           isAnimationActive={false}

@@ -96,21 +96,21 @@ function PortfolioCard({
                   : "text-muted-foreground/70 hover:text-foreground"
               }`}
             >
-              {v === "donut" ? "도넛" : "히트맵"}
+              {v === "donut" ? "자산배분" : "상관관계"}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex min-h-[110px] items-center gap-2.5">
+      <div className="flex h-72 items-stretch gap-2.5">
         {view === "donut" ? (
-          <>
+          <div className="flex flex-1 flex-col items-center justify-center gap-3">
             <AssetDonut allocation={allocation} />
-            <div className="grid flex-1 gap-1">
+            <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1">
               {allocation.map((d) => (
                 <div
                   key={d.group}
-                  className="flex items-center gap-1.5 text-[11px]"
+                  className="flex items-center gap-1.5 text-[12px]"
                 >
                   <span
                     className="size-2 shrink-0 rounded-[3px]"
@@ -125,28 +125,28 @@ function PortfolioCard({
                 </div>
               ))}
             </div>
-          </>
+          </div>
         ) : (
           <CorrelationHeatmap />
         )}
       </div>
 
       <div className="mt-2.5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-muted">
-        <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} tone="up" />
-        <Metric k="변동성" v={`${m.volatilityPct}%`} />
+        <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} />
         <Metric k="샤프지수" v={m.sharpe.toFixed(2)} />
         <Metric k="소르티노" v={m.sortino.toFixed(2)} />
-        <Metric
-          k="MDD"
-          v={`${m.mddPct}%`}
-          sub={m.mddAmountLabel}
-          tone="down"
-        />
         <Metric
           k="세후수익률"
           v={`${m.afterTaxReturnPct.toFixed(1)}%`}
           sub={m.afterTaxAmountLabel}
           tone="up"
+        />
+        <Metric k="변동성" v={`${m.volatilityPct}%`} sub={m.volatilityAmountLabel} />
+        <Metric
+          k="MDD"
+          v={`${m.mddPct}%`}
+          sub={m.mddAmountLabel}
+          tone="down"
         />
       </div>
     </Card>
@@ -169,16 +169,16 @@ function Metric({
   const arrow = tone === "up" ? "▲" : tone === "down" ? "▼" : null;
   return (
     <div className="bg-card px-2 py-1.5">
-      <div className="text-[8.5px] font-bold text-muted-foreground">{k}</div>
+      <div className="text-[12px] font-bold text-muted-foreground">{k}</div>
       <div
-        className={`text-sm font-extrabold leading-none tabular-nums ${toneCls}`}
+        className={`mt-1 text-[14px] font-extrabold leading-none tabular-nums ${toneCls}`}
       >
-        {arrow && <span className="mr-0.5 text-[10px]">{arrow}</span>}
+        {arrow && <span className="mr-0.5 text-[14px]">{arrow}</span>}
         {v}
       </div>
       {sub && (
         <div
-          className={`mt-0.5 text-[8.5px] font-bold tabular-nums ${toneCls}`}
+          className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}
         >
           {sub}
         </div>

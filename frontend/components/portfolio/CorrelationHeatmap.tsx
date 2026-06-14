@@ -1,29 +1,35 @@
 "use client";
 
-import { DISPLAY_GROUPS } from "@/lib/assetMapping";
+import { DISPLAY_GROUPS, type DisplayGroup } from "@/lib/assetMapping";
 import { CORRELATION_MATRIX } from "@/lib/mockData";
 
-/**
- * 6분류 자산군 상관관계 히트맵 (셀 그리드 응용).
- * 도넛 ↔ 히트맵 세그먼트 토글로 전환된다. 행렬은 더미 — 백엔드 연동 시 교체.
- */
+const GROUP_ABBR: Record<DisplayGroup, string> = {
+  국내주식: "국내",
+  해외배당주: "배당",
+  해외성장주: "성장",
+  일반채권: "일반",
+  저쿠폰채: "저쿠",
+  분리과세: "분리",
+};
+
 export default function CorrelationHeatmap() {
   return (
-    <div className="flex-1">
+    <div className="flex flex-1 flex-col">
       <div
-        className="grid gap-px"
+        className="flex-1 grid gap-px"
         style={{
-          gridTemplateColumns: `48px repeat(${DISPLAY_GROUPS.length}, 1fr)`,
+          gridTemplateColumns: `44px repeat(${DISPLAY_GROUPS.length}, 1fr)`,
+          gridTemplateRows: `auto repeat(${DISPLAY_GROUPS.length}, 1fr)`,
         }}
       >
         <span />
         {DISPLAY_GROUPS.map((g) => (
           <span
             key={g}
-            className="truncate text-center text-[7.5px] font-semibold text-muted-foreground"
+            className="truncate text-center text-[10px] font-semibold text-muted-foreground"
             title={g}
           >
-            {g.slice(0, 2)}
+            {GROUP_ABBR[g]}
           </span>
         ))}
         {CORRELATION_MATRIX.map((row, i) => (
@@ -31,7 +37,7 @@ export default function CorrelationHeatmap() {
         ))}
       </div>
       <p className="mt-1 text-right text-[8px] font-semibold text-muted-foreground">
-        상관계수 (더미)
+        상관계수
       </p>
     </div>
   );
@@ -40,15 +46,14 @@ export default function CorrelationHeatmap() {
 function Row({ label, row }: { label: string; row: number[] }) {
   return (
     <>
-      <span className="flex items-center truncate pr-1 text-[8px] font-semibold text-muted-foreground">
+      <span className="flex items-center truncate pr-1 text-[10px] font-semibold text-muted-foreground">
         {label}
       </span>
       {row.map((v, j) => (
         <span
           key={j}
-          className="flex aspect-square items-center justify-center rounded-[3px] text-[7.5px] font-bold tabular-nums"
+          className="flex items-center justify-center rounded-[3px] text-[7.5px] font-bold tabular-nums"
           style={{
-            // 상관 높음 → 진한 파랑, 낮음 → 연한 파랑
             backgroundColor: `rgba(0, 100, 255, ${0.06 + v * 0.8})`,
             color: v > 0.55 ? "#fff" : "#0050D6",
           }}
