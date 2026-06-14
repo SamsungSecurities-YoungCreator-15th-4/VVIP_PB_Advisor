@@ -39,14 +39,14 @@ export default function InsightSection() {
             AI 분석 결과
           </span>
         </div>
-        <p className="text-[13px] font-medium leading-relaxed text-foreground">
-          {INSIGHT.defaultAnswer}
-        </p>
+        <div className="h-60 overflow-y-auto pr-1">
+          <p className="text-[13px] font-medium leading-relaxed text-foreground">
+            {INSIGHT.defaultAnswer}
+          </p>
+        </div>
       </div>
 
-      <p className="mb-1 mt-3.5 text-[14px] font-bold">
-        출처 / 인용 목록
-      </p>
+      <p className="mb-1 mt-3.5 text-[14px] font-bold">출처 / 인용 목록</p>
       <div>
         {INSIGHT.sources.map((src) => (
           <div
