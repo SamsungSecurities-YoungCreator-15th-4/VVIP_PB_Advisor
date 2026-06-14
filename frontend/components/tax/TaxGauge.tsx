@@ -32,12 +32,12 @@ export default function TaxGauge() {
     <div className="flex flex-col gap-3">
       <div className="flex items-stretch gap-2.5">
         <div className="flex-1 rounded-xl border p-3">
-          <p className="text-[9.5px] font-bold text-muted-foreground">
+          <p className="text-[12px] font-bold text-muted-foreground">
             고객 기타 금융소득 입력 (연 이자·배당)
           </p>
           <p className="mt-1 text-lg font-extrabold tabular-nums">
             {fmt(otherIncome)}
-            <span className="text-[11px]">만원</span>
+            <span className="text-[12px]">만원</span>
           </p>
           <Slider
             value={[otherIncome]}
@@ -49,22 +49,22 @@ export default function TaxGauge() {
           />
         </div>
         <div className="w-[130px] rounded-xl border bg-brand/5 p-3">
-          <p className="text-[9.5px] font-bold text-muted-foreground">
+          <p className="text-[12px] font-bold text-muted-foreground">
             포트폴리오 A<br />
             예상 이자·배당
           </p>
           <p className="mt-1 text-sm font-extrabold tabular-nums text-brand-dark">
             +{fmt(portfolioDividendManwon)}
-            <span className="text-[11px]">만원</span>
+            <span className="text-[12px]">만원</span>
           </p>
-          <p className="mt-0.5 text-[8.5px] font-semibold text-muted-foreground">
+          <p className="mt-0.5 text-[12px] font-semibold text-muted-foreground">
             합산 대상 과세소득
           </p>
         </div>
       </div>
 
       <div>
-        <div className="flex justify-between text-[9.5px] font-bold text-muted-foreground">
+        <div className="flex justify-between text-[12px] font-bold text-muted-foreground">
           <span>연 금융소득 합산</span>
           <span className="tabular-nums">{fmt(total)}만원</span>
         </div>
@@ -108,10 +108,10 @@ export default function TaxGauge() {
         <div className="flex items-start gap-2 rounded-xl bg-[#FEECEE] p-3">
           <span className="text-sm">⚠️</span>
           <div>
-            <p className="text-[11px] font-extrabold">
+            <p className="text-[12px] font-extrabold">
               기준선 <b className="text-up">초과</b> — 금융소득종합과세 대상
             </p>
-            <p className="mt-0.5 text-[9.5px] font-semibold leading-snug text-muted-foreground">
+            <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted-foreground">
               초과분 <b>{fmt(total - thresholdManwon)}만원</b>은 다른
               종합소득과 합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이
               적용됩니다. <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을
@@ -123,10 +123,10 @@ export default function TaxGauge() {
         <div className="flex items-start gap-2 rounded-xl bg-brand/5 p-3">
           <span className="text-sm text-brand-dark">✓</span>
           <div>
-            <p className="text-[11px] font-extrabold">
+            <p className="text-[12px] font-extrabold">
               기준선 <b className="text-brand-dark">이내</b> — 분리과세 유지
             </p>
-            <p className="mt-0.5 text-[9.5px] font-semibold leading-snug text-muted-foreground">
+            <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted-foreground">
               합산 금융소득이 기준선 {fmt(thresholdManwon)}만원 이내로,{" "}
               <b>15.4% 분리과세</b>가 적용됩니다. 여유 한도{" "}
               <b>{fmt(thresholdManwon - total)}만원</b>.
@@ -137,7 +137,7 @@ export default function TaxGauge() {
 
       <div className="flex gap-2">
         <div className="flex-1 rounded-lg border p-2 text-center">
-          <p className="text-[9px] font-bold text-muted-foreground">
+          <p className="text-[12px] font-bold text-muted-foreground">
             분리과세 시
           </p>
           <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-down">
@@ -149,7 +149,7 @@ export default function TaxGauge() {
             isOver ? "border-[#F7B2B8] bg-[#FEF4F5]" : ""
           }`}
         >
-          <p className="text-[9px] font-bold text-muted-foreground">
+          <p className="text-[12px] font-bold text-muted-foreground">
             종합과세 시 {isOver && "(현 상태)"}
           </p>
           <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-up">

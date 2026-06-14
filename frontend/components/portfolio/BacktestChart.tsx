@@ -23,9 +23,9 @@ export default function BacktestChart() {
   return (
     <Card className="gap-0 p-3">
       <div className="mb-1 flex items-center justify-between">
-        <p className="text-[13px] font-bold">
+        <p className="text-[14px] font-bold">
           백테스트{" "}
-          <span className="text-[10px] font-semibold text-muted-foreground">
+          <span className="text-[12px] font-semibold text-muted-foreground">
             최근 5년
           </span>
         </p>
@@ -33,7 +33,7 @@ export default function BacktestChart() {
           {LINES.map((l) => (
             <span
               key={l.key}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground"
+              className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground"
             >
               <span
                 className="h-[3px] w-3.5 rounded-sm"
@@ -55,7 +55,7 @@ export default function BacktestChart() {
               dataKey="year"
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 10, fill: "#B0B8C1", fontWeight: 600 }}
+              tick={{ fontSize: 12, fill: "#B0B8C1", fontWeight: 600 }}
             />
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip
@@ -63,7 +63,7 @@ export default function BacktestChart() {
                 value,
                 LINES.find((l) => l.key === name)?.name ?? String(name),
               ]}
-              contentStyle={{ fontSize: 11, borderRadius: 8 }}
+              contentStyle={{ fontSize: 12, borderRadius: 8 }}
             />
             {LINES.map((l) => (
               <Line
