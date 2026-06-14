@@ -7,7 +7,7 @@ interface Props {
   allocation: { group: DisplayGroup; weight: number }[];
 }
 
-/** 포트폴리오 카드 자산배분 도넛 — 220×220px 고정 */
+/** 포트폴리오 카드 자산배분 도넛 — 180×180px 고정 */
 export default function AssetDonut({ allocation }: Props) {
   return (
     <div className="relative size-45 shrink-0">

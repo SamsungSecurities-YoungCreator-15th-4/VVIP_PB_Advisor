@@ -19,6 +19,7 @@ const LINES = [
 ] as const;
 
 const pctFmt = (v: number) => {
+  if (Number.isNaN(v)) return "";
   const ret = v - 100;
   return `${ret >= 0 ? "+" : ""}${ret}%`;
 };

@@ -40,7 +40,7 @@ export default function InsightSection() {
           </span>
         </div>
         <div className="h-60 overflow-y-auto pr-1">
-          <p className="text-[13px] font-medium leading-relaxed text-foreground">
+          <p className="whitespace-pre-line text-[13px] font-medium leading-relaxed text-foreground">
             {INSIGHT.defaultAnswer}
           </p>
         </div>
