@@ -287,7 +287,8 @@ export const CORRELATION_MATRIX: number[][] = [
 export const TAX_EFFECT = {
   baseLabel: "기준 : 포트폴리오 A · 18억",
   annualSavingManwon: 1080,
-  subNote: "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
+  subNote:
+    "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
   afterTaxReturn: { from: "5.5%", to: "6.1%", delta: "+0.6%p" },
   effectiveTax: { from: "1,620", to: "540만", delta: "−1,080만" },
   // 세금 흐름 비교 (세전 기대수익 1.15억 기준, 만원)
