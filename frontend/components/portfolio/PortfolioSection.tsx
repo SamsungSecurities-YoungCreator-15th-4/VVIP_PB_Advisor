@@ -96,7 +96,7 @@ function PortfolioCard({
                   : "text-muted-foreground/70 hover:text-foreground"
               }`}
             >
-              {v === "donut" ? "도넛" : "히트맵"}
+              {v === "donut" ? "자산배분" : "상관관계"}
             </button>
           ))}
         </div>
