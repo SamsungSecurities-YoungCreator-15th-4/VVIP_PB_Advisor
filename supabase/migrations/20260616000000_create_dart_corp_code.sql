@@ -23,3 +23,10 @@ create index if not exists idx_dart_corp_code_name_normalized
 -- 종목코드 보조 조회용("005930" 등으로 직접 찾는 경로).
 create index if not exists idx_dart_corp_code_stock_code
   on dart_corp_code(stock_code);
+
+-- RLS: 프로젝트 컨벤션(모든 테이블 RLS on + 정책 0개 = service_role 전용)에 맞춘다.
+-- 적재·조회 모두 백엔드가 service_role 키로 수행(RLS 우회)하므로 anon/authenticated
+-- 정책은 두지 않는다(공개 법인 메타지만 불필요한 노출면을 만들지 않음 = 최소권한).
+-- (원격에는 Supabase 가 public 테이블 생성 시 RLS 를 자동 활성화하나, 파일만으로
+--  재생성할 때도 동일하도록 여기서 명시한다. enable 은 멱등이라 재적용 무해.)
+alter table dart_corp_code enable row level security;

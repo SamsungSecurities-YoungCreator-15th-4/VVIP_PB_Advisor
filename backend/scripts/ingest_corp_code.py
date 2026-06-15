@@ -92,7 +92,11 @@ def fetch_corp_code_xml(api_key: str) -> bytes:
 
 def parse_listed_rows(xml_bytes: bytes) -> list[dict]:
     """CORPCODE.xml 에서 상장사(stock_code 존재) 행만 dart_corp_code 레코드로 만든다."""
-    root = ET.fromstring(xml_bytes)
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError as exc:
+        # 다운로드 손상·예기치 못한 형식이면 트레이스백 대신 친절히 종료한다.
+        raise SystemExit(f"CORPCODE.xml 파싱 실패(올바르지 않은 XML 형식): {exc}")
     rows: list[dict] = []
     # corpCode.xml 은 <result> 바로 아래 <list> 가 평면으로 나열된 구조라, 트리 전체를
     # 재귀 탐색하는 iter() 대신 직계 자식만 도는 iterfind() 가 효율적이다(대용량 대응).
