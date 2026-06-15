@@ -94,7 +94,9 @@ def parse_listed_rows(xml_bytes: bytes) -> list[dict]:
     """CORPCODE.xml 에서 상장사(stock_code 존재) 행만 dart_corp_code 레코드로 만든다."""
     root = ET.fromstring(xml_bytes)
     rows: list[dict] = []
-    for item in root.iter("list"):
+    # corpCode.xml 은 <result> 바로 아래 <list> 가 평면으로 나열된 구조라, 트리 전체를
+    # 재귀 탐색하는 iter() 대신 직계 자식만 도는 iterfind() 가 효율적이다(대용량 대응).
+    for item in root.iterfind("list"):
         corp_code = (item.findtext("corp_code") or "").strip()
         corp_name = (item.findtext("corp_name") or "").strip()
         stock_code = (item.findtext("stock_code") or "").strip()
@@ -178,6 +180,16 @@ def main() -> None:
         raise SystemExit(
             "DART_API_KEY 환경변수가 설정되지 않았습니다. "
             "backend/.env 에 추가하세요 (.env.example 참고)."
+        )
+
+    # 실제 적재 모드면 무거운(쿼터 소모) DART 다운로드 전에 Supabase 환경변수를 먼저
+    # 검증한다. 누락 시 다운로드·파싱 다 한 뒤 upsert 단계에서야 실패하면 쿼터 낭비다.
+    if not args.dry_run and (
+        not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    ):
+        raise SystemExit(
+            "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 환경변수가 설정되지 않았습니다. "
+            "backend/.env 를 확인하세요 (.env.example 참고)."
         )
 
     print("[DART] corpCode.xml 다운로드 중…")

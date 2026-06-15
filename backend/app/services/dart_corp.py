@@ -23,7 +23,13 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 
 def normalize_corp_name(name: str) -> str:
-    """회사명에서 법인 마커와 모든 공백을 제거한 정규화 문자열을 반환한다."""
+    """회사명에서 법인 마커와 모든 공백을 제거한 정규화 문자열을 반환한다.
+
+    공용 헬퍼라 stage-2 사용자 질의 파싱 등에서 None/빈 문자열이 들어올 수 있어,
+    그 경우 AttributeError 대신 빈 문자열을 반환한다(방어적).
+    """
+    if not name:
+        return ""
     normalized = name
     for marker in _CORP_MARKERS:
         normalized = normalized.replace(marker, "")
