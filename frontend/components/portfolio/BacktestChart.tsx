@@ -69,7 +69,7 @@ export default function BacktestChart() {
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip
               formatter={(value, name) => [
-                `${pctFmt(Number(value))} (${value})`,
+                value != null ? `${pctFmt(Number(value))} (${value})` : "-",
                 LINES.find((l) => l.key === name)?.name ?? String(name),
               ]}
               itemSorter={(item) => {
