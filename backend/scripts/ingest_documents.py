@@ -48,11 +48,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.rag.config import CHUNK_OVERLAP, CHUNK_SIZE  # noqa: E402
 from app.rag.retrieval import (  # noqa: E402
+    EMBEDDING_DEPLOYMENT,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
-    embed_query,
+    get_openai_client,
     get_supabase_client,
 )
+
+# 배치 임베딩 크기. 청크당 순차 호출(2000+회)은 느려 한 번에 여러 청크를 임베딩한다.
+# Azure text-embedding-3-small 입력 한도(8191토큰/입력)와 별개로, 한 요청의 입력
+# 개수 상한이 있어 보수적으로 64로 둔다.
+EMBED_BATCH_SIZE = 64
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
@@ -119,6 +125,23 @@ def chunk_text(text: str) -> list[tuple[str, int]]:
     return chunks
 
 
+def embed_batch(texts: list[str]) -> list[list[float]]:
+    """여러 청크를 배치로 임베딩한다(retrieval.embed_query 와 같은 Azure 배포 사용).
+
+    검색부 embed_query 는 단일 텍스트용이라, 2000+ 청크를 순차 호출하면 느리다.
+    같은 클라이언트/배포에 input 을 리스트로 넘겨 호출 수를 1/EMBED_BATCH_SIZE 로 줄인다.
+    응답의 index 순서가 입력 순서와 일치함을 보장하기 위해 index 로 재정렬한다.
+    """
+    client = get_openai_client()
+    embeddings: list[list[float]] = []
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        batch = texts[start : start + EMBED_BATCH_SIZE]
+        resp = client.embeddings.create(model=EMBEDDING_DEPLOYMENT, input=batch)
+        for item in sorted(resp.data, key=lambda d: d.index):
+            embeddings.append(item.embedding)
+    return embeddings
+
+
 def collect_pdfs(category: str | None, file: str | None) -> list[Path]:
     """적재 대상 PDF 경로(절대) 목록을 모은다. file > category > 전체 순으로 좁힌다."""
     if file:
@@ -179,22 +202,25 @@ def ingest_one(pdf_path: Path, *, dry_run: bool) -> dict:
         on_conflict="id",
     ).execute()
 
-    # 재실행 시 stale 청크가 남지 않게 기존 청크를 먼저 비운다.
-    supabase.table("document_chunk").delete().eq("document_id", doc_id).execute()
+    # 배치 임베딩 후 한 번에 적재. 임베딩이 끝난 뒤 기존 청크를 비우므로(아래),
+    # 임베딩 단계에서 실패하면 기존 적재분은 그대로 보존된다(부분 손상 방지).
+    embeddings = embed_batch([content for content, _ in chunks])
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": idx,
+            "content": content,
+            "embedding": embeddings[idx],
+            "embedding_model": EMBEDDING_MODEL,
+            "embedding_dim": EMBEDDING_DIM,
+            "token_count": token_count,
+        }
+        for idx, (content, token_count) in enumerate(chunks)
+    ]
 
-    for idx, (content, token_count) in enumerate(chunks):
-        embedding = embed_query(content)
-        supabase.table("document_chunk").insert(
-            {
-                "document_id": doc_id,
-                "chunk_index": idx,
-                "content": content,
-                "embedding": embedding,
-                "embedding_model": EMBEDDING_MODEL,
-                "embedding_dim": EMBEDDING_DIM,
-                "token_count": token_count,
-            }
-        ).execute()
+    # 재실행 시 stale 청크가 남지 않게 기존 청크를 비우고 새로 넣는다(문서 단위 멱등).
+    supabase.table("document_chunk").delete().eq("document_id", doc_id).execute()
+    supabase.table("document_chunk").insert(rows).execute()
     print(f"    └ {len(chunks)}청크 임베딩·적재 완료 (model={EMBEDDING_MODEL})")
     return {"file": rel_str, "skipped": False, "chunks": len(chunks)}
 
@@ -209,6 +235,12 @@ def main() -> None:
     )
     parser.add_argument("--limit", type=int, help="앞에서부터 N개만 처리(소량 검증용)")
     parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="제외할 상대경로(반복 지정 가능). 예: --exclude tax/nts_taxguide_2026_vol2_errata.pdf",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="임베딩·DB 없이 청킹만 — 과금 0, 청크 수 사전 확인",
@@ -216,6 +248,12 @@ def main() -> None:
     args = parser.parse_args()
 
     pdfs = collect_pdfs(args.category, args.file)
+    if args.exclude:
+        excluded = {e.replace("\\", "/") for e in args.exclude}
+        pdfs = [
+            p for p in pdfs
+            if str(p.relative_to(DATA_DIR)).replace("\\", "/") not in excluded
+        ]
     if args.limit is not None:
         pdfs = pdfs[: args.limit]
     if not pdfs:
