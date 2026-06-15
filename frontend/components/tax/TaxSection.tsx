@@ -22,13 +22,13 @@ export default function TaxSection() {
       <div className="mb-2 flex items-center justify-between px-0.5">
         <h2 className="text-lg font-extrabold">절세 최적화 시뮬레이터</h2>
         <TabsList className="h-7">
-          <TabsTrigger value="effect" className="px-2.5 text-[10px] font-bold">
+          <TabsTrigger value="effect" className="px-2.5 text-[12px] font-bold">
             절세 효과
           </TabsTrigger>
-          <TabsTrigger value="threshold" className="px-2.5 text-[10px] font-bold">
+          <TabsTrigger value="threshold" className="px-2.5 text-[12px] font-bold">
             종합과세 임계선
           </TabsTrigger>
-          <TabsTrigger value="advice" className="px-2.5 text-[10px] font-bold">
+          <TabsTrigger value="advice" className="px-2.5 text-[12px] font-bold">
             절세 제안
           </TabsTrigger>
         </TabsList>
@@ -39,23 +39,23 @@ export default function TaxSection() {
         <TabsContent value="effect" className="flex flex-col gap-3">
           <div className="flex items-center gap-4 rounded-xl border border-brand/20 bg-brand/5 px-3.5 py-3">
             <div className="flex-1">
-              <div className="flex items-center gap-2 text-xs font-extrabold">
+              <div className="flex items-center gap-2 text-[12px] font-extrabold">
                 <span className="flex size-5 items-center justify-center rounded-md bg-brand text-[13px] font-extrabold text-white">
                   $
                 </span>
                 절세 최적화 효과
-                <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[9.5px] font-bold text-muted-foreground">
+                <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[12px] font-bold text-muted-foreground">
                   {baseLabel}
                 </span>
               </div>
-              <p className="mt-1.5 flex items-baseline gap-1.5 text-[11px] font-bold text-brand-dark">
+              <p className="mt-1.5 flex items-baseline gap-1.5 text-[12px] font-bold text-up">
                 연간 절세 효과
                 <b className="text-3xl font-extrabold tabular-nums tracking-tight">
                   +{TAX_EFFECT.annualSavingManwon.toLocaleString()}
                 </b>
-                <span className="text-[13px] font-extrabold">만원</span>
+                <span className="text-[12px] font-extrabold">만원</span>
               </p>
-              <p className="mt-1 text-[9.5px] font-semibold text-muted-foreground">
+              <p className="mt-1 text-[12px] font-semibold text-muted-foreground">
                 {TAX_EFFECT.subNote}
               </p>
             </div>
@@ -91,30 +91,30 @@ export default function TaxSection() {
                 className="flex flex-col rounded-xl border p-2.5"
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="flex size-5 items-center justify-center rounded-md bg-brand/10 text-[11px] font-extrabold text-brand-dark">
+                  <span className="flex size-5 items-center justify-center rounded-md bg-brand/10 text-[12px] font-extrabold text-brand-dark">
                     {card.icon}
                   </span>
-                  <span className="text-[11px] font-extrabold">
+                  <span className="text-[12px] font-extrabold">
                     {card.title}
                   </span>
                 </div>
-                <p className="mt-1.5 flex-1 text-[9px] font-semibold leading-snug text-muted-foreground">
+                <p className="mt-1.5 flex-1 text-[12px] font-semibold leading-snug text-muted-foreground">
                   {card.body}
                 </p>
-                <p className="mt-1 text-[8.5px] font-bold text-muted-foreground/60">
+                <p className="mt-1 text-[12px] font-bold text-muted-foreground/60">
                   {card.tag}
                 </p>
-                <p className="mt-0.5 text-sm font-extrabold tabular-nums text-up">
+                <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
                   {card.saving}
                 </p>
               </div>
             ))}
           </div>
           <div className="mt-2 flex items-center justify-between rounded-xl bg-brand px-3 py-2">
-            <span className="text-[11px] font-bold text-white">
+            <span className="text-[12px] font-bold text-white">
               {TAX_ADVICE.totalLabel}
             </span>
-            <span className="text-base font-extrabold tabular-nums text-white">
+            <span className="text-[12px] font-extrabold tabular-nums text-white">
               {TAX_ADVICE.totalSaving}
             </span>
           </div>
@@ -127,9 +127,9 @@ export default function TaxSection() {
 function SummaryStat({ k, v, d }: { k: string; v: string; d: string }) {
   return (
     <div className="min-w-29.5 rounded-xl border bg-white px-3 py-2">
-      <p className="text-[9.5px] font-bold text-muted-foreground">{k}</p>
-      <p className="mt-1 text-sm font-extrabold tabular-nums">{v}</p>
-      <p className="mt-0.5 text-[10px] font-extrabold tabular-nums text-up">
+      <p className="text-[12px] font-bold text-muted-foreground">{k}</p>
+      <p className="mt-1 text-[12px] font-extrabold tabular-nums">{v}</p>
+      <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
         {d}
       </p>
     </div>

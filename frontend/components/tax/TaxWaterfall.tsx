@@ -27,12 +27,12 @@ export default function TaxWaterfall() {
 
   return (
     <div>
-      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold">
+      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-extrabold">
         <span className="flex size-4 items-center justify-center rounded-full bg-brand/10 text-[10px] text-brand-dark">
           1
         </span>
         세금 흐름 비교
-        <span className="text-[9.5px] font-semibold text-muted-foreground">
+        <span className="text-[12px] font-semibold text-muted-foreground">
           · {TAX_EFFECT.flow.pretaxLabel}
         </span>
       </p>
@@ -41,7 +41,7 @@ export default function TaxWaterfall() {
           <BarChart
             data={data}
             layout="vertical"
-            margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
+            margin={{ top: 0, right: 40, bottom: 0, left: 0 }}
             barSize={28}
           >
             <XAxis type="number" hide />
@@ -51,7 +51,7 @@ export default function TaxWaterfall() {
               width={52}
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 11, fontWeight: 800, fill: "#4E5968" }}
+              tick={{ fontSize: 12, fontWeight: 800, fill: "#4E5968" }}
             />
             <Bar dataKey="afterTax" stackId="flow" isAnimationActive={false}>
               {data.map((_, i) => (
@@ -61,7 +61,7 @@ export default function TaxWaterfall() {
                 dataKey="afterTax"
                 position="insideLeft"
                 formatter={(v) => `세후 ${Number(v).toLocaleString()}만`}
-                style={{ fontSize: 10, fontWeight: 800, fill: "#fff" }}
+                style={{ fontSize: 12, fontWeight: 800, fill: "#fff" }}
               />
             </Bar>
             <Bar dataKey="tax" stackId="flow" isAnimationActive={false}>
@@ -70,9 +70,9 @@ export default function TaxWaterfall() {
               ))}
               <LabelList
                 dataKey="tax"
-                position="insideRight"
+                position="right"
                 formatter={(v) => Number(v).toLocaleString()}
-                style={{ fontSize: 9, fontWeight: 800, fill: "#fff" }}
+                style={{ fontSize: 11, fontWeight: 800, fill: "#F04452" }}
               />
             </Bar>
           </BarChart>
@@ -89,7 +89,7 @@ export default function TaxWaterfall() {
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-[9.5px] font-bold text-muted-foreground">
+    <span className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground">
       <span
         className="size-2 rounded-[3px]"
         style={{ backgroundColor: color }}
