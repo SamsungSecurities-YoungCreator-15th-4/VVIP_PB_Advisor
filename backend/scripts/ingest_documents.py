@@ -202,7 +202,7 @@ def ingest_one(pdf_path: Path, *, dry_run: bool) -> dict:
         on_conflict="id",
     ).execute()
 
-    # 배치 임베딩 후 한 번에 적재. 임베딩이 끝난 뒤 기존 청크를 비우므로(아래),
+    # 배치 임베딩 후 한 번에 적재. 임베딩이 끝난 뒤 DB에 반영하므로(아래),
     # 임베딩 단계에서 실패하면 기존 적재분은 그대로 보존된다(부분 손상 방지).
     embeddings = embed_batch([content for content, _ in chunks])
     rows = [
@@ -218,9 +218,16 @@ def ingest_one(pdf_path: Path, *, dry_run: bool) -> dict:
         for idx, (content, token_count) in enumerate(chunks)
     ]
 
-    # 재실행 시 stale 청크가 남지 않게 기존 청크를 비우고 새로 넣는다(문서 단위 멱등).
-    supabase.table("document_chunk").delete().eq("document_id", doc_id).execute()
-    supabase.table("document_chunk").insert(rows).execute()
+    # 재실행 시: 새 청크를 먼저 upsert(unique(document_id,chunk_index) 갱신)한 뒤,
+    # 이전 실행보다 청크 수가 줄었을 때 남는 stale 청크(chunk_index >= 현재 개수)만
+    # 삭제한다. delete→insert 와 달리 문서가 0청크로 비는 창이 없어, insert 실패 시
+    # 검색에서 문서가 통째로 누락되는 문제를 막는다(Gemini 리뷰 반영).
+    supabase.table("document_chunk").upsert(
+        rows, on_conflict="document_id,chunk_index"
+    ).execute()
+    supabase.table("document_chunk").delete().eq("document_id", doc_id).gte(
+        "chunk_index", len(chunks)
+    ).execute()
     print(f"    └ {len(chunks)}청크 임베딩·적재 완료 (model={EMBEDDING_MODEL})")
     return {"file": rel_str, "skipped": False, "chunks": len(chunks)}
 
