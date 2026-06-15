@@ -133,8 +133,8 @@ function PortfolioCard({
 
       <div className="mt-2.5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-muted">
         <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} />
-        <Metric k="샤프지수" v={m.sharpe.toFixed(2)} />
-        <Metric k="소르티노" v={m.sortino.toFixed(2)} />
+        <Metric k="샤프지수" v={m.sharpe != null ? m.sharpe.toFixed(2) : "-"} />
+        <Metric k="소르티노" v={m.sortino != null ? m.sortino.toFixed(2) : "-"} />
         <Metric
           k="세후수익률"
           v={`${m.afterTaxReturnPct.toFixed(1)}%`}

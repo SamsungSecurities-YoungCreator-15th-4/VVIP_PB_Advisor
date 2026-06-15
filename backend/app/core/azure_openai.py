@@ -31,7 +31,10 @@ def build_azure_client(api_version: str) -> AzureOpenAI:
         )
     # 타임아웃 미설정 시 동기 핸들러가 스레드풀을 무한 점유할 수 있어 기본값을 둔다.
     timeout_raw = os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS")
-    timeout = float(timeout_raw) if timeout_raw else 60.0
+    try:
+        timeout = float(timeout_raw) if timeout_raw else 60.0
+    except ValueError:
+        timeout = 60.0
     return AzureOpenAI(
         azure_endpoint=endpoint,
         api_key=api_key,

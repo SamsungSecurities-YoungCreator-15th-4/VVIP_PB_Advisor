@@ -25,7 +25,7 @@ export default function AccountAllocation() {
                     {acct.tag}
                   </span>
                 </span>
-                {acct.used !== null ? (
+                {acct.used != null ? (
                   <span className="text-[12px] font-extrabold tabular-nums">
                     {acct.used.toLocaleString()}{" "}
                     <span className="font-bold text-muted-foreground/60">
