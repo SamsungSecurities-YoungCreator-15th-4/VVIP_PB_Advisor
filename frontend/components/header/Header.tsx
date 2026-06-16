@@ -14,7 +14,7 @@ export default function Header() {
         </div>
         <div>
           <h1 className="text-[15px] font-extrabold leading-tight">
-            VVIP PB Advisor
+            S.upervisor
           </h1>
           <p className="text-[9px] font-bold tracking-[0.12em] text-muted-foreground">
             PORTFOLIO ADVISORY
