@@ -25,7 +25,6 @@ const UP = "#F04452";
 const TEXT = "#111827";
 const MUTED = "#6B7280";
 const BORDER = "#E5E7EB";
-const GREEN = "#059669"; // 포트폴리오 MDD 개선 지표용
 
 const TODAY_SHORT = new Date()
   .toLocaleDateString("ko-KR", {
@@ -302,9 +301,9 @@ function CoverPage() {
         <p style={{ fontSize: 10, color: MUTED, lineHeight: 1.7, margin: 0 }}>
           본 보고서는 상담 내용, 고객 IPS, 시장 데이터 및 AI 분석 결과를
           바탕으로 고객의 투자 목적과 제약조건을 정리하고, 이에 적합한
-            포트폴리오 방향을 제안하기 위해 작성되었습니다. 본 자료는 PB 상담을
-            보조하기 위한 참고자료이며, 최종 투자 판단은 고객의 투자 목적, 위험
-            선호도, 세무·법률 상황을 종합적으로 고려하여 결정되어야 합니다.
+          포트폴리오 방향을 제안하기 위해 작성되었습니다. 본 자료는 PB 상담을
+          보조하기 위한 참고자료이며, 최종 투자 판단은 고객의 투자 목적, 위험
+          선호도, 세무·법률 상황을 종합적으로 고려하여 결정되어야 합니다.
         </p>
       </div>
     </div>
@@ -422,19 +421,19 @@ function MarketIpsPage() {
       <div
         style={{
           background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "16px 40px",
+          padding: "19px 40px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "white" }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
             ① 지금의 시장 환경과 나의 투자 목표
           </div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 13,
               color: "rgba(255,255,255,0.75)",
               marginTop: 2,
             }}
@@ -443,10 +442,10 @@ function MarketIpsPage() {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "white" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
             {C.name} 고객님
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
             {TODAY_SHORT} 기준
           </div>
         </div>
@@ -455,7 +454,7 @@ function MarketIpsPage() {
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
         {/* 섹션 1: 시장 현황 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 16 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -468,7 +467,7 @@ function MarketIpsPage() {
             display: "grid",
             gridTemplateColumns: "repeat(5, 1fr)",
             gap: 10,
-            marginBottom: 32,
+            marginBottom: 48,
           }}
         >
           {CLIENT_MACROS.map((m) => {
@@ -525,7 +524,7 @@ function MarketIpsPage() {
 
         {/* 섹션 2: IPS */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 16 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -713,19 +712,19 @@ function PortfolioPage() {
       <div
         style={{
           background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "16px 40px",
+          padding: "19px 40px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "white" }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
             ② 포트폴리오 비교 &amp; 주요 지표 쉽게 이해하기
           </div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 13,
               color: "rgba(255,255,255,0.75)",
               marginTop: 2,
             }}
@@ -734,10 +733,10 @@ function PortfolioPage() {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "white" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
             {C.name} 고객님
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
             {TODAY_SHORT} 기준
           </div>
         </div>
@@ -746,7 +745,7 @@ function PortfolioPage() {
       <div style={{ padding: "24px 40px 80px", wordBreak: "keep-all" }}>
         {/* 섹션 1: 성과 비교 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 14 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -760,7 +759,7 @@ function PortfolioPage() {
             border: `1px solid ${BORDER}`,
             borderRadius: 10,
             padding: "16px 20px",
-            marginBottom: 10,
+            marginBottom: 14,
           }}
         >
           <div
@@ -784,17 +783,68 @@ function PortfolioPage() {
             }}
           >
             {[
-              { label: "기대수익률", value: `연 ${cur.expectedReturnPct}%`, color: TEXT, sub: null, subColor: MUTED },
-              { label: "샤프지수", value: `${cur.sharpe}`, color: TEXT, sub: null, subColor: MUTED },
-              { label: "소르티노", value: `${cur.sortino}`, color: TEXT, sub: null, subColor: MUTED },
-              { label: "세후수익률", value: `▲${cur.afterTaxReturnPct}%`, color: UP, sub: cur.afterTaxAmountLabel, subColor: UP },
-              { label: "변동성", value: `${cur.volatilityPct}%`, color: TEXT, sub: cur.volatilityAmountLabel, subColor: MUTED },
-              { label: "MDD", value: `▼${cur.mddPct}%`, color: BRAND, sub: cur.mddAmountLabel, subColor: MUTED },
+              {
+                label: "기대수익률",
+                value: `연 ${cur.expectedReturnPct}%`,
+                color: TEXT,
+                sub: null,
+                subColor: MUTED,
+              },
+              {
+                label: "샤프지수",
+                value: `${cur.sharpe}`,
+                color: TEXT,
+                sub: null,
+                subColor: MUTED,
+              },
+              {
+                label: "소르티노",
+                value: `${cur.sortino}`,
+                color: TEXT,
+                sub: null,
+                subColor: MUTED,
+              },
+              {
+                label: "세후수익률",
+                value: `▲${cur.afterTaxReturnPct}%`,
+                color: UP,
+                sub: cur.afterTaxAmountLabel,
+                subColor: UP,
+              },
+              {
+                label: "변동성",
+                value: `${cur.volatilityPct}%`,
+                color: TEXT,
+                sub: cur.volatilityAmountLabel,
+                subColor: MUTED,
+              },
+              {
+                label: "MDD",
+                value: `▼${cur.mddPct}%`,
+                color: BRAND,
+                sub: cur.mddAmountLabel,
+                subColor: BRAND,
+              },
             ].map((s) => (
               <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>{s.label}</div>
-                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
-                {s.sub && <div style={{ fontSize: 10, fontWeight: 700, color: s.subColor, marginTop: 2 }}>{s.sub}</div>}
+                <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>
+                  {s.label}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>
+                  {s.value}
+                </div>
+                {s.sub && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: s.subColor,
+                      marginTop: 2,
+                    }}
+                  >
+                    {s.sub}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -807,7 +857,7 @@ function PortfolioPage() {
             borderRadius: 10,
             padding: "16px 20px",
             background: BRAND_LIGHT,
-            marginBottom: 12,
+            marginBottom: 20,
           }}
         >
           <div
@@ -823,12 +873,13 @@ function PortfolioPage() {
             </div>
             <div
               style={{
-                background: BRAND,
-                color: "white",
+                background: "#F3F4F6",
+                color: MUTED,
                 fontSize: 10,
-                fontWeight: 800,
+                fontWeight: 700,
                 borderRadius: 6,
                 padding: "3px 8px",
+                border: `1px solid ${BORDER}`,
               }}
             >
               고객님 선택
@@ -843,17 +894,68 @@ function PortfolioPage() {
             }}
           >
             {[
-              { label: "기대수익률", value: `연 ${a.expectedReturnPct}%`, color: BRAND, sub: null, subColor: MUTED },
-              { label: "샤프지수", value: `${a.sharpe} ↑`, color: BRAND, sub: null, subColor: MUTED },
-              { label: "소르티노", value: `${a.sortino}`, color: BRAND, sub: null, subColor: MUTED },
-              { label: "세후수익률", value: `▲${a.afterTaxReturnPct}%`, color: UP, sub: a.afterTaxAmountLabel, subColor: UP },
-              { label: "변동성", value: `${a.volatilityPct}%`, color: TEXT, sub: a.volatilityAmountLabel, subColor: MUTED },
-              { label: "MDD", value: `▼${a.mddPct}% ↓`, color: GREEN, sub: a.mddAmountLabel, subColor: GREEN },
+              {
+                label: "기대수익률",
+                value: `연 ${a.expectedReturnPct}%`,
+                color: TEXT,
+                sub: null,
+                subColor: MUTED,
+              },
+              {
+                label: "샤프지수",
+                value: `${a.sharpe} ↑`,
+                color: TEXT,
+                sub: null,
+                subColor: MUTED,
+              },
+              {
+                label: "소르티노",
+                value: `${a.sortino}`,
+                color: TEXT,
+                sub: null,
+                subColor: MUTED,
+              },
+              {
+                label: "세후수익률",
+                value: `▲${a.afterTaxReturnPct}%`,
+                color: UP,
+                sub: a.afterTaxAmountLabel,
+                subColor: UP,
+              },
+              {
+                label: "변동성",
+                value: `${a.volatilityPct}%`,
+                color: TEXT,
+                sub: a.volatilityAmountLabel,
+                subColor: MUTED,
+              },
+              {
+                label: "MDD",
+                value: `▼${a.mddPct}%`,
+                color: BRAND,
+                sub: a.mddAmountLabel,
+                subColor: BRAND,
+              },
             ].map((s) => (
               <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>{s.label}</div>
-                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
-                {s.sub && <div style={{ fontSize: 10, fontWeight: 700, color: s.subColor, marginTop: 2 }}>{s.sub}</div>}
+                <div style={{ fontSize: 10, color: MUTED, marginBottom: 4 }}>
+                  {s.label}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>
+                  {s.value}
+                </div>
+                {s.sub && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: s.subColor,
+                      marginTop: 2,
+                    }}
+                  >
+                    {s.sub}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -896,7 +998,7 @@ function PortfolioPage() {
             alignItems: "center",
             gap: 6,
             padding: "8px 14px",
-            marginBottom: 16,
+            marginBottom: 48,
             background: "#F9FAFB",
             borderLeft: `3px solid ${BRAND}`,
             borderRadius: "0 6px 6px 0",
@@ -908,14 +1010,12 @@ function PortfolioPage() {
           <span style={{ fontSize: 13, fontWeight: 800, color: BRAND }}>
             +2,700만원 개선
           </span>
-          <span style={{ fontSize: 10, color: MUTED }}>
-            예상됩니다.
-          </span>
+          <span style={{ fontSize: 10, color: MUTED }}>예상됩니다.</span>
         </div>
 
         {/* 섹션 2: 지표 설명 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 14 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -1015,19 +1115,19 @@ function TaxPage() {
       <div
         style={{
           background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "16px 40px",
+          padding: "19px 40px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "white" }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
             ③ 절세 전략 &amp; 분산투자 — 계좌 배치 활용
           </div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 13,
               color: "rgba(255,255,255,0.75)",
               marginTop: 2,
             }}
@@ -1036,10 +1136,10 @@ function TaxPage() {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "white" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
             {C.name} 고객님
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
             {TODAY_SHORT} 기준
           </div>
         </div>
@@ -1052,7 +1152,7 @@ function TaxPage() {
             background: `linear-gradient(135deg, ${BRAND_DARK} 0%, ${BRAND} 60%, #2C7BFF 100%)`,
             borderRadius: 14,
             padding: "24px 28px",
-            marginBottom: 24,
+            marginBottom: 40,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -1117,7 +1217,7 @@ function TaxPage() {
             >
               ↓
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#DF3725" }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "white" }}>
               {TAX_EFFECT.effectiveTax.to}
             </div>
             <div
@@ -1134,7 +1234,7 @@ function TaxPage() {
 
         {/* 절세 전략 4가지 카드 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 14 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -1147,7 +1247,7 @@ function TaxPage() {
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: 10,
-            marginBottom: 24,
+            marginBottom: 40,
           }}
         >
           {[
@@ -1234,7 +1334,7 @@ function TaxPage() {
 
         {/* 절세 계좌 배치 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 14 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -1386,19 +1486,19 @@ function DiversificationPage() {
       <div
         style={{
           background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "16px 40px",
+          padding: "19px 40px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "white" }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
             분산투자 효과 — 상관관계가 낮은 대체자산이란?
           </div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 13,
               color: "rgba(255,255,255,0.75)",
               marginTop: 2,
             }}
@@ -1407,10 +1507,10 @@ function DiversificationPage() {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "white" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
             {C.name} 고객님
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
             {TODAY_SHORT} 기준
           </div>
         </div>
@@ -1446,7 +1546,7 @@ function DiversificationPage() {
         </div>
 
         {/* 상관관계 매트릭스 — 대시보드 CorrelationHeatmap과 동일한 데이터·색상 */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 40 }}>
           <div
             style={{
               fontSize: 12,
@@ -1562,7 +1662,7 @@ function DiversificationPage() {
 
         {/* 대체자산 4종 카드 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 14 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -1634,24 +1734,6 @@ function DiversificationPage() {
               </div>
             </div>
           ))}
-        </div>
-
-        {/* 면책 고지 */}
-        <div
-          style={{
-            background: "#F9FAFB",
-            borderRadius: 8,
-            padding: "10px 14px",
-            border: `1px solid ${BORDER}`,
-          }}
-        >
-          <p style={{ fontSize: 10, color: MUTED, lineHeight: 1.6, margin: 0 }}>
-            본 자료는 상담 내용을 바탕으로 작성된 참고용 리포트이며, 투자 권유나
-            법적 조언이 아닙니다. 투자에는 원금 손실의 위험이 있으며, 과거
-            성과가 미래 수익을 보장하지 않습니다. 삼성증권 · S.upervisor |
-            상관관계 수치는 학술·실무 통상값 기반이며 시장 상황에 따라
-            변동됩니다.
-          </p>
         </div>
       </div>
 
