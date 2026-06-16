@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import PbPdfTemplate from "@/components/pdf/PbPdfTemplate";
 import ClientPdfTemplate from "@/components/pdf/ClientPdfTemplate";
+import PdfPreviewModal from "@/components/pdf/PdfPreviewModal";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -131,6 +132,5 @@ export default function PdfExportButton() {
 }
 
 function DevPreviewModal({ type, onClose }: { type: PdfType; onClose: () => void }) {
-  const PdfPreviewModal = require("@/components/pdf/PdfPreviewModal").default;
   return <PdfPreviewModal type={type} onClose={onClose} />;
 }

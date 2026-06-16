@@ -625,7 +625,7 @@ function MarketIpsPage() {
             고객님은 <strong>금융소득 종합과세 대상</strong>이시므로, 절세
             계좌(ISA, 연금저축, IRP)를 적극 활용하는 것이 중요합니다. 또한 자녀
             전세자금 3억원은 별도로 유동성이 높은 상품으로 운용하고, 나머지는
-            장기 포트폴리오로 구성하는 <strong>'투 트랙'</strong> 전략을
+            장기 포트폴리오로 구성하는 <strong>&lsquo;투 트랙&rsquo;</strong> 전략을
             권장합니다.
           </p>
         </div>
