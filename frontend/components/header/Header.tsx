@@ -10,14 +10,14 @@ export default function Header() {
       {/* 로고 — 항상 표시 */}
       <div className="flex shrink-0 items-center gap-3 border-r pr-4">
         <div className="flex size-9 items-center justify-center rounded-lg bg-linear-to-br from-[#2C7BFF] to-[#0050D6] text-lg font-extrabold text-white">
-          V
+          S
         </div>
         <div>
           <h1 className="text-[15px] font-extrabold leading-tight">
-            VVIP PB Advisor
+            S.upervisor
           </h1>
           <p className="text-[9px] font-bold tracking-[0.12em] text-muted-foreground">
-            PORTFOLIO ADVISORY
+            VVIP PB Advisor
           </p>
         </div>
       </div>
