@@ -282,7 +282,7 @@ def main() -> None:
         try:
             rel_str = str(p.relative_to(DATA_DIR)).replace("\\", "/")
         except ValueError:
-            # DATA_DIR 밖 경로면 절대경로 노출(내부 구조 정보 노출) 방지 위해 파일명만 사용(Gemini 리뷰).
+            # DATA_DIR 밖 경로면 절대경로(내부 구조) 노출 방지 위해 파일명만 사용(Gemini 리뷰).
             rel_str = p.name
         try:
             results.append(ingest_one(p, dry_run=args.dry_run))
