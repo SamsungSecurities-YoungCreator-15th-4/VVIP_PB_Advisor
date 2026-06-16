@@ -157,7 +157,10 @@ def collect_pdfs(category: str | None, file: str | None) -> list[Path]:
             raise SystemExit(
                 f"알 수 없는 category: {cat} (가능: {', '.join(CATEGORY_SOURCE_TYPE)})"
             )
-        pdfs.extend(sorted((DATA_DIR / cat).glob("*.pdf")))
+        cat_dir = DATA_DIR / cat
+        # 카테고리 폴더가 아직 없을 수 있어(예: data 일부만 준비) glob 전 존재 확인.
+        if cat_dir.is_dir():
+            pdfs.extend(sorted(cat_dir.glob("*.pdf")))
     return pdfs
 
 
@@ -269,7 +272,16 @@ def main() -> None:
     mode = "DRY-RUN(청킹만)" if args.dry_run else "적재"
     print(f"[{mode}] 대상 {len(pdfs)}개 — CHUNK_SIZE={CHUNK_SIZE}, OVERLAP={CHUNK_OVERLAP}")
 
-    results = [ingest_one(p, dry_run=args.dry_run) for p in pdfs]
+    # 개별 PDF 처리 실패(텍스트 추출 오류·네트워크·DB 제약 등)가 전체 배치를 중단시키지
+    # 않도록 파일 단위로 예외를 잡고 다음 파일로 진행한다(Gemini 리뷰 반영).
+    results = []
+    for p in pdfs:
+        try:
+            results.append(ingest_one(p, dry_run=args.dry_run))
+        except Exception as e:
+            rel_str = str(p.relative_to(DATA_DIR)).replace("\\", "/")
+            print(f"  ❌  적재 실패 ({rel_str}): {e}", file=sys.stderr)
+            results.append({"file": rel_str, "skipped": True, "chunks": 0})
     total_chunks = sum(r["chunks"] for r in results)
     skipped = sum(1 for r in results if r["skipped"])
     print(

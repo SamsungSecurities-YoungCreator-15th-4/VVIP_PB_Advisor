@@ -54,6 +54,8 @@ def summarize_tax_result(tax_result: dict[str, Any]) -> str:
             {"role": "user", "content": user_prompt},
         ],
         temperature=0,
+        # 동기 핸들러 스레드 풀이 무한 대기로 고갈되지 않도록 명시적 타임아웃(Gemini 리뷰).
+        timeout=30.0,
     )
     # content 필터·정책 등으로 choices 가 비어 올 수 있어 접근 전에 검증한다.
     if not response.choices:
@@ -109,10 +111,13 @@ def fallback_summary(tax_result: dict[str, Any]) -> str:
         lines.append(f"- 세후수익률(추정): 전략 전 {before} → 전략 후 {after}")
 
     cards = tax_result.get("account_cards") or {}
-    isa_saving = _won((cards.get("isa") or {}).get("estimated_tax_saving"))
+    # 키가 대소문자 다르게 들어와도(ISA/irp 등) 누락되지 않도록 방어(Gemini 리뷰).
+    isa_card = cards.get("isa") or cards.get("ISA") or {}
+    isa_saving = _won(isa_card.get("estimated_tax_saving"))
     if isa_saving:
         lines.append(f"- ISA 계좌 절세 효과(추정): {isa_saving}")
-    irp_credit = _won((cards.get("irp") or {}).get("estimated_tax_credit"))
+    irp_card = cards.get("irp") or cards.get("IRP") or {}
+    irp_credit = _won(irp_card.get("estimated_tax_credit"))
     if irp_credit:
         lines.append(f"- IRP 세액공제(추정): {irp_credit}")
 
