@@ -30,20 +30,31 @@ export default function PdfExportButton() {
   const clientRef = useRef<HTMLDivElement>(null);
 
   async function handleExport(type: PdfType) {
-    const el = type === "pb" ? pbRef.current : clientRef.current;
-    if (!el) return;
+    const container = type === "pb" ? pbRef.current : clientRef.current;
+    if (!container) return;
 
     setExporting(type);
     try {
       const { domToCanvas } = await import("modern-screenshot");
       const { default: jsPDF } = await import("jspdf");
 
-      // A4 기준: 794×1123px → 210×297mm
-      const canvas = await domToCanvas(el, { scale: 2 });
-
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const imgData = canvas.toDataURL("image/png");
-      pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
+
+      // data-pdf-page 속성이 있는 요소를 페이지 단위로 캡처
+      const pages = container.querySelectorAll<HTMLElement>("[data-pdf-page]");
+
+      if (pages.length === 0) {
+        // fallback: 단일 이미지로 전체 캡처 (A4 1장)
+        const canvas = await domToCanvas(container, { scale: 2 });
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
+      } else {
+        for (let i = 0; i < pages.length; i++) {
+          const canvas = await domToCanvas(pages[i], { scale: 2 });
+          if (i > 0) pdf.addPage();
+          pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
+        }
+      }
+
       pdf.save(FILE_NAMES[type]);
     } finally {
       setExporting(null);
