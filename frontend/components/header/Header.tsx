@@ -11,7 +11,7 @@ export default function Header() {
       <div className="flex shrink-0 items-center gap-3 border-r pr-4">
         <div className="flex size-9 items-center justify-center rounded-lg bg-linear-to-br from-[#2C7BFF] to-[#0050D6] text-lg font-extrabold text-white">
           S
-</div>
+        </div>
         <div>
           <h1 className="text-[15px] font-extrabold leading-tight">
             S.upervisor
