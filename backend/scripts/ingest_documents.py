@@ -277,10 +277,16 @@ def main() -> None:
     # 않도록 파일 단위로 예외를 잡고 다음 파일로 진행한다(Gemini 리뷰 반영).
     results = []
     for p in pdfs:
+        # rel_str 은 except 안에서도 쓰이므로 미리 안전하게 계산한다. try 안에서 구하면
+        # relative_to 실패(ValueError) 시 except 에서 다시 터져 배치가 통째 죽는다(Gemini 리뷰).
+        try:
+            rel_str = str(p.relative_to(DATA_DIR)).replace("\\", "/")
+        except ValueError:
+            # DATA_DIR 밖 경로면 절대경로(내부 구조) 노출 방지 위해 파일명만 사용(Gemini 리뷰).
+            rel_str = p.name
         try:
             results.append(ingest_one(p, dry_run=args.dry_run))
         except Exception as e:
-            rel_str = str(p.relative_to(DATA_DIR)).replace("\\", "/")
             print(f"  ❌  적재 실패 ({rel_str}): {e}", file=sys.stderr)
             # 운영 중 장애 원인 규명을 위해 상세 스택트레이스도 함께 남긴다(Gemini 리뷰).
             traceback.print_exc(file=sys.stderr)

@@ -113,8 +113,10 @@ def fallback_summary(tax_result: dict[str, Any]) -> str:
     # 키가 대소문자 다르게 들어와도(ISA/irp 등) 누락되지 않도록 키를 일괄 소문자로 정규화.
     # account_cards 가 dict 가 아니면(잘못된 입력) AttributeError 대신 빈 dict 로 처리(Gemini 리뷰).
     cards_raw = tax_result.get("account_cards")
+    # 키는 문자열로 정규화, 값은 dict 인 항목만 남긴다.
+    # (아래 .get() 체인에서 AttributeError 나지 않도록, Gemini 리뷰)
     cards = (
-        {k.lower(): v for k, v in cards_raw.items()}
+        {str(k).lower(): v for k, v in cards_raw.items() if isinstance(v, dict)}
         if isinstance(cards_raw, dict)
         else {}
     )
