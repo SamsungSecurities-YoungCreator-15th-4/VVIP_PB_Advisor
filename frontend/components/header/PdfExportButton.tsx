@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { ChevronDown, Eye, FileDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,9 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import PbPdfTemplate from "@/components/pdf/PbPdfTemplate";
-import ClientPdfTemplate from "@/components/pdf/ClientPdfTemplate";
 import PdfPreviewModal from "@/components/pdf/PdfPreviewModal";
+
+// SSR 비활성화 — new Date() hydration mismatch 방지
+const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), { ssr: false });
+const ClientPdfTemplate = dynamic(() => import("@/components/pdf/ClientPdfTemplate"), { ssr: false });
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -64,7 +67,7 @@ export default function PdfExportButton() {
 
   return (
     <>
-      {/* ── off-screen 템플릿 컨테이너 ── */}
+      {/* ── off-screen 템플릿 컨테이너 (dynamic ssr:false — hydration mismatch 방지) ── */}
       <div
         aria-hidden="true"
         style={{ position: "fixed", left: -9999, top: 0, pointerEvents: "none", zIndex: -1 }}

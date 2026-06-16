@@ -6,6 +6,7 @@
  * 프로덕션 빌드에서는 이 컴포넌트가 완전히 제거된다.
  */
 
+import { useEffect } from "react";
 import { X } from "lucide-react";
 import PbPdfTemplate from "@/components/pdf/PbPdfTemplate";
 import ClientPdfTemplate from "@/components/pdf/ClientPdfTemplate";
@@ -18,6 +19,14 @@ interface Props {
 }
 
 export default function PdfPreviewModal({ type, onClose }: Props) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 py-8"

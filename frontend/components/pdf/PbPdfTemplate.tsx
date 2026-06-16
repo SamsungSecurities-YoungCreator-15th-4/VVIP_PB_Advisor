@@ -1355,11 +1355,11 @@ function TaxAiPage() {
           {[
             {
               title: "금리 상승 대응 인사이트",
-              body: aiParas[0]?.slice(0, 130) + "…",
+              body: aiParas[0] ? aiParas[0].slice(0, 130) + "…" : "",
             },
             {
               title: "포트폴리오 최적화 제안",
-              body: aiParas[1]?.slice(0, 130) + "…",
+              body: aiParas[1] ? aiParas[1].slice(0, 130) + "…" : "",
             },
           ].map((card) => (
             <div
