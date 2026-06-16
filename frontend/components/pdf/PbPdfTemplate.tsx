@@ -338,9 +338,10 @@ function CoverPage() {
               fontWeight: 700,
               padding: "5px 13px",
               borderRadius: 20,
+              whiteSpace: "nowrap" as const,
             }}
           >
-            PB 내부용
+            PB 내부용 · CONFIDENTIAL
           </span>
         </div>
 
