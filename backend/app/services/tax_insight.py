@@ -110,14 +110,18 @@ def fallback_summary(tax_result: dict[str, Any]) -> str:
     if before and after:
         lines.append(f"- 세후수익률(추정): 전략 전 {before} → 전략 후 {after}")
 
-    cards = tax_result.get("account_cards") or {}
-    # 키가 대소문자 다르게 들어와도(ISA/irp 등) 누락되지 않도록 방어(Gemini 리뷰).
-    isa_card = cards.get("isa") or cards.get("ISA") or {}
-    isa_saving = _won(isa_card.get("estimated_tax_saving"))
+    # 키가 대소문자 다르게 들어와도(ISA/irp 등) 누락되지 않도록 키를 일괄 소문자로 정규화.
+    # account_cards 가 dict 가 아니면(잘못된 입력) AttributeError 대신 빈 dict 로 처리(Gemini 리뷰).
+    cards_raw = tax_result.get("account_cards")
+    cards = (
+        {k.lower(): v for k, v in cards_raw.items()}
+        if isinstance(cards_raw, dict)
+        else {}
+    )
+    isa_saving = _won((cards.get("isa") or {}).get("estimated_tax_saving"))
     if isa_saving:
         lines.append(f"- ISA 계좌 절세 효과(추정): {isa_saving}")
-    irp_card = cards.get("irp") or cards.get("IRP") or {}
-    irp_credit = _won(irp_card.get("estimated_tax_credit"))
+    irp_credit = _won((cards.get("irp") or {}).get("estimated_tax_credit"))
     if irp_credit:
         lines.append(f"- IRP 세액공제(추정): {irp_credit}")
 

@@ -37,6 +37,7 @@ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import argparse
 import re
 import sys
+import traceback
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -281,6 +282,8 @@ def main() -> None:
         except Exception as e:
             rel_str = str(p.relative_to(DATA_DIR)).replace("\\", "/")
             print(f"  ❌  적재 실패 ({rel_str}): {e}", file=sys.stderr)
+            # 운영 중 장애 원인 규명을 위해 상세 스택트레이스도 함께 남긴다(Gemini 리뷰).
+            traceback.print_exc(file=sys.stderr)
             results.append({"file": rel_str, "skipped": True, "chunks": 0})
     total_chunks = sum(r["chunks"] for r in results)
     skipped = sum(1 for r in results if r["skipped"])
