@@ -2,9 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.portfolio_logic.portfolio_logic import router as portfolio_router
+from app.routers import rag, tax
 from app.routers.consultations import router as consultations_router
-from app.routers import rag
-from app.portfolio_logic.portfolio_logic_6th import router as portfolio_router
+
 
 app = FastAPI(title="VVIP Asset Advisor Hub API")
 
@@ -18,10 +19,10 @@ app.add_middleware(
 
 app.include_router(consultations_router)
 app.include_router(rag.router)
+app.include_router(tax.router)
 app.include_router(portfolio_router)
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    # 배포 헬스체크용: 의존성·DB 호출 없이 즉답한다.
     return {"status": "ok", "service": "vvip-pb-advisor"}

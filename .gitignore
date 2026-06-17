@@ -42,7 +42,8 @@ venv/
 *.egg-info/
 .pytest_cache/
 # RAG 데이터·인덱스 (용량 큰 파일)
-backend/data/*.pdf
+# PDF는 용량이 커서 git 제외 (드라이브/슬랙으로 공유), 하위 폴더까지 매칭
+backend/data/**/*.pdf
 backend/data/*.docx
 backend/faiss_index/
 *.index
@@ -52,11 +53,9 @@ backend/faiss_index/
 # 이미 커밋된 STT 테스트 샘플은 추적 상태가 유지되며 영향받지 않는다.
 backend/data/*.txt
 backend/data/*.json
-AI/stt/*.txt
-AI/stt/*.json
-AI/stt/*.wav
-AI/stt/*.mp3
-AI/stt/*.m4a
+backend/app/stt/.env
+backend/app/stt/audio/
+backend/app/stt/output/
 # 공유용 더미/샘플은 파일명에 "sample" 을 넣으면 예외로 추적된다 (실데이터엔 절대 사용 금지).
 # 그 외 의도적 추가는 `git add -f <파일>` 로 강제 추가.
 !**/*sample*
@@ -79,6 +78,8 @@ backend/.env
 # ---------- AI 코딩 도구 ----------
 # Claude Code
 .claude/
+# MCP 서버 설정(개인 로컬 설정). project_ref만 담기지만 팀 공유 대신 각자 관리한다.
+.mcp.json
 
 # ---------- STT 개발 관련 ----------
 .env

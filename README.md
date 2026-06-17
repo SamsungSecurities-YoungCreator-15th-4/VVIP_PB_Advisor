@@ -10,10 +10,10 @@
 
 | 영역 | 사용 기술 |
 | --- | --- |
-| 프론트엔드 | Next.js, TypeScript, TailwindCSS |
+| 프론트엔드 | Next.js (pnpm), TypeScript, TailwindCSS, shadcn/ui, recharts, Zustand |
 | 백엔드 | FastAPI (Python), yfinance |
-| DB·인증 | Supabase (PostgreSQL) |
-| 배포 | Vercel |
+| DB·인증 | Supabase (PostgreSQL + pgvector) — 접근 방식 A: supabase-py(RPC 전용) / B: psycopg3(직접 SQL) |
+| 배포 | 프론트엔드 Vercel · 백엔드 Render |
 | 협업 | GitHub, Notion, Slack |
 
 ## 레포 구조
@@ -21,8 +21,16 @@
 ```
 VVIP_PB_Advisor/
 ├── frontend/      # Next.js 프론트엔드 (PB 상담 대시보드 UI)
-├── backend/       # FastAPI 백엔드 (시장 데이터·정량 지표·포트폴리오 연산)
-├── AI/            # AI 관련 산출물·작업 파일 보관
+├── backend/       # FastAPI 백엔드
+│   └── app/
+│       ├── routers/   # API 엔드포인트 (consultations, rag 등)
+│       ├── stt/       # STT·화자 매핑·RRTTLLU 추출 (구 AI/stt 에서 이동)
+│       ├── rag/       # RAG 검색부 (Azure 임베딩 + pgvector)
+│       ├── services/  # STT 파이프라인·IPS 추출 등 비즈니스 로직
+│       ├── schemas/   # Pydantic 모델
+│       ├── core/      # 설정(config)
+│       └── db/        # Supabase 클라이언트
+├── supabase/      # DB 마이그레이션·시드 (PostgreSQL + pgvector)
 ├── docs/          # 기획·설계·협업 규칙 문서
 ├── .github/       # PR 템플릿 등 GitHub 관련 설정
 ├── AGENTS.md      # AI 에이전트(코드 어시스턴트)를 위한 작업 규칙
@@ -69,7 +77,7 @@ uvicorn app.main:app --reload
 
 | 역할 | 리드 | 페어 |
 | --- | --- | --- |
-| 프론트엔드 | 다경 | 준호 (UX) |
+| 프론트엔드 | 다경 | 준호 (UX), 중현 (스캐폴드) |
 | 백엔드 | 중현 | — |
 | AI + 기획 | 준호 (PM), 중현 (팀장) | 지은 (AI 기획), 승민 (AI 개발) |
 | 도메인 스터디 | 다경 | 준호·지은 (차별화 A+D), 승민·중현 (차별화 B+C) |
