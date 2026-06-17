@@ -154,6 +154,7 @@ export interface PortfolioMetrics {
   volatilityPct: number;
   sharpe: number;
   sortino: number;
+  volatilityAmountLabel: string;
   mddPct: number; // 양수로 보관, 표시 시 ▼ 접두
   mddAmountLabel: string;
   afterTaxReturnPct: number;
@@ -192,6 +193,7 @@ export const PORTFOLIOS: Portfolio[] = [
     metrics: {
       expectedReturnPct: 4.8,
       volatilityPct: 11.2,
+      volatilityAmountLabel: "±3,200만원",
       sharpe: 0.43,
       sortino: 0.3,
       mddPct: 14.6,
@@ -220,6 +222,7 @@ export const PORTFOLIOS: Portfolio[] = [
     metrics: {
       expectedReturnPct: 6.4,
       volatilityPct: 12.5,
+      volatilityAmountLabel: "±3,800만원",
       sharpe: 0.61,
       sortino: 0.48,
       mddPct: 11.2,
@@ -248,6 +251,7 @@ export const PORTFOLIOS: Portfolio[] = [
     metrics: {
       expectedReturnPct: 8.7,
       volatilityPct: 20.3,
+      volatilityAmountLabel: "±6,100만원",
       sharpe: 0.43,
       sortino: 0.43,
       mddPct: 23.3,
@@ -283,7 +287,8 @@ export const CORRELATION_MATRIX: number[][] = [
 export const TAX_EFFECT = {
   baseLabel: "기준 : 포트폴리오 A · 18억",
   annualSavingManwon: 1080,
-  subNote: "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
+  subNote:
+    "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
   afterTaxReturn: { from: "5.5%", to: "6.1%", delta: "+0.6%p" },
   effectiveTax: { from: "1,620", to: "540만", delta: "−1,080만" },
   // 세금 흐름 비교 (세전 기대수익 1.15억 기준, 만원)
@@ -402,7 +407,7 @@ export const SCENARIO_WARN = {
 export const INSIGHT = {
   placeholder: "예: 금리 전망, 환율 리스크, 세액공제…",
   defaultAnswer:
-    "금리 상승기에는 단기 채권 비중 확대와 배당 성장주 편입이 유효하며, 환율 변동성 확대 시 환헤지 비중 상향을 권고합니다. 세후 기준 포트폴리오 A의 위험조정수익이 가장 우수합니다.",
+    "현재 고객 포트폴리오는 국내주식 20%, 해외배당주 22% 비중으로 선진국 배당 자산에 상대적으로 집중되어 있습니다. 최근 미 연준의 금리 동결 기조 장기화 가능성을 고려할 때, 단기 채권 듀레이션을 1~2년 이내로 유지하면서 투자등급 회사채 비중을 소폭 확대하는 전략이 유효합니다.\n\n환율 측면에서는 원/달러 환율이 1,380~1,420원 구간에서 등락하는 현 상황에서, 해외자산 중 비헤지 비중이 44%에 달해 환손실 리스크가 잠재합니다. 달러 익스포저의 30% 수준까지 환헤지 전환을 단계적으로 검토하시기 바랍니다.\n\n세후 수익률 기준으로는 포트폴리오 A(세후 5.5%)가 현재 포트폴리오(세후 4.0%) 대비 약 1.5%p 우위에 있으며, ISA 계좌 편입과 연금저축 한도 추가 납입을 통해 절세 여력이 연간 최대 1,080만원 추가로 확보 가능합니다.\n\n리스크 관리 측면에서 MDD -11.2% 수준은 VVIP 고객 손실 허용 범위(통상 -15% 이내) 내에 있으나, 글로벌 경기 둔화 시나리오 하에서 해외성장주 비중(12%)이 변동성 확대의 주요 원인이 될 수 있습니다. 포트폴리오 B의 해외성장주 22% 비중 확대안은 고수익 추구 성향 고객에 한해 선별 제안을 권고합니다.",
   sources: [
     { title: "Young Creator 리서치 · 글로벌 전략", date: "2026.05.20" },
     { title: "yfinance Market Data API", date: "실시간" },

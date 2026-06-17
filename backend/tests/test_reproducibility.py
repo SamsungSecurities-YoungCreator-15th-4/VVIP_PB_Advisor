@@ -255,7 +255,7 @@ class TestRagSearchTransformDeterminism:
         # 불변식: 빈 published_date 는 None 으로 정규화된다(d2 meta 에 값 없음).
         import app.rag.retrieval as retrieval
 
-        monkeypatch.setattr(retrieval, "get_supabase_client", lambda: self._fake_supabase())
+        monkeypatch.setattr(retrieval, "get_supabase_client", self._fake_supabase)
         result = retrieval.search_chunks([0.0] * retrieval.EMBEDDING_DIM)
         by_id = {c["doc_id"]: c for c in result}
         assert by_id["d2"]["published_date"] is None

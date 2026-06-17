@@ -36,7 +36,11 @@ EMBEDDING_API_VERSION = os.getenv("AZURE_OPENAI_EMBEDDING_API_VERSION", "2023-05
 #   배포명: ai-insight-llm / 모델: gpt-4o / API 버전: 2025-01-01-preview
 
 DEFAULT_TOP_K = 8
-DEFAULT_SIMILARITY_THRESHOLD = 0.5
+# 교차언어 검색 대응값. 한국어 질의 → 영문 문서(FOMC 등)는 임베딩 유사도가
+# 0.37~0.4 수준이라 0.5에서는 404가 잦았다(2단계 검증). RPC가 top-K를 먼저 뽑고
+# 바깥에서 threshold를 거는 구조라 값만 0.4로 낮춘다. 무관 질의는 0.4 미만으로
+# 걸러진다(검증: "오늘 점심 메뉴" 류 top_sim < 0.4 확인).
+DEFAULT_SIMILARITY_THRESHOLD = 0.4
 
 
 @lru_cache(maxsize=1)
