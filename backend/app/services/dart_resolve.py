@@ -72,13 +72,14 @@ def _rows_by_corp_code(corp_code: str) -> list[dict]:
 
 
 def _rows_by_normalized(normalized: str) -> list[dict]:
-    # ilike 는 와일드카드 없으면 "대소문자 무시 정확일치"로 동작한다. 저장 컬럼이 아직
-    # 소문자 재적재 전이어도(영문명 대소문자 혼재) 매칭되도록 ilike 로 조회한다.
+    # eq(정확일치)로 조회한다. 저장 컬럼은 .lower() 재적재로 이미 소문자이고 normalize 도
+    # 소문자를 내보내므로 정확일치가 성립한다. ilike 와 달리 입력의 %·_ 가 와일드카드로
+    # 해석되지 않아 대량 매칭→DART 호출 폭주(DoS) 위험이 없다.
     return (
         get_supabase()
         .table("dart_corp_code")
         .select("corp_code,corp_name,stock_code,modify_date")
-        .ilike("corp_name_normalized", normalized)
+        .eq("corp_name_normalized", normalized)
         .execute()
         .data
     )

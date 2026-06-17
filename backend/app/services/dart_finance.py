@@ -23,6 +23,11 @@ _ANNUAL_REPORT_CODE = "11011"  # 사업보고서(연간)
 # 가장 최근 연도부터 몇 년 거슬러 시도할지(상장폐지 직전·신규상장 등 데이터 공백 대비).
 _YEAR_LOOKBACK = 3
 
+# 치명적 DART 상태코드: 키 오류(010/011)·호출제한(020)·시스템(800/900). 연도를 바꿔도
+# 동일하게 실패하므로 즉시 예외로 중단한다(불필요한 재호출·404 오인 방지).
+# '013'(조회 데이터 없음)은 정상 폴백 신호이므로 여기 포함하지 않는다.
+_FATAL_DART_STATUS = {"010", "011", "020", "800", "900"}
+
 # DART 계정명 → 우리 표준 필드. 손익 계정은 표기 변형("(손실)" 등) 대비 startswith.
 _BS_EXACT = {
     "자산총계": "total_assets",
@@ -124,8 +129,11 @@ def fetch_financials(
     for idx, year in enumerate(candidate_years):
         tried.append(str(year))
         data = get_single_account(corp_code, year, _ANNUAL_REPORT_CODE)
+        status = data.get("status")
+        if status in _FATAL_DART_STATUS:
+            raise RuntimeError(f"DART 재무 조회 API 오류({status}): {data.get('message', '')}")
         items = data.get("list") or []
-        if data.get("status") != "000" or not items:
+        if status != "000" or not items:
             continue
         fs_div, rcept_no, values = _parse_items(items)
         # 핵심 손익(매출/영업이익/순이익) 중 하나도 못 뽑으면 다음 연도 시도.

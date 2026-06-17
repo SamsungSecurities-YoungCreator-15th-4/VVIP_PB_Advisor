@@ -54,8 +54,14 @@ def get_company_overview(corp_code: str) -> dict:
         status=000(정상)은 폐지 여부와 무관하므로 corp_cls 가 실제 상장상태 판별자다.
     """
     data = _dart_get(_COMPANY_URL, {"corp_code": corp_code})
+    status = data.get("status", "")
+    # status!='000'(키 만료·호출제한 등)에도 빈 corp_cls 를 반환하면 디스앰비규에이션이
+    # 모든 후보를 폐지(E)로 오분류해 현존 법인을 잘못 제외한다. 정상이 아니면 즉시 예외.
+    # (정상적으로 폐지된 법인은 status='000' + corp_cls='E' 로 오므로 여기서 안 걸린다.)
+    if status != "000":
+        raise RuntimeError(f"DART 기업개황 조회 실패({status}): {data.get('message', '')}")
     return {
-        "status": data.get("status", ""),
+        "status": status,
         "message": data.get("message", ""),
         "corp_cls": data.get("corp_cls", ""),
         "corp_name": data.get("corp_name", ""),

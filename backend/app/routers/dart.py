@@ -94,12 +94,13 @@ def _format_financials_for_prompt(corp_name: str, fin: FinancialResult) -> str:
 def _summarize(corp_name: str, fin: FinancialResult) -> str:
     """gpt-4o 요약(temperature=0). 실패 시 결정적 템플릿으로 폴백(데모가 죽지 않게)."""
     facts = _format_financials_for_prompt(corp_name, fin)
+    user_msg = f"다음 재무 수치를 PB 관점에서 요약해 주세요.\n\n{facts}"
     try:
         resp = get_llm_client().chat.completions.create(
             model=get_llm_deployment(),
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": f"다음 재무 수치를 PB 관점에서 요약해 주세요.\n\n{facts}"},
+                {"role": "user", "content": user_msg},
             ],
             temperature=0,
         )
@@ -137,7 +138,10 @@ def create_dart_insight(request: DartInsightRequest) -> DartInsightResponse:
     if fin is None:
         raise HTTPException(
             status_code=404,
-            detail=f"{resolved.corp_name}({resolved.corp_code}) 의 확정 사업보고서 재무를 찾지 못했습니다.",
+            detail=(
+                f"{resolved.corp_name}({resolved.corp_code}) 의 "
+                "확정 사업보고서 재무를 찾지 못했습니다."
+            ),
         )
 
     summary = _summarize(resolved.corp_name or query, fin)
