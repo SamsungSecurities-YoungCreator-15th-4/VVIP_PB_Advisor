@@ -24,21 +24,22 @@ export default function DataSourceBadge({
       ? {
           Icon: AlertTriangle,
           label: "데모 데이터",
-          cls: "border-amber-300 bg-amber-50 text-amber-700",
+          // 눈에 거슬리지 않게 차분한 회색 톤. 단, 실데이터인 척 숨기진 않는다(거버넌스).
+          cls: "border-muted-foreground/15 bg-muted/30 text-muted-foreground/60",
         }
       : {
           Icon: Inbox,
           label: "데이터 없음",
-          cls: "border-muted bg-muted/40 text-muted-foreground",
+          cls: "border-muted-foreground/15 bg-muted/30 text-muted-foreground/60",
         };
   const { Icon, label, cls } = config;
 
   return (
     <span
       title={note}
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${cls} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls} ${className}`}
     >
-      <Icon className="size-3" />
+      <Icon className="size-2.5" />
       {label}
     </span>
   );
