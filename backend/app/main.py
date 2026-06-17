@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.routers.consultations import router as consultations_router
 
-from app.routers import rag, tax
+from app.routers import clients, rag, tax
 
 app = FastAPI(title="VVIP Asset Advisor Hub API")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(consultations_router)
+app.include_router(clients.router)
 app.include_router(rag.router)
 app.include_router(tax.router)
 

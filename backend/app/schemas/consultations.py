@@ -3,7 +3,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
-CustomerName = Literal["김성삼", "이사조", "박기업"]
+# 고객 SSOT 는 DB(client 테이블)다. 과거에는 페르소나 3명을 Literal 로 고정했으나,
+# 고객 추가 기능 도입으로 임의 고객명이 들어올 수 있어 자유 문자열로 전환한다.
+# 검증은 타입(Literal)이 아니라 "DB 에 존재하는 고객인가"로 한다(라우터에서 조회).
+CustomerName = str
 
 
 class ConsultationResponse(BaseModel):

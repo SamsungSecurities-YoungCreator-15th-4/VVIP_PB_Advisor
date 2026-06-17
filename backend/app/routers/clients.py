@@ -1,0 +1,179 @@
+"""POST /clients — 고객(client) 생성.
+
+고객 SSOT 는 DB(client 테이블)다. STT 는 고객명으로 client 를 조회해 client_id(FK)를
+채우므로(Option A), 이름이 사실상 조회 키가 된다. 따라서 동명이인 모호성을 막기 위해
+이름 중복을 거부한다(앱 레벨 선검사 + DB UNIQUE 제약이 durable 가드).
+
+운용자산(AUM)은 client 테이블에 전용 컬럼이 없어 meta.aum_eokwon(억원)으로 저장한다.
+Supabase 호출이 블로킹이라 핸들러는 동기 def 로 둔다(rag.py·tax.py 와 동일).
+"""
+
+import logging
+import math
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
+
+from app.db.supabase import get_supabase
+from app.services.ips import build_ips_snapshot_payload
+
+router = APIRouter(prefix="/clients", tags=["clients"])
+logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
+
+MAX_NAME_LEN = 50
+MAX_AUM_EOKWON = 100_000  # 비현실적 입력 방지 상한(억원).
+
+# 신규 고객의 "미상담 기본 IPS" — 고정 상수 1세트(준호님 확정).
+# 고객 생성마다 LLM 호출/난수로 흔들지 않는다(재현성·비용 — 절세규칙·상품매핑과 같은
+# 하드코딩 규칙표 패턴). Asset 만 고객이 입력한 운용자산(억원)으로 채우고, 나머지는
+# 보수적 중립값. 기존 페르소나 3명의 사전조사 IPS 값 범위를 참고했다(Return 3~25 →
+# 중립 5, Risk 안정/균형/공격 → 균형형, Time → 10년, Liquidity → 중간).
+# 추후 STT 상담이 들어오면 source_type='consultation' 스냅샷이 "별도로" 쌓이며,
+# 이 initial 스냅샷을 덮어쓰지 않는다(기존 구조 유지).
+DEFAULT_IPS_TEMPLATE: dict = {
+    "Goal": "안정적 자산 운용 및 장기 수익 추구",
+    "Return": 5,  # 중립적 목표 수익률(%)
+    "Risk": "균형형",
+    "Time": 10,  # 중장기 기본(년)
+    "Tax": "금융소득종합과세 대비",
+    "Liquidity": "중간",
+    "Legal": "특이사항 없음",
+    "Unique": "사전 상담 전 기본 프로파일",
+}
+
+
+def _default_ips_raw(aum_eokwon: float) -> dict:
+    """고정 디폴트 IPS + 고객이 입력한 운용자산(Asset, 억원). 결정적(난수·시각 없음)."""
+    return {**DEFAULT_IPS_TEMPLATE, "Asset": aum_eokwon}
+
+
+class ClientCreateRequest(BaseModel):
+    name: str
+    aum_eokwon: float = Field(ge=0)  # 운용자산(억원). meta.aum_eokwon 으로 저장.
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("고객명은 비어 있을 수 없습니다.")
+        if len(stripped) > MAX_NAME_LEN:
+            raise ValueError(f"고객명은 {MAX_NAME_LEN}자 이내여야 합니다.")
+        return stripped
+
+    @field_validator("aum_eokwon")
+    @classmethod
+    def _validate_aum(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("운용자산은 유효한 숫자여야 합니다.")
+        if value > MAX_AUM_EOKWON:
+            raise ValueError(f"운용자산은 {MAX_AUM_EOKWON}억원 이내여야 합니다.")
+        return value
+
+
+class ClientCreateResponse(BaseModel):
+    client_id: str
+    name: str
+    aum_eokwon: float
+    ips_snapshot_id: str  # 함께 생성된 디폴트 initial IPS 스냅샷(추적용)
+    created_at: str
+
+
+@router.post("", response_model=ClientCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
+    supabase = get_supabase()
+
+    # 동명이인 차단(Option A). DB UNIQUE(name) 가 최종 가드지만, 명확한 409 를 위해 선검사.
+    existing = (
+        supabase.table("client")
+        .select("id")
+        .eq("name", request.name)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(
+            status_code=409,
+            detail=f"이미 존재하는 고객명입니다: {request.name}",
+        )
+
+    try:
+        result = (
+            supabase.table("client")
+            .insert(
+                {
+                    "name": request.name,
+                    # AUM 전용 컬럼이 없어 meta 에 보관. persona=False 로 페르소나 3명과 구분.
+                    "meta": {"aum_eokwon": request.aum_eokwon, "persona": False},
+                }
+            )
+            .execute()
+        )
+        created = result.data[0] if result.data else None
+    except Exception as exc:
+        # UNIQUE 제약 충돌(동시 생성 레이스)도 여기로 떨어질 수 있다.
+        logger.exception("client insert failed")
+        raise HTTPException(
+            status_code=500,
+            detail="고객 저장 중 오류가 발생했습니다.",
+        ) from exc
+
+    if not created:
+        raise HTTPException(status_code=500, detail="고객 저장 중 오류가 발생했습니다.")
+
+    # 신규 고객은 사전조사 IPS 가 없으므로 디폴트 initial 스냅샷을 함께 저장한다
+    # (consultation_id=NULL — CHECK 제약상 initial 은 NULL 이어야 함).
+    # supabase-py(REST)는 다중문 트랜잭션이 어려워, 스냅샷 insert 실패 시 방금 만든
+    # client 를 보상 삭제(compensating rollback)해 고아 client 가 남지 않게 한다.
+    snapshot_payload = build_ips_snapshot_payload(
+        client_id=created["id"],
+        consultation_id=None,
+        source_type="initial",
+        raw_ips_json=_default_ips_raw(request.aum_eokwon),
+    )
+    try:
+        snapshot_result = (
+            supabase.table("ips_snapshot").insert(snapshot_payload).execute()
+        )
+        snapshot = snapshot_result.data[0] if snapshot_result.data else None
+    except Exception as exc:
+        logger.exception("default ips_snapshot insert failed — rolling back client")
+        _rollback_client(supabase, created["id"])
+        raise HTTPException(
+            status_code=500,
+            detail="고객 IPS 저장 중 오류가 발생했습니다.",
+        ) from exc
+
+    if not snapshot:
+        _rollback_client(supabase, created["id"])
+        raise HTTPException(
+            status_code=500,
+            detail="고객 IPS 저장 중 오류가 발생했습니다.",
+        )
+
+    return ClientCreateResponse(
+        client_id=created["id"],
+        name=created["name"],
+        aum_eokwon=request.aum_eokwon,
+        ips_snapshot_id=snapshot["id"],
+        created_at=_to_kst_iso(created["created_at"]),
+    )
+
+
+def _rollback_client(supabase, client_id: str) -> None:
+    """스냅샷 저장 실패 시 방금 만든 client 보상 삭제. 삭제까지 실패하면 로그만 남긴다."""
+    try:
+        supabase.table("client").delete().eq("id", client_id).execute()
+    except Exception:
+        logger.exception("client rollback delete failed (client_id=%s)", client_id)
+
+
+def _to_kst_iso(created_at: str) -> str:
+    normalized = created_at.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(KST).isoformat()
