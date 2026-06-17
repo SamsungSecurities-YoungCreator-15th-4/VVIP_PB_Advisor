@@ -40,12 +40,15 @@ export interface SttConsultationData {
   consultationDate: string;
 }
 
-function mapTranscript(items: TranscriptItem[]): ConsultMessage[] {
+function mapTranscript(
+  items: TranscriptItem[] | null | undefined,
+): ConsultMessage[] {
+  if (!items) return [];
   return items.map((it) => ({
     // 백엔드 화자값은 "PB"/"고객". 그 외 값이 오면 일단 고객으로 표기.
     speaker: it.speaker_role === "PB" ? "PB" : "고객",
-    text: it.text,
-    time: it.utterance_time,
+    text: it.text ?? "",
+    time: it.utterance_time ?? "",
   }));
 }
 
@@ -68,8 +71,9 @@ function coerceLiquidity(value: string | null): IpsPatch["liquidity"] {
 }
 
 /** flatten IPS JSON → store 적용 가능한 패치(키 매핑 + 타입 정합). */
-function mapIps(ips: IpsJson): IpsPatch {
+function mapIps(ips: IpsJson | null | undefined): IpsPatch {
   const patch: IpsPatch = {};
+  if (!ips) return patch;
   if (ips.Goal != null) patch.goal = ips.Goal;
   const ret = toNumber(ips.Return);
   if (ret !== undefined) patch.returnPct = ret;

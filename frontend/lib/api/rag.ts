@@ -36,9 +36,9 @@ function mockInsight(): InsightData {
 
 function mapResponse(res: RagInsightResponse): InsightData {
   return {
-    answer: res.answer,
-    citations: res.citations.map((c) => ({
-      title: c.title,
+    answer: res.answer ?? "",
+    citations: (res.citations ?? []).map((c) => ({
+      title: c.title ?? "",
       date: c.published_date ?? null,
       sourceType: c.source_type,
       similarity: c.similarity,
