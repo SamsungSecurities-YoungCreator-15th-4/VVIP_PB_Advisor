@@ -35,6 +35,10 @@ export interface Customer {
   pbCode: string;
   aumLabel: string; // 표시용
   aumEokwon: number; // 계산용 (억원)
+  /** DB(client 테이블) UUID. 초기 mock 3명·미저장(데모) 고객은 없음. */
+  clientId?: string;
+  /** DB 저장 성공 여부. false = 데모(로컬에만 추가). undefined = mock 초기 고객. */
+  persisted?: boolean;
 }
 
 export const CUSTOMERS: Customer[] = [
