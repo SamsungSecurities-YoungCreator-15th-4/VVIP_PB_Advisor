@@ -1,5 +1,5 @@
-﻿# ruff: noqa
-
+﻿# ruff: noqa: E501
+# flake8: noqa
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -27,6 +27,8 @@ TRADING_DAYS = 252
 SORTINO_NO_DOWNSIDE_CAP = 3.0
 MIN_COMMON_PRICE_OBSERVATIONS = 126
 MAX_SESSION_REQUEST_STORE_SIZE = 100
+BACKTEST_BASE_INDEX = 100.0
+SEPARATE_TAX_BOND_MIN_HOLDING_YEARS = 3
 
 # 기준 금리와 시나리오 금리는 분리한다.
 # 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.
@@ -129,6 +131,65 @@ TAX_RULE_TABLE = {
         "source": "IRP 세액공제율 가정: 저소득 구간",
     },
 }
+
+# seed.sql tax_rule.rule_key와 맞추기 위한 alias rule.
+# 기존 세부 key는 추적용으로 유지하고, 화면/DB 연동 시에는 seed_rule_key를 우선 사용한다.
+TAX_RULE_TABLE.update(
+    {
+        "financial_income_tax_threshold": {
+            "value": FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
+            "unit": "KRW",
+            "source": "seed.sql tax_rule alias: financial_income_tax_threshold",
+            "legacy_key": "financial_income_comprehensive_tax_threshold",
+        },
+        "overseas_stock_transfer_tax": {
+            "value": OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
+            "unit": "rate",
+            "source": "seed.sql tax_rule alias: overseas_stock_transfer_tax",
+            "params": {
+                "basic_deduction": OVERSEAS_STOCK_GAIN_DEDUCTION,
+                "loss_offset_scope": "overseas_equity_same_year",
+            },
+            "legacy_keys": [
+                "overseas_stock_gain_deduction",
+                "overseas_stock_capital_gains_tax_rate",
+            ],
+        },
+        "isa_tax_exemption": {
+            "value": ISA_LOW_TAX_RATE,
+            "unit": "rate",
+            "source": "seed.sql tax_rule alias: isa_tax_exemption",
+            "params": {
+                "general_tax_free_limit": ISA_GENERAL_TAX_FREE_LIMIT,
+                "seogmin_tax_free_limit": ISA_SEOGMIN_TAX_FREE_LIMIT,
+                "mandatory_holding_years": ISA_MANDATORY_HOLDING_YEARS,
+                "annual_contribution_limit": ISA_ANNUAL_CONTRIBUTION_LIMIT,
+                "total_contribution_limit": ISA_TOTAL_CONTRIBUTION_LIMIT,
+            },
+            "legacy_keys": [
+                "isa_general_tax_free_limit",
+                "isa_seogmin_tax_free_limit",
+                "isa_low_tax_rate",
+                "isa_mandatory_holding_years",
+            ],
+        },
+        "irp_tax_credit": {
+            "value": IRP_TAX_CREDIT_RATE_HIGH_INCOME,
+            "unit": "rate",
+            "source": "seed.sql tax_rule alias: irp_tax_credit",
+            "params": {
+                "tax_credit_limit": IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT,
+                "high_income_rate": IRP_TAX_CREDIT_RATE_HIGH_INCOME,
+                "low_income_rate": IRP_TAX_CREDIT_RATE_LOW_INCOME,
+            },
+            "legacy_keys": [
+                "irp_tax_credit_limit",
+                "irp_tax_credit_rate_high_income",
+                "irp_tax_credit_rate_low_income",
+            ],
+        },
+    }
+)
 
 # 추천 B 선별 기준
 # 검증된 사실: 상관계수가 낮을수록 분산효과가 커질 수 있음.
@@ -392,6 +453,11 @@ class IPSRequest(BaseModel):
     total_asset: float = Field(..., gt=0)
     unique_need_amount: float = Field(..., ge=0)
     unique_asset: str = Field(...)
+    # Unique는 더 이상 특정 자산 하나만 의미하지 않는다.
+    # 자연어/dict/list 원문은 unique_profile에 보존하고,
+    # 현재 엔진이 해석 가능한 필요자금·ISA·IRP 정보만 결정론적으로 반영한다.
+    unique_items: List[Dict[str, Any]] = Field(default_factory=list)
+    unique_profile: Dict[str, Any] = Field(default_factory=dict)
 
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(..., ge=1, le=50)
@@ -428,6 +494,9 @@ class IPSRequest(BaseModel):
 
     irp_enabled: bool = Field(True)
     irp_eligible: bool = Field(True)
+    irp_account_exists: bool = Field(False)
+    irp_account_age_years: float = Field(0.0, ge=0, le=80)
+    irp_cumulative_contribution: float = Field(0.0, ge=0)
     irp_current_year_contribution: float = Field(0.0, ge=0)
     irp_remaining_tax_credit_capacity: float = Field(
         IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT, ge=0
@@ -455,6 +524,34 @@ class ScenarioRequest(BaseModel):
     stress_affects_scoring: bool = Field(False)
 
 
+class PortfolioCalculateResponse(BaseModel):
+    client_id: Optional[str] = None
+    consultation_id: str
+    calculation_session_id: str
+    as_of: str
+    risk_profile: str
+    risk_profile_label: str
+    portfolios: List[Dict[str, Any]]
+    search_summary: Dict[str, Any]
+    scenario_summary: Dict[str, Any]
+    data_snapshot: Dict[str, Any]
+    input_adapter: Dict[str, Any]
+    methodology: Dict[str, Any]
+    notes: List[str]
+
+
+class PortfolioStressTestResponse(BaseModel):
+    consultation_id: str
+    calculation_session_id: str
+    as_of: str
+    risk_profile: str
+    risk_profile_label: str
+    portfolios: List[Dict[str, Any]]
+    scenario_summary: Dict[str, Any]
+    data_snapshot: Dict[str, Any]
+    input_adapter: Dict[str, Any]
+
+
 class AnalysisRequest(BaseModel):
     ips: IPSRequest = Field(...)
     scenario: ScenarioRequest = Field(...)
@@ -465,6 +562,8 @@ class PortfolioRequest(BaseModel):
     total_asset: float = Field(..., gt=0)
     unique_need_amount: float = Field(0, ge=0)
     unique_asset: str = Field("general_bond")
+    unique_items: List[Dict[str, Any]] = Field(default_factory=list)
+    unique_profile: Dict[str, Any] = Field(default_factory=dict)
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(10, ge=1, le=50)
     tax_sensitivity: Literal["low", "medium", "high"] = Field("medium")
@@ -502,6 +601,9 @@ class PortfolioRequest(BaseModel):
 
     irp_enabled: bool = Field(True)
     irp_eligible: bool = Field(True)
+    irp_account_exists: bool = Field(False)
+    irp_account_age_years: float = Field(0.0, ge=0, le=80)
+    irp_cumulative_contribution: float = Field(0.0, ge=0)
     irp_current_year_contribution: float = Field(0.0, ge=0)
     irp_remaining_tax_credit_capacity: float = Field(
         IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT, ge=0
@@ -652,6 +754,8 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
         total_asset=ips.total_asset,
         unique_need_amount=ips.unique_need_amount,
         unique_asset=validate_unique_asset(ips.unique_asset),
+        unique_items=ips.unique_items,
+        unique_profile=ips.unique_profile,
         risk_profile=ips.risk_profile,
         investment_horizon_years=ips.investment_horizon_years,
         tax_sensitivity=ips.tax_sensitivity,
@@ -685,6 +789,9 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
         isa_years_until_liquid=ips.isa_years_until_liquid,
         irp_enabled=ips.irp_enabled,
         irp_eligible=ips.irp_eligible,
+        irp_account_exists=ips.irp_account_exists,
+        irp_account_age_years=ips.irp_account_age_years,
+        irp_cumulative_contribution=ips.irp_cumulative_contribution,
         irp_current_year_contribution=ips.irp_current_year_contribution,
         irp_remaining_tax_credit_capacity=ips.irp_remaining_tax_credit_capacity,
         irp_remaining_tax_credit_capacity_override=(
@@ -701,6 +808,12 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
 
 
 def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
+    """추천·지표 계산용 실제 가격 데이터.
+
+    이 함수는 신규 상장 자산의 과거 구간을 현금으로 채우지 않는다.
+    모든 자산이 실제 가격을 가진 공통 구간만 사용해 기대수익률, 공분산,
+    변동성, MDD, VaR, 추천 포트폴리오를 계산한다.
+    """
     tickers = {asset: ticker for asset, ticker in ASSET_TICKERS.items() if ticker != "CASH"}
 
     raw = yf.download(
@@ -749,13 +862,13 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
         asset for asset, start_date in first_valid_dates.items() if start_date == common_start
     ]
 
-    # 신규 상장 ETF가 섞여 있을 때 .dropna()가 5년치 대부분을 조용히 날리는 문제를 방지한다.
-    # 공통 시작일을 명시적으로 잡고, 너무 짧으면 왜 실패했는지 설명한다.
+    # 추천·위험지표·기대수익률은 실제 가격 데이터만 사용한다.
+    # 신규 상장 자산의 과거 구간을 현금으로 채우지 않고, 모든 자산이 실제 가격을 가진 공통 구간만 사용한다.
     common_prices = prices.loc[common_start:, available_assets].ffill().dropna(how="any")
 
     if len(common_prices) < MIN_COMMON_PRICE_OBSERVATIONS:
         raise RuntimeError(
-            "공통 가격 데이터 구간이 너무 짧습니다. "
+            "공통 실제 가격 데이터 구간이 너무 짧습니다. "
             f"observations={len(common_prices)}, min_required={MIN_COMMON_PRICE_OBSERVATIONS}, "
             f"common_start={common_start.date() if common_start is not None else None}, "
             f"limiting_assets={limiting_assets}. 최근 상장 ETF proxy를 더 긴 이력 proxy로 바꾸는지 검토해 주세요."
@@ -779,10 +892,155 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
             asset: date.strftime("%Y-%m-%d") for asset, date in first_valid_dates.items()
         },
         "limiting_assets": limiting_assets,
-        "note": "전체 자산의 공통 가격 구간만 사용. 신규 상장 proxy가 있으면 data_start가 짧아질 수 있음.",
+        "usage": "metrics_and_recommendation_actual_data_only",
+        "note": (
+            "추천·기대수익률·위험지표 계산용 데이터. 전체 자산의 공통 실제 가격 구간만 사용하며, "
+            "신규 상장 자산의 과거 구간을 현금으로 대체하지 않음."
+        ),
     }
 
     return common_prices
+
+
+def download_backtest_price_data(period: str, cash_return: float) -> pd.DataFrame:
+    """백테스트 차트 전용 5년 가격 데이터.
+
+    과제 조건상 백테스트 차트는 무조건 5년 구간을 유지한다.
+    단, 신규 상장 또는 데이터 시작 전 구간은 추천·지표 계산에 쓰지 않고,
+    백테스트 차트에서만 현금 수익률로 대체한다.
+    """
+    period = "5y"
+
+    tickers = {
+        asset: ticker
+        for asset, ticker in ASSET_TICKERS.items()
+        if ticker != "CASH"
+    }
+
+    raw = yf.download(
+        list(tickers.values()),
+        period=period,
+        auto_adjust=True,
+        progress=False,
+        group_by="column",
+        threads=True,
+    )
+
+    if raw.empty:
+        raise RuntimeError("yfinance에서 데이터를 가져오지 못했습니다.")
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        if "Close" not in raw.columns.get_level_values(0):
+            raise RuntimeError("yfinance 응답에서 Close 가격을 찾지 못했습니다.")
+        prices = raw["Close"].copy()
+    else:
+        prices = raw[["Close"]].copy()
+
+    reverse_map = {ticker: asset for asset, ticker in tickers.items()}
+    prices = prices.rename(columns=reverse_map)
+    prices = prices.dropna(how="all").sort_index()
+
+    if prices.empty:
+        raise RuntimeError("가격 데이터가 비어 있습니다.")
+
+    base_index = prices.index
+    daily_cash_return = (1 + cash_return) ** (1 / TRADING_DAYS) - 1
+
+    backtest_prices = pd.DataFrame(index=base_index)
+    first_valid_dates: Dict[str, Any] = {}
+    cash_substituted_assets: Dict[str, Any] = {}
+    excluded_assets: List[str] = []
+
+    for asset in ASSET_TICKERS.keys():
+        if asset == "cash":
+            continue
+
+        if asset not in prices.columns or prices[asset].notna().sum() == 0:
+            excluded_assets.append(asset)
+            continue
+
+        series = prices[asset].reindex(base_index).ffill()
+        first_valid_date = series.first_valid_index()
+
+        if first_valid_date is None:
+            excluded_assets.append(asset)
+            continue
+
+        first_valid_dates[asset] = first_valid_date
+        first_pos = base_index.get_loc(first_valid_date)
+
+        # 백테스트 차트 전용 처리: 신규 상장/데이터 시작 전 구간만 현금 수익률로 대체한다.
+        # 첫 실제 가격일에 가격 점프가 생기지 않도록 첫 실제 가격에서 현금 수익률만큼 역산한다.
+        if first_pos > 0:
+            first_real_price = float(series.loc[first_valid_date])
+            reverse_steps = np.arange(first_pos, 0, -1)
+            pre_listing_values = first_real_price / (
+                (1 + daily_cash_return) ** reverse_steps
+            )
+
+            series.iloc[:first_pos] = pre_listing_values
+
+            cash_substituted_assets[asset] = {
+                "substituted_from": base_index[0].strftime("%Y-%m-%d"),
+                "substituted_until": base_index[first_pos - 1].strftime("%Y-%m-%d"),
+                "first_real_price_date": first_valid_date.strftime("%Y-%m-%d"),
+                "method": "backtest_only_pre_listing_period_replaced_with_cash_return",
+            }
+
+        backtest_prices[asset] = series.ffill()
+
+    if excluded_assets:
+        raise RuntimeError(
+            "확정 자산군 중 가격 데이터를 전혀 가져오지 못한 자산이 있습니다. "
+            f"excluded_assets={excluded_assets}. 티커 또는 yfinance 다운로드 상태를 확인해 주세요."
+        )
+
+    backtest_prices["cash"] = (1 + daily_cash_return) ** np.arange(len(base_index))
+
+    ordered_assets = [
+        asset for asset in ASSET_TICKERS.keys()
+        if asset in backtest_prices.columns
+    ]
+    backtest_prices = backtest_prices[ordered_assets]
+
+    if backtest_prices.isna().any().any():
+        missing_assets = backtest_prices.columns[
+            backtest_prices.isna().any()
+        ].tolist()
+        raise RuntimeError(
+            "백테스트용 현금 대체 이후에도 결측치가 남아 있습니다. "
+            f"missing_assets={missing_assets}"
+        )
+
+    if len(backtest_prices) < MIN_COMMON_PRICE_OBSERVATIONS:
+        raise RuntimeError(
+            "5년 백테스트 가격 데이터 구간이 너무 짧습니다. "
+            f"observations={len(backtest_prices)}, "
+            f"min_required={MIN_COMMON_PRICE_OBSERVATIONS}"
+        )
+
+    backtest_prices.attrs["data_snapshot"] = {
+        "period_requested": period,
+        "as_of": backtest_prices.index[-1].strftime("%Y-%m-%d"),
+        "data_start": backtest_prices.index[0].strftime("%Y-%m-%d"),
+        "data_end": backtest_prices.index[-1].strftime("%Y-%m-%d"),
+        "observations": int(len(backtest_prices)),
+        "available_assets": ordered_assets,
+        "excluded_assets": excluded_assets,
+        "first_valid_dates": {
+            asset: date.strftime("%Y-%m-%d") for asset, date in first_valid_dates.items()
+        },
+        "cash_substituted_assets": cash_substituted_assets,
+        "limiting_assets": [],
+        "usage": "backtest_chart_only_5y_with_cash_substitution",
+        "note": (
+            "백테스트 차트 전용 데이터. 과제 조건 때문에 5년 구간을 유지하며, "
+            "신규 상장 또는 데이터 시작 전 구간만 현금 수익률로 대체함. "
+            "추천·기대수익률·위험지표 계산에는 사용하지 않음."
+        ),
+    }
+
+    return backtest_prices
 
 
 def calculate_daily_returns(prices: pd.DataFrame) -> pd.DataFrame:
@@ -906,7 +1164,7 @@ def calculate_financial_income_comprehensive_tax_status(
         "excess_over_threshold": safe_round(excess, 0),
         "is_over_threshold": taxable_financial_income
         > FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
-        "rule_key": "financial_income_comprehensive_tax_threshold",
+        "rule_key": "financial_income_tax_threshold",
         "basis": "금융소득종합과세 검토 기준 2,000만 원. 세부 적용은 고객 전체 소득과 세법 확인 필요.",
     }
 
@@ -939,10 +1197,7 @@ def estimate_overseas_stock_capital_gains_tax(
         "taxable_gain": safe_round(taxable_gain, 0),
         "tax_rate": OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
         "estimated_tax": safe_round(estimated_tax, 0),
-        "rule_keys": [
-            "overseas_stock_gain_deduction",
-            "overseas_stock_capital_gains_tax_rate",
-        ],
+        "rule_keys": ["overseas_stock_transfer_tax"],
         "basis": (
             "해외상장 주식/ETF의 가격차익 부분에 기본공제 250만 원과 "
             "기본세율 22%를 적용한 간이 추정. 배당·이자성 수익과 "
@@ -1058,6 +1313,9 @@ def calculate_irp_status(request: PortfolioRequest) -> Dict[str, Any]:
         "enabled": request.irp_enabled,
         "eligible": request.irp_eligible,
         "usable": irp_usable,
+        "account_exists": request.irp_account_exists,
+        "account_age_years": safe_round(request.irp_account_age_years, 2),
+        "cumulative_contribution": safe_round(request.irp_cumulative_contribution, 0),
         "annual_tax_credit_limit": IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT,
         "current_year_contribution": safe_round(
             request.irp_current_year_contribution, 0
@@ -1149,14 +1407,7 @@ def allocate_account_buckets(
             "locked_amount_for_liquidity": safe_round(isa_locked_amount, 0),
             "tax_free_limit": isa_tax_free_limit,
             "low_tax_rate_after_tax_free_limit": ISA_LOW_TAX_RATE,
-            "rule_keys": [
-                "isa_general_tax_free_limit",
-                "isa_seogmin_tax_free_limit",
-                "isa_low_tax_rate",
-                "isa_mandatory_holding_years",
-                "isa_annual_contribution_limit",
-                "isa_total_contribution_limit",
-            ],
+            "rule_keys": ["isa_tax_exemption"],
             "allocations": {
                 asset: {
                     "label": ASSET_NAMES_KR[asset],
@@ -1177,11 +1428,7 @@ def allocate_account_buckets(
             if irp_status["remaining_tax_credit_capacity"] > 0
             else 0.0,
             "estimated_tax_credit": safe_round(irp_tax_credit, 0),
-            "rule_keys": [
-                "irp_tax_credit_limit",
-                "irp_tax_credit_rate_high_income",
-                "irp_tax_credit_rate_low_income",
-            ],
+            "rule_keys": ["irp_tax_credit"],
             "allocations": {
                 asset: {
                     "label": ASSET_NAMES_KR[asset],
@@ -1566,6 +1813,52 @@ def calculate_stress_test(
     }
 
 
+
+def calculate_metric_amounts(
+    metrics: Dict[str, Any],
+    total_asset: float,
+    tax_breakdown: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """비율 지표를 프론트 표기용 원화 금액으로 환산한다.
+
+    - after_tax_return_amount: 세후 기대수익률 × 현재 총자산. 연간 세후 기대 이익이다.
+    - mdd_amount: 백테스트 일별 수익률 기준 최대낙폭 × 현재 총자산. 세금 반영값이 아니다.
+    - volatility_band_amount: 연율화 변동성 × 현재 총자산. 손익 확정값이 아니라 변동 폭 근사다.
+    """
+    total_asset = safe_float(total_asset)
+    after_tax_profit = None
+    if tax_breakdown is not None:
+        after_tax_profit = tax_breakdown.get("after_tax_profit")
+
+    return {
+        "basis": "portfolio_total_asset",
+        "total_asset": safe_round(total_asset, 0),
+        "expected_return_amount": safe_round(
+            safe_float(metrics.get("expected_return")) * total_asset,
+            0,
+        ),
+        "after_tax_return_amount": safe_round(
+            safe_float(after_tax_profit)
+            if after_tax_profit is not None
+            else safe_float(metrics.get("after_tax_return")) * total_asset,
+            0,
+        ),
+        "mdd_amount": safe_round(safe_float(metrics.get("mdd")) * total_asset, 0),
+        "volatility_band_amount": safe_round(
+            safe_float(metrics.get("volatility")) * total_asset,
+            0,
+        ),
+        "historical_var_95_daily_loss_amount": safe_round(
+            -safe_float(metrics.get("historical_var_95_daily_loss")) * total_asset,
+            0,
+        ),
+        "note": (
+            "원화 지표는 현재 총자산에 각 포트폴리오의 비율 지표를 곱한 값. "
+            "after_tax_return_amount만 세후 기대 이익이며, MDD/VaR는 과거 수익률 기반 손실률의 원화 환산이다."
+        ),
+    }
+
+
 def calculate_metrics(
     weights: Dict[str, float],
     returns: pd.DataFrame,
@@ -1664,6 +1957,12 @@ def calculate_metrics(
         "risk_contribution_max_share": risk_contribution["max_share"],
     }
 
+    metric_amounts = calculate_metric_amounts(
+        temp_metrics,
+        request.total_asset,
+        tax_breakdown,
+    )
+
     risk_level = classify_portfolio_by_guidelines(temp_metrics)
     selection_risk_control = evaluate_selection_risk_controls(
         temp_metrics,
@@ -1693,6 +1992,7 @@ def calculate_metrics(
         "stress_test": stress_test,
         "risk_level": risk_level,
         "risk_level_label": RISK_LEVEL_NAME.get(risk_level, "기준 미충족"),
+        "metric_amounts": metric_amounts,
         "tax_breakdown": tax_breakdown,
     }
 
@@ -1719,6 +2019,8 @@ def calculate_cumulative_returns(
         {
             "date": date.strftime("%Y-%m-%d"),
             "value": safe_round(value, 6),
+            "index_value": safe_round((1.0 + value) * BACKTEST_BASE_INDEX, 4),
+            "base_index": BACKTEST_BASE_INDEX,
         }
         for date, value in cumulative.items()
     ]
@@ -1835,6 +2137,46 @@ def is_suitable_for_client(metrics: Dict[str, Any], client_risk_profile: str) ->
 # ============================================================
 
 
+
+def is_separate_tax_bond_allowed(request: PortfolioRequest) -> bool:
+    return request.investment_horizon_years >= SEPARATE_TAX_BOND_MIN_HOLDING_YEARS
+
+
+def get_effective_unique_asset(request: PortfolioRequest) -> str:
+    unique_asset = validate_unique_asset(request.unique_asset)
+    if unique_asset == "separate_tax_bond" and not is_separate_tax_bond_allowed(request):
+        return "cash"
+    return unique_asset
+
+
+def get_recommendation_eligible_assets(
+    available_assets: List[str],
+    request: PortfolioRequest,
+) -> List[str]:
+    eligible_assets = list(available_assets)
+    if not is_separate_tax_bond_allowed(request):
+        eligible_assets = [
+            asset for asset in eligible_assets if asset != "separate_tax_bond"
+        ]
+    return eligible_assets
+
+
+def build_constraint_warnings(request: PortfolioRequest) -> List[str]:
+    warnings = []
+    if not is_separate_tax_bond_allowed(request):
+        warnings.append(
+            "investment_horizon_years가 3년 미만이므로 추천 포트폴리오에서는 "
+            "분리과세채(separate_tax_bond)를 제외했습니다. 현재 포트폴리오에 이미 "
+            "들어온 비중은 평가만 수행합니다."
+        )
+        if request.unique_asset == "separate_tax_bond":
+            warnings.append(
+                "unique_asset=separate_tax_bond 입력은 3년 미만 기간 조건과 맞지 않아 "
+                "unique 필요자금 배치 자산을 cash로 대체했습니다."
+            )
+    return warnings
+
+
 def generate_random_weights(
     assets: Optional[List[str]] = None,
     rng: Optional[np.random.Generator] = None,
@@ -1945,7 +2287,7 @@ def find_recommended_portfolios(
     expected_returns: pd.Series,
     request: PortfolioRequest,
     cov_matrix: Optional[pd.DataFrame] = None,
-) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     rng = np.random.default_rng(request.random_seed)
 
     candidates = []
@@ -1954,10 +2296,17 @@ def find_recommended_portfolios(
     suitable_count = 0
     risk_control_pass_count = 0
 
-    available_assets = [asset for asset in ASSET_TICKERS.keys() if asset in returns.columns]
+    raw_available_assets = [
+        asset for asset in ASSET_TICKERS.keys() if asset in returns.columns
+    ]
+    available_assets = get_recommendation_eligible_assets(
+        raw_available_assets,
+        request,
+    )
+    effective_unique_asset = get_effective_unique_asset(request)
     validate_required_assets_available(
-        {request.unique_asset: 1.0},
-        available_assets,
+        {effective_unique_asset: 1.0},
+        raw_available_assets,
         "unique_asset",
     )
 
@@ -2045,6 +2394,13 @@ def find_recommended_portfolios(
         "filtered_out_portfolios": generated_count - suitable_count,
         "selection_method": "suitability_filter_var_erc_after_tax_ranking",
         "random_seed": request.random_seed,
+        "eligible_assets": available_assets,
+        "excluded_by_horizon": [
+            "separate_tax_bond"
+        ]
+        if "separate_tax_bond" in raw_available_assets
+        and "separate_tax_bond" not in available_assets
+        else [],
     }
 
     return [recommendation_1, recommendation_2], search_summary
@@ -2073,6 +2429,7 @@ def build_portfolio_response(
     selection_summary: Optional[Dict[str, Any]] = None,
     correlation_with_recommended_1: Optional[float] = None,
     cov_matrix: Optional[pd.DataFrame] = None,
+    backtest_returns: Optional[pd.DataFrame] = None,
 ) -> Dict[str, Any]:
     metrics = calculate_metrics(
         weights=weights,
@@ -2082,7 +2439,8 @@ def build_portfolio_response(
         cov_matrix=cov_matrix,
     )
 
-    cumulative_returns = calculate_cumulative_returns(weights, returns)
+    cumulative_source_returns = backtest_returns if backtest_returns is not None else returns
+    cumulative_returns = calculate_cumulative_returns(weights, cumulative_source_returns)
 
     response = {
         "api_key": api_key,
@@ -2106,6 +2464,8 @@ def build_portfolio_response(
             "liquidity_coverage": metrics["liquidity_coverage"],
             # 세후수익률은 절세 최적화 계산 이후 반영되는 값
             "after_tax_return": metrics["after_tax_return"],
+            "krw": metrics["metric_amounts"],
+            "metric_amounts": metrics["metric_amounts"],
             # 포트폴리오 위험/세금/스트레스 정보
             "taxable_financial_income": metrics["taxable_financial_income"],
             "financial_income_comprehensive_tax_status": metrics["tax_breakdown"][
@@ -2129,6 +2489,7 @@ def build_portfolio_response(
             "selection_risk_control": metrics["selection_risk_control"],
             "stress_test": metrics["stress_test"],
         },
+        "metric_amounts": metrics["metric_amounts"],
         "tax_breakdown": metrics["tax_breakdown"],
         "selection_summary": selection_summary
         if selection_summary is not None
@@ -2205,8 +2566,22 @@ def get_guideline_definition() -> Dict[str, Any]:
 
 
 def extract_backtest_payload(full_response: Dict[str, Any]) -> Dict[str, Any]:
+    data_snapshot = full_response["input_summary"].get(
+        "backtest_data_snapshot",
+        full_response["input_summary"].get("data_snapshot", {}),
+    )
     return {
         "session_id": full_response["session_id"],
+        "basis": {
+            "base_index": BACKTEST_BASE_INDEX,
+            "base_date": data_snapshot.get("data_start"),
+            "as_of": data_snapshot.get("as_of") or data_snapshot.get("data_end"),
+            "note": (
+                "백테스트 차트는 5년 구간을 100으로 둔 누적수익률 지수. "
+                "신규 상장 또는 데이터 시작 전 구간은 차트에서만 현금 수익률로 대체."
+            ),
+        },
+        "data_snapshot": data_snapshot,
         "backtest": {
             "current": full_response["portfolios"]["current"]["cumulative_returns"],
             "portfolio_a": full_response["portfolios"]["recommended_1"]["cumulative_returns"],
@@ -2415,6 +2790,8 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         raise ValueError("Unique 필요금액은 총자산보다 클 수 없습니다.")
 
     request.unique_asset = validate_unique_asset(request.unique_asset)
+    constraint_warnings = build_constraint_warnings(request)
+    request.unique_asset = get_effective_unique_asset(request)
     request.current_weights = canonicalize_weights(request.current_weights)
     request.view_expected_returns = canonicalize_asset_return_map(request.view_expected_returns)
 
@@ -2434,6 +2811,13 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         view_expected_returns=request.view_expected_returns,
         view_weight=request.view_weight,
     )
+
+    backtest_prices = download_backtest_price_data(
+        period="5y",
+        cash_return=request.cash_return,
+    )
+    backtest_data_snapshot = backtest_prices.attrs.get("data_snapshot", {})
+    backtest_returns = calculate_daily_returns(backtest_prices)
 
     validate_required_assets_available(
         {request.unique_asset: 1.0},
@@ -2467,6 +2851,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         expected_returns=expected_returns,
         request=request,
         cov_matrix=cov_matrix,
+        backtest_returns=backtest_returns,
     )
 
     rec_1_response = build_portfolio_response(
@@ -2478,6 +2863,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         request=request,
         selection_summary=recommendations[0]["selection_summary"],
         cov_matrix=cov_matrix,
+        backtest_returns=backtest_returns,
     )
 
     rec_2_response = build_portfolio_response(
@@ -2490,6 +2876,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         selection_summary=recommendations[1]["selection_summary"],
         correlation_with_recommended_1=recommendations[1].get("correlation_with_recommended_1"),
         cov_matrix=cov_matrix,
+        backtest_returns=backtest_returns,
     )
 
     correlation_matrix = returns.corr().round(4).to_dict()
@@ -2504,6 +2891,12 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "unique_ratio": safe_round(unique_ratio, 6),
             "unique_asset": request.unique_asset,
             "unique_asset_label": ASSET_NAMES_KR[request.unique_asset],
+            "unique_items": request.unique_items,
+            "unique_profile": request.unique_profile,
+            "unique_engine_note": (
+                "Unique 원문은 보존하되 LLM 없이 결정론적 규칙으로 "
+                "금액·시점·ISA·IRP 키워드만 반영합니다."
+            ),
             "risk_profile": request.risk_profile,
             "client_risk_level": CLIENT_RISK_LEVEL[request.risk_profile],
             "investment_horizon_years": request.investment_horizon_years,
@@ -2513,6 +2906,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "risk_free_rate_basis": "미국 기준 무위험이자율. 시나리오 테스트 금리와 분리.",
             "cash_return": request.cash_return,
             "period": request.period,
+            "backtest_period": "5y",
             "num_simulations": request.num_simulations,
             "random_seed": request.random_seed,
             "expected_return_haircut": request.expected_return_haircut,
@@ -2537,6 +2931,9 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "isa_years_until_liquid": request.isa_years_until_liquid,
             "irp_enabled": request.irp_enabled,
             "irp_eligible": request.irp_eligible,
+            "irp_account_exists": request.irp_account_exists,
+            "irp_account_age_years": request.irp_account_age_years,
+            "irp_cumulative_contribution": request.irp_cumulative_contribution,
             "irp_current_year_contribution": request.irp_current_year_contribution,
             "irp_remaining_tax_credit_capacity": (
                 request.irp_remaining_tax_credit_capacity
@@ -2547,8 +2944,12 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "irp_tax_credit_rate": request.irp_tax_credit_rate,
             "irp_years_until_access": request.irp_years_until_access,
             "data_snapshot": data_snapshot,
+            "backtest_data_snapshot": backtest_data_snapshot,
         },
-        "search_summary": search_summary,
+        "search_summary": {
+            **search_summary,
+            "constraint_warnings": constraint_warnings,
+        },
         "portfolios": {
             "current": current_response,
             "recommended_1": rec_1_response,
@@ -2562,7 +2963,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
                 "Monte Carlo 방식으로 후보 포트폴리오 생성. "
                 "8th 기본값은 5,000개이며 request.random_seed로 재현 가능."
             ),
-            "optimization_basis": "Mean-Variance 기반: 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",
+            "optimization_basis": "Mean-Variance 기반: 실제 가격 데이터의 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",
             "risk_classification": "변동성, MDD, 유동성 커버리지, 자산구성비중을 hard filter로 사용.",
             "selection_logic": "임의 점수 가중치 없이 적합성, VaR, ERC 통과 후보를 세후수익률 중심으로 정렬.",
             "duration_logic": "듀레이션은 채권형 자산에만 적용하고 ETF proxy 기준 수치를 사용.",
@@ -2580,9 +2981,9 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "stress_test_logic": "금리 충격은 채권형 자산에만 -듀레이션×금리변화를 적용.",
             "var_erc_logic": "95% historical VaR와 공분산 기반 위험기여도 집중도를 리스크 관리에 반영.",
             "backtest_caution": (
-                "동일 다운로드 구간의 수익률·공분산으로 추천을 만들고 "
-                "같은 구간 누적수익률을 그림. 백테스트 차트는 설명용 "
-                "in-sample chart이며 독립 검증 성과로 해석하면 안 됨."
+                "추천·기대수익률·위험지표는 실제 가격 데이터만 사용하고, "
+                "백테스트 차트만 과제 조건에 따라 5년 구간으로 고정함. "
+                "신규 상장 또는 데이터 시작 전 구간은 백테스트 차트에서만 현금 수익률로 대체함."
             ),
         },
         "notes": [
@@ -2625,6 +3026,7 @@ def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
         "risk_free_rate_used_for_sharpe_sortino": core["input_summary"]["risk_free_rate"],
         "risk_free_rate_note": "Sharpe/Sortino 기준 금리는 scenario.base_interest_rate와 분리됨.",
         "rrttllu": request.scenario.rrttllu,
+        "unique_profile": core["input_summary"].get("unique_profile", {}),
     }
 
     core["backtest"] = extract_backtest_payload(core)
@@ -2701,6 +3103,389 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     return default
 
 
+
+def stringify_unique_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            parts.append(f"{key}: {stringify_unique_value(item)}")
+        return " | ".join(parts)
+    if isinstance(value, list):
+        return " | ".join(stringify_unique_value(item) for item in value)
+    return str(value)
+
+
+def find_keyword_window(text: str, keywords: List[str], radius: int = 90) -> str:
+    lower_text = text.lower()
+    for keyword in keywords:
+        index = lower_text.find(keyword.lower())
+        if index >= 0:
+            start = max(index - radius, 0)
+            end = min(index + len(keyword) + radius, len(text))
+            return text[start:end]
+    return ""
+
+
+
+def truncate_at_stop_keywords(text: str, stop_keywords: List[str]) -> str:
+    lower_text = text.lower()
+    cut_points = [
+        lower_text.find(keyword.lower())
+        for keyword in stop_keywords
+        if lower_text.find(keyword.lower()) > 0
+    ]
+    if not cut_points:
+        return text
+    return text[: min(cut_points)]
+
+
+def find_account_segment(
+    text: str,
+    keywords: List[str],
+    stop_keywords: List[str],
+    radius_before: int = 0,
+    radius_after: int = 140,
+) -> str:
+    lower_text = text.lower()
+    indexes = [
+        lower_text.find(keyword.lower())
+        for keyword in keywords
+        if lower_text.find(keyword.lower()) >= 0
+    ]
+    if not indexes:
+        return ""
+
+    index = min(indexes)
+    start = max(index - radius_before, 0)
+    end = min(index + radius_after, len(text))
+
+    stop_indexes = [
+        lower_text.find(stop.lower(), index + 1)
+        for stop in stop_keywords
+        if lower_text.find(stop.lower(), index + 1) > index
+    ]
+    if stop_indexes:
+        end = min(end, min(stop_indexes))
+
+    return text[start:end]
+
+
+def parse_start_year_from_text(text: str) -> Optional[int]:
+    for pattern in (
+        r"(19[0-9]{2}|20[0-9]{2})\s*년\s*(?:에\s*)?(?:가입|개설|시작)",
+        r"(?:가입|개설|시작)\s*(?:연도|년도)?\s*[:=]?\s*(19[0-9]{2}|20[0-9]{2})",
+    ):
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def calculate_account_age_years_from_start_year(start_year: Optional[int]) -> float:
+    if start_year is None:
+        return 0.0
+    current_year = datetime.now(KST).year
+    return float(max(current_year - int(start_year), 0))
+
+
+def parse_relative_years_from_text(text: str) -> Optional[float]:
+    match = re.search(
+        r"([0-9]+(?:\.[0-9]+)?)\s*년\s*(?:후|뒤|내|안|이내)",
+        text,
+    )
+    if match:
+        return safe_float(match.group(1), 0.0)
+    return None
+
+
+def parse_amount_near_keywords(text: str, keywords: List[str]) -> float:
+    window = find_keyword_window(text, keywords)
+    if not window:
+        return 0.0
+    return parse_amount_krw(window)
+
+
+
+def parse_explicit_money_amount_krw(value: Any) -> float:
+    text_value = stringify_unique_value(value).replace(",", "").strip()
+    if not text_value:
+        return 0.0
+
+    total = 0.0
+    matched_unit = False
+    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", text_value):
+        matched_unit = True
+        total += float(number_text) * KOREAN_MONEY_UNITS[unit]
+    if matched_unit:
+        return float(total)
+
+    won_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*원", text_value)
+    if won_match:
+        return safe_float(won_match.group(1), 0.0)
+
+    return 0.0
+
+
+def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[float]:
+    window = find_keyword_window(text, keywords, radius=120)
+    if not window:
+        return None
+
+    if re.search(r"(?:올해|금년|당해).{0,30}(?:납입|입금).{0,30}(?:없|무|0원|0\s*원)", window):
+        return 0.0
+    if re.search(r"(?:납입|입금).{0,30}(?:없|무|0원|0\s*원)", window):
+        return 0.0
+
+    current_year_match = re.search(
+        r"(?:올해|금년|당해).{0,40}([0-9]+(?:\.[0-9]+)?\s*[억만천]?)\s*(?:원)?\s*(?:납입|입금)",
+        window,
+    )
+    if current_year_match:
+        return parse_amount_krw(current_year_match.group(1))
+
+    return None
+
+
+def contains_negative_account_signal(text: str, keywords: List[str]) -> bool:
+    window = find_keyword_window(text, keywords, radius=80)
+    if not window:
+        return False
+    return bool(re.search(r"(?:미가입|없음|없다|안\s*만듦|안\s*만들)", window))
+
+
+
+def parse_liquidity_need_amount(unique_value: Any, text: str) -> float:
+    """Unique에서 별도 확보해야 하는 유동성 금액만 추출한다.
+
+    ISA/IRP 납입액을 unique_need_amount로 오인하지 않도록,
+    주거·전세·생활비·필요자금 등 개인 유동성 신호가 있거나
+    명시 key가 있을 때만 우선 추출한다.
+    """
+    if isinstance(unique_value, dict):
+        for key in (
+            "unique_need_amount",
+            "need_amount",
+            "liquidity_need_amount",
+            "required_amount",
+            "personal_need_amount",
+        ):
+            if key in unique_value:
+                return parse_amount_krw(unique_value.get(key))
+
+    personal_liquidity_keywords = [
+        "전세",
+        "주거",
+        "목돈",
+        "필요자금",
+        "필요 자금",
+        "필요",
+        "유동성",
+        "생활비",
+        "학자금",
+        "결혼",
+        "병원",
+        "긴급",
+    ]
+    for keyword in personal_liquidity_keywords:
+        window = find_keyword_window(text, [keyword], radius=120)
+        window = truncate_at_stop_keywords(
+            window,
+            ["ISA", "isa", "IRP", "irp", "개인종합자산관리", "개인형퇴직연금", "퇴직연금"],
+        )
+        amount = parse_amount_krw(window)
+        if amount > 0:
+            return amount
+
+    has_account_info = bool(
+        find_keyword_window(text, ["isa", "개인종합자산관리"], radius=30)
+        or find_keyword_window(text, ["irp", "개인형퇴직연금", "퇴직연금"], radius=30)
+    )
+    if has_account_info:
+        return 0.0
+
+    return parse_amount_krw(unique_value)
+
+
+def extract_unique_profile(unique_value: Any) -> Dict[str, Any]:
+    """Unique 원문에서 현재 엔진이 안전하게 해석 가능한 정보만 추출한다.
+
+    LLM을 붙이지 않는 이상 '무엇이든 의미까지 이해'할 수는 없으므로,
+    원문은 raw/text로 보존하고 금액·상대시점·ISA·IRP 같은 명시 패턴만 반영한다.
+    """
+    text = stringify_unique_value(unique_value).strip()
+    liquidity_amount = parse_liquidity_need_amount(unique_value, text)
+    liquidity_years = parse_relative_years_from_text(text)
+
+    isa_window = find_account_segment(
+        text,
+        ["isa", "개인종합자산관리"],
+        ["irp", "개인형퇴직연금", "퇴직연금"],
+    )
+    irp_window = find_account_segment(
+        text,
+        ["irp", "개인형퇴직연금", "퇴직연금"],
+        ["isa", "개인종합자산관리"],
+    )
+
+    isa_start_year = parse_start_year_from_text(isa_window)
+    isa_contribution = parse_explicit_money_amount_krw(isa_window) if isa_window else 0.0
+    isa_account_exists = bool(isa_window) and not bool(
+        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", isa_window)
+    )
+
+    irp_start_year = parse_start_year_from_text(irp_window)
+    irp_current_year_contribution = parse_current_year_contribution(
+        irp_window,
+        ["irp", "개인형퇴직연금", "퇴직연금"],
+    )
+    irp_cumulative_contribution = parse_explicit_money_amount_krw(irp_window) if irp_window else 0.0
+    irp_account_exists = bool(irp_window) and not bool(
+        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", irp_window)
+    )
+
+    items: List[Dict[str, Any]] = []
+    if liquidity_amount > 0:
+        items.append(
+            {
+                "type": "liquidity_need",
+                "amount": safe_round(liquidity_amount, 0),
+                "years_until_need": safe_round(liquidity_years, 2)
+                if liquidity_years is not None
+                else None,
+                "source": "unique",
+            }
+        )
+    if isa_window:
+        items.append(
+            {
+                "type": "isa_account",
+                "account_exists": isa_account_exists,
+                "start_year": isa_start_year,
+                "account_age_years": safe_round(
+                    calculate_account_age_years_from_start_year(isa_start_year),
+                    2,
+                ),
+                "cumulative_contribution": safe_round(isa_contribution, 0),
+                "source": "unique",
+            }
+        )
+    if irp_window:
+        items.append(
+            {
+                "type": "irp_account",
+                "account_exists": irp_account_exists,
+                "start_year": irp_start_year,
+                "account_age_years": safe_round(
+                    calculate_account_age_years_from_start_year(irp_start_year),
+                    2,
+                ),
+                "cumulative_contribution": safe_round(irp_cumulative_contribution, 0),
+                "current_year_contribution": safe_round(
+                    irp_current_year_contribution,
+                    0,
+                )
+                if irp_current_year_contribution is not None
+                else None,
+                "source": "unique",
+            }
+        )
+
+    return {
+        "raw": unique_value,
+        "text": text,
+        "items": items,
+        "liquidity_need_amount": safe_round(liquidity_amount, 0),
+        "liquidity_need_years": safe_round(liquidity_years, 2)
+        if liquidity_years is not None
+        else None,
+        "isa": {
+            "detected": bool(isa_window),
+            "account_exists": isa_account_exists,
+            "start_year": isa_start_year,
+            "account_age_years": safe_round(
+                calculate_account_age_years_from_start_year(isa_start_year),
+                2,
+            ),
+            "cumulative_contribution": safe_round(isa_contribution, 0),
+        },
+        "irp": {
+            "detected": bool(irp_window),
+            "account_exists": irp_account_exists,
+            "start_year": irp_start_year,
+            "account_age_years": safe_round(
+                calculate_account_age_years_from_start_year(irp_start_year),
+                2,
+            ),
+            "cumulative_contribution": safe_round(irp_cumulative_contribution, 0),
+            "current_year_contribution": safe_round(
+                irp_current_year_contribution,
+                0,
+            )
+            if irp_current_year_contribution is not None
+            else None,
+        },
+        "parser_note": (
+            "LLM 미사용 규칙 기반 파서. 금액·n년 후·ISA/IRP 가입연도/납입액처럼 "
+            "명시된 패턴만 계산 입력에 반영하고, 그 외 자연어는 raw/text로 보존한다."
+        ),
+    }
+
+
+def apply_unique_profile_to_ips_payload(
+    ips_payload: Dict[str, Any],
+    unique_value: Any,
+    adapter_warnings: List[str],
+) -> Dict[str, Any]:
+    profile = extract_unique_profile(unique_value)
+    result = dict(ips_payload)
+
+    result["unique_profile"] = {
+        **profile,
+        **result.get("unique_profile", {}),
+    }
+    result["unique_items"] = result.get("unique_items") or profile["items"]
+
+    if safe_float(result.get("unique_need_amount")) <= 0:
+        result["unique_need_amount"] = profile["liquidity_need_amount"]
+
+    if not result.get("unique_asset"):
+        result["unique_asset"] = normalize_unique_asset_value(unique_value)
+
+    isa_info = profile["isa"]
+    if isa_info["detected"]:
+        if "isa_account_exists" not in result:
+            result["isa_account_exists"] = isa_info["account_exists"]
+        if safe_float(result.get("isa_account_age_years")) <= 0:
+            result["isa_account_age_years"] = isa_info["account_age_years"]
+        if safe_float(result.get("isa_cumulative_contribution")) <= 0:
+            result["isa_cumulative_contribution"] = isa_info["cumulative_contribution"]
+
+    irp_info = profile["irp"]
+    if irp_info["detected"]:
+        if "irp_account_exists" not in result:
+            result["irp_account_exists"] = irp_info["account_exists"]
+        if safe_float(result.get("irp_account_age_years")) <= 0:
+            result["irp_account_age_years"] = irp_info["account_age_years"]
+        if safe_float(result.get("irp_cumulative_contribution")) <= 0:
+            result["irp_cumulative_contribution"] = irp_info["cumulative_contribution"]
+        if irp_info["current_year_contribution"] is not None and safe_float(
+            result.get("irp_current_year_contribution")
+        ) <= 0:
+            result["irp_current_year_contribution"] = irp_info[
+                "current_year_contribution"
+            ]
+
+    if profile["text"] and not profile["items"]:
+        adapter_warnings.append(
+            "Unique 원문은 보존했지만 규칙 기반 파서가 계산에 반영할 수 있는 "
+            "금액·시점·ISA·IRP 패턴을 찾지 못했습니다."
+        )
+
+    return result
+
+
 def normalize_risk_profile_value(value: Any) -> str:
     text_value = str(value or "").strip().lower()
     mapping = {
@@ -2774,6 +3559,20 @@ def normalize_unique_asset_value(value: Any) -> str:
     if canonical in UNIQUE_ASSETS:
         return canonical
 
+    personal_liquidity_keywords = (
+        "전세",
+        "주거",
+        "목돈",
+        "필요",
+        "유동성",
+        "생활비",
+        "학자금",
+        "결혼",
+        "병원",
+        "긴급",
+    )
+    if any(keyword in text_value for keyword in personal_liquidity_keywords):
+        return "cash"
     if "분리" in text_value:
         return "separate_tax_bond"
     if "저쿠폰" in text_value:
@@ -2918,6 +3717,25 @@ def normalize_analysis_request_payload(
         )
         if current_weights_from_portfolio is not None:
             normalized_ips["current_weights"] = current_weights_from_portfolio
+        scenario_payload = normalized_payload.get("scenario")
+        rrttllu_payload = (
+            scenario_payload.get("rrttllu")
+            if isinstance(scenario_payload, dict)
+            else {}
+        )
+        unique_value = (
+            normalized_ips.get("Unique")
+            or normalized_ips.get("unique")
+            or normalized_ips.get("unique_raw")
+        )
+        if unique_value is None and isinstance(rrttllu_payload, dict):
+            unique_value = rrttllu_payload.get("Unique")
+        if unique_value is not None:
+            normalized_ips = apply_unique_profile_to_ips_payload(
+                normalized_ips,
+                unique_value,
+                adapter_warnings,
+            )
         normalized_payload["ips"] = normalized_ips
         return AnalysisRequest(**normalized_payload), {
             "source": "analysis_request",
@@ -2934,7 +3752,8 @@ def normalize_analysis_request_payload(
 
     investment_horizon = int(max(parse_amount_krw(flat_ips.get("Time")), 1))
     unique_value = flat_ips.get("Unique")
-    unique_need_amount = parse_amount_krw(unique_value)
+    unique_profile = extract_unique_profile(unique_value)
+    unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
     if unique_need_amount <= 0:
         adapter_warnings.append(
             "IPS의 Unique 값에서 별도 필요자금을 숫자로 추출하지 못해 unique_need_amount=0으로 계산했습니다."
@@ -2960,6 +3779,8 @@ def normalize_analysis_request_payload(
             "total_asset": total_asset,
             "unique_need_amount": unique_need_amount,
             "unique_asset": normalize_unique_asset_value(unique_value),
+            "unique_items": unique_profile["items"],
+            "unique_profile": unique_profile,
             "risk_profile": normalize_risk_profile_value(flat_ips.get("Risk")),
             "investment_horizon_years": investment_horizon,
             "tax_sensitivity": normalize_tax_sensitivity_value(flat_ips.get("Tax")),
@@ -2980,6 +3801,17 @@ def normalize_analysis_request_payload(
                 0.75,
             ),
             "random_seed": int(safe_float(payload.get("random_seed"), 42)),
+            "isa_account_exists": unique_profile["isa"]["account_exists"],
+            "isa_account_age_years": unique_profile["isa"]["account_age_years"],
+            "isa_cumulative_contribution": unique_profile["isa"]["cumulative_contribution"],
+            "irp_account_exists": unique_profile["irp"]["account_exists"],
+            "irp_account_age_years": unique_profile["irp"]["account_age_years"],
+            "irp_cumulative_contribution": unique_profile["irp"]["cumulative_contribution"],
+            "irp_current_year_contribution": (
+                unique_profile["irp"]["current_year_contribution"]
+                if unique_profile["irp"]["current_year_contribution"] is not None
+                else 0.0
+            ),
         },
         "scenario": {
             "base_interest_rate": safe_float(
@@ -3054,10 +3886,14 @@ def build_backtest_payload(
         if not date_text:
             continue
         month_key = date_text[:7]
-        value = (1.0 + safe_float(point.get("value"))) * 100.0
+        value = safe_float(
+            point.get("index_value"),
+            (1.0 + safe_float(point.get("value"))) * BACKTEST_BASE_INDEX,
+        )
         monthly_points[month_key] = {
             "date": month_key,
             "value": safe_round(value, 2),
+            "base_index": BACKTEST_BASE_INDEX,
         }
 
     return list(monthly_points.values())
@@ -3082,15 +3918,41 @@ def build_metrics_krw_payload(
     total_asset: float,
 ) -> Dict[str, Any]:
     metrics = portfolio["metrics"]
+    amount_metrics = metrics.get("krw") or portfolio.get("metric_amounts") or {}
     return {
-        "after_tax_return": safe_round(
-            safe_float(metrics["after_tax_return"]) * total_asset,
+        "basis": amount_metrics.get("basis", "portfolio_total_asset"),
+        "total_asset": safe_round(total_asset, 0),
+        "expected_return": safe_round(
+            amount_metrics.get(
+                "expected_return_amount",
+                safe_float(metrics["expected_return"]) * total_asset,
+            ),
             0,
         ),
-        "mdd": safe_round(safe_float(metrics["mdd"]) * total_asset, 0),
-        "volatility_band": safe_round(
-            safe_float(metrics["volatility"]) * total_asset,
+        "after_tax_return": safe_round(
+            amount_metrics.get(
+                "after_tax_return_amount",
+                safe_float(metrics["after_tax_return"]) * total_asset,
+            ),
             0,
+        ),
+        "mdd": safe_round(
+            amount_metrics.get(
+                "mdd_amount",
+                safe_float(metrics["mdd"]) * total_asset,
+            ),
+            0,
+        ),
+        "volatility_band": safe_round(
+            amount_metrics.get(
+                "volatility_band_amount",
+                safe_float(metrics["volatility"]) * total_asset,
+            ),
+            0,
+        ),
+        "note": amount_metrics.get(
+            "note",
+            "원화 지표는 현재 총자산에 비율 지표를 곱한 값입니다.",
         ),
     }
 
@@ -3155,6 +4017,21 @@ def build_spec_portfolio_item(
     current_portfolio: Dict[str, Any],
     total_asset: float,
 ) -> Dict[str, Any]:
+    metrics_krw = build_metrics_krw_payload(portfolio, total_asset)
+    current_metrics_krw = build_metrics_krw_payload(current_portfolio, total_asset)
+    vs_current_krw = {
+        "after_tax_return_delta": safe_round(
+            safe_float(metrics_krw.get("after_tax_return"))
+            - safe_float(current_metrics_krw.get("after_tax_return")),
+            0,
+        ),
+        "mdd_loss_improvement": safe_round(
+            safe_float(metrics_krw.get("mdd"))
+            - safe_float(current_metrics_krw.get("mdd")),
+            0,
+        ),
+        "basis": "portfolio_amount_minus_current_amount",
+    }
     item = {
         "kind": kind,
         "rank": rank,
@@ -3162,7 +4039,8 @@ def build_spec_portfolio_item(
         "badge": badge,
         "allocation": build_allocation_payload(portfolio),
         "metrics": build_metrics_payload(portfolio),
-        "metrics_krw": build_metrics_krw_payload(portfolio, total_asset),
+        "metrics_krw": metrics_krw,
+        "vs_current_krw": vs_current_krw,
         "backtest": build_backtest_payload(portfolio["cumulative_returns"]),
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
@@ -3226,6 +4104,12 @@ def build_portfolio_calculate_response(
         ],
         "search_summary": full_response["search_summary"],
         "scenario_summary": full_response["scenario_summary"],
+        "data_snapshot": {
+            **full_response["input_summary"].get("data_snapshot", {}),
+            "backtest_data_snapshot": full_response["input_summary"].get(
+                "backtest_data_snapshot", {}
+            ),
+        },
         "input_adapter": {
             **adapter_info,
             "warnings": warnings,
@@ -3274,7 +4158,7 @@ def get_guidelines():
     return get_guideline_definition()
 
 
-@router.post("/portfolio/calculate")
+@router.post("/portfolio/calculate", response_model=PortfolioCalculateResponse)
 def portfolio_calculate(request: Dict[str, Any]):
     """API 명세서 ⑤ 포트폴리오 계산."""
     try:
@@ -3285,7 +4169,7 @@ def portfolio_calculate(request: Dict[str, Any]):
         raise public_http_exception(e)
 
 
-@router.post("/portfolio/stress-test")
+@router.post("/portfolio/stress-test", response_model=PortfolioStressTestResponse)
 def portfolio_stress_test(request: Dict[str, Any]):
     """API 명세서 ⑥ 스트레스 테스트."""
     try:
@@ -3300,13 +4184,14 @@ def portfolio_stress_test(request: Dict[str, Any]):
             "risk_profile_label": response["risk_profile_label"],
             "portfolios": response["portfolios"],
             "scenario_summary": response["scenario_summary"],
+            "data_snapshot": response.get("data_snapshot", {}),
             "input_adapter": response["input_adapter"],
         }
     except Exception as e:
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/all")
+@router.post("/api/portfolio/all", response_model=Dict[str, Any])
 def api_portfolio_all(request: AnalysisRequest):
     """
     최초 대시보드용 전체 API.
@@ -3318,7 +4203,7 @@ def api_portfolio_all(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/current")
+@router.post("/api/portfolio/current", response_model=Dict[str, Any])
 def api_portfolio_current(request: AnalysisRequest):
     """
     현재 포트폴리오만 반환.
@@ -3333,7 +4218,7 @@ def api_portfolio_current(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/a")
+@router.post("/api/portfolio/a", response_model=Dict[str, Any])
 def api_portfolio_a(request: AnalysisRequest):
     """
     포트폴리오 A만 반환.
@@ -3348,7 +4233,7 @@ def api_portfolio_a(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/b")
+@router.post("/api/portfolio/b", response_model=Dict[str, Any])
 def api_portfolio_b(request: AnalysisRequest):
     """
     포트폴리오 B만 반환.
@@ -3363,7 +4248,7 @@ def api_portfolio_b(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/bundle")
+@router.post("/api/portfolio/bundle", response_model=Dict[str, Any])
 def api_portfolio_bundle(request: AnalysisRequest):
     """
     현재 / 포트폴리오 A / 포트폴리오 B 묶음만 반환.
@@ -3381,7 +4266,7 @@ def api_portfolio_bundle(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/backtest")
+@router.post("/api/backtest", response_model=Dict[str, Any])
 def api_backtest(request: AnalysisRequest):
     """
     현재 / 포트폴리오 A / 포트폴리오 B 백테스트 데이터만 반환.
@@ -3393,7 +4278,7 @@ def api_backtest(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/tax-inputs")
+@router.post("/api/tax-inputs", response_model=Dict[str, Any])
 def api_tax_inputs(request: AnalysisRequest):
     """
     절세 최적화 파트에 넘길 값만 반환.
@@ -3406,7 +4291,7 @@ def api_tax_inputs(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/tax-optimizer")
+@router.post("/api/tax-optimizer", response_model=Dict[str, Any])
 def api_tax_optimizer(request: AnalysisRequest):
     """
     절세 최적화 화면 전용 payload만 반환.
@@ -3446,7 +4331,7 @@ def api_get_saved_request(session_id: str):
 # 새 프론트는 /api/portfolio/all 등 분리 API를 사용하면 됨.
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=Dict[str, Any])
 def analyze_portfolio(request: PortfolioRequest):
     try:
         return run_analysis_core(request)
