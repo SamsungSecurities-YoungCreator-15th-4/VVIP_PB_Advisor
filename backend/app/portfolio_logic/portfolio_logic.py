@@ -34,6 +34,11 @@ SEPARATE_TAX_BOND_MIN_HOLDING_YEARS = 3
 # 하며, 시드 미전달 시에도 무시드 경로가 남지 않도록 이 기본 시드를 단일 출처로 쓴다.
 DEFAULT_RANDOM_SEED = 42
 
+# 베타(β) 회귀 벤치마크 자산. ASSET_TICKERS의 키를 가리킨다.
+# TODO(팀 확정 전 가안): 현재는 국내 PB 상담 기준으로 코스피(domestic_equity)를 기본값으로
+# 둔다. S&P500(overseas_blue_chip) 등으로 바꾸려면 이 한 줄만 수정하면 된다.
+BETA_BENCHMARK_ASSET = "domestic_equity"
+
 # 기준 금리와 시나리오 금리는 분리한다.
 # 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.
 # 프로젝트용 가정: 기준 무위험이자율은 미국 기준 3.5%를 기본값으로 사용한다.
@@ -1606,6 +1611,34 @@ def calculate_mdd(portfolio_daily_returns: pd.Series) -> float:
     return float(drawdown.min())
 
 
+def calculate_beta(
+    portfolio_daily_returns: pd.Series,
+    returns: pd.DataFrame,
+    benchmark_asset: str = BETA_BENCHMARK_ASSET,
+) -> Optional[float]:
+    # 회귀 베타: cov(포트폴리오 일간수익률, 벤치마크 일간수익률) / var(벤치마크 일간수익률).
+    # 다른 지표와 동일한 일간 수익률·공통구간·결정성 규약을 그대로 따르고, 별도 데이터를
+    # 받지 않고 returns에 이미 들어있는 벤치마크 자산 컬럼을 재사용한다.
+    # 벤치마크 데이터가 없거나 분산이 0이면 가짜 값을 만들지 않고 None을 반환한다.
+    if benchmark_asset not in returns.columns:
+        return None
+
+    aligned = pd.concat(
+        [portfolio_daily_returns, returns[benchmark_asset]], axis=1
+    ).dropna()
+    if len(aligned) < 2:
+        return None
+
+    portfolio_series = aligned.iloc[:, 0]
+    benchmark_series = aligned.iloc[:, 1]
+    benchmark_variance = float(benchmark_series.var())
+    if benchmark_variance < 1e-12 or not np.isfinite(benchmark_variance):
+        return None
+
+    covariance = float(portfolio_series.cov(benchmark_series))
+    return float(covariance / benchmark_variance)
+
+
 def calculate_sortino(
     portfolio_daily_returns: pd.Series,
     annual_return: float,
@@ -1910,6 +1943,7 @@ def calculate_metrics(
     )
 
     mdd = calculate_mdd(portfolio_daily_returns)
+    beta = calculate_beta(portfolio_daily_returns, returns)
 
     after_tax_return, tax_breakdown = calculate_after_tax_return(
         weights=weights,
@@ -1980,6 +2014,8 @@ def calculate_metrics(
         "sharpe_ratio": safe_round(sharpe, 6),
         "sortino_ratio": safe_round(sortino, 6),
         "mdd": safe_round(mdd, 6),
+        "beta": safe_round(beta, 6) if beta is not None else None,
+        "beta_benchmark": BETA_BENCHMARK_ASSET,
         "taxable_financial_income": safe_round(taxable_financial_income, 0),
         "liquidity_coverage": safe_round(liquidity_coverage, 6),
         "stock_weight": safe_round(group_weights["stock_weight"], 6),
