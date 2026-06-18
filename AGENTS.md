@@ -32,6 +32,8 @@ VVIP_PB_Advisor/
 │       └── db/        # Supabase 클라이언트
 ├── supabase/      # DB 마이그레이션·시드 (PostgreSQL + pgvector)
 ├── CONTRIBUTING.md # 협업 규칙(브랜치 전략·커밋·PR)
+├── AGENTS.md      # AI 코드 어시스턴트 작업 규칙
+├── README.md      # 프로젝트 전반 안내
 └── .github/       # PR 템플릿 등 GitHub 관련 설정
 ```
 
