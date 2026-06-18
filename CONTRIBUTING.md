@@ -59,5 +59,5 @@
 
 ## 참고
 
-- 에이전트(코드 어시스턴트) 작업 규칙은 루트의 [`AGENTS.md`](../AGENTS.md) 참조.
-- 프로젝트 전반 안내는 루트의 [`README.md`](../README.md) 참조.
+- 에이전트(코드 어시스턴트) 작업 규칙은 루트의 [`AGENTS.md`](AGENTS.md) 참조.
+- 프로젝트 전반 안내는 루트의 [`README.md`](README.md) 참조.
