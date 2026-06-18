@@ -1620,24 +1620,24 @@ def calculate_beta(
     # 회귀 베타: cov(포트폴리오 일간수익률, 벤치마크 일간수익률) / var(벤치마크 일간수익률).
     # 다른 지표와 동일한 일간 수익률·공통구간·결정성 규약을 그대로 따르고, 별도 데이터를
     # 받지 않고 returns에 이미 들어있는 벤치마크 자산 컬럼을 재사용한다.
-    # 벤치마크 데이터가 없거나 분산이 0이면 가짜 값을 만들지 않고 None을 반환한다.
+    # returns는 상단에서 dropna(how="any")로 결측치가 제거됐고 portfolio_daily_returns는
+    # returns로부터 dot으로 만들어져 동일 인덱스다. 따라서 pd.concat 정렬 없이 Series.cov를
+    # 바로 쓴다 — 몬테카를로 수천 회 호출 시 concat/dropna 오버헤드를 피하는 게 성능 핵심.
+    # 벤치마크가 없거나 분산/베타가 유효하지 않으면 가짜 값(0) 대신 None을 반환한다.
     if benchmark_asset not in returns.columns:
         return None
 
-    aligned = pd.concat(
-        [portfolio_daily_returns, returns[benchmark_asset]], axis=1
-    ).dropna()
-    if len(aligned) < 2:
-        return None
-
-    portfolio_series = aligned.iloc[:, 0]
-    benchmark_series = aligned.iloc[:, 1]
+    benchmark_series = returns[benchmark_asset]
     benchmark_variance = float(benchmark_series.var())
     if benchmark_variance < 1e-12 or not np.isfinite(benchmark_variance):
         return None
 
-    covariance = float(portfolio_series.cov(benchmark_series))
-    return float(covariance / benchmark_variance)
+    covariance = float(portfolio_daily_returns.cov(benchmark_series))
+    beta = covariance / benchmark_variance
+    if not np.isfinite(beta):
+        return None
+
+    return float(beta)
 
 
 def calculate_sortino(
