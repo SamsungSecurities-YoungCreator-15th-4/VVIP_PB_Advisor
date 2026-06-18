@@ -30,6 +30,10 @@ MAX_SESSION_REQUEST_STORE_SIZE = 100
 BACKTEST_BASE_INDEX = 100.0
 SEPARATE_TAX_BOND_MIN_HOLDING_YEARS = 3
 
+# 재현성(결정성)은 본 프로젝트의 핵심 원칙이다. 시뮬레이션 RNG는 항상 시드를 받아야
+# 하며, 시드 미전달 시에도 무시드 경로가 남지 않도록 이 기본 시드를 단일 출처로 쓴다.
+DEFAULT_RANDOM_SEED = 42
+
 # 기준 금리와 시나리오 금리는 분리한다.
 # 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.
 # 프로젝트용 가정: 기준 무위험이자율은 미국 기준 3.5%를 기본값으로 사용한다.
@@ -472,7 +476,7 @@ class IPSRequest(BaseModel):
 
     num_simulations: int = Field(5000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
-    random_seed: int = Field(42, ge=0)
+    random_seed: int = Field(DEFAULT_RANDOM_SEED, ge=0)
 
     enable_black_litterman: bool = Field(False)
     view_expected_returns: Optional[Dict[str, float]] = Field(None)
@@ -575,7 +579,7 @@ class PortfolioRequest(BaseModel):
     period: str = Field("5y")
     num_simulations: int = Field(5000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
-    random_seed: int = Field(42, ge=0)
+    random_seed: int = Field(DEFAULT_RANDOM_SEED, ge=0)
 
     enable_black_litterman: bool = Field(False)
     view_expected_returns: Optional[Dict[str, float]] = Field(None)
@@ -2185,7 +2189,8 @@ def generate_random_weights(
     if not assets:
         raise ValueError("랜덤 포트폴리오를 생성할 자산 목록이 비어 있습니다.")
 
-    rng = rng or np.random.default_rng()
+    # 시드 미전달 시에도 결정적이도록 기본 시드를 강제한다(무시드 경로 제거).
+    rng = rng or np.random.default_rng(DEFAULT_RANDOM_SEED)
     alpha = np.ones(len(assets))
     sampled = rng.dirichlet(alpha)
     return {asset: float(weight) for asset, weight in zip(assets, sampled)}
