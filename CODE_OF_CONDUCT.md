@@ -1,7 +1,7 @@
 # 행동 강령 (Code of Conduct)
 
 삼성증권 영크리에이터 15기 4조 팀 프로젝트의 협업 원칙입니다. 상세한 협업 규칙(브랜치
-전략·커밋 컨벤션·PR 규칙)은 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)와 팀 노션
+전략·커밋 컨벤션·PR 규칙)은 [`CONTRIBUTING.md`](CONTRIBUTING.md)와 팀 노션
 협업 가이드를 따릅니다.
 
 ## 우리가 지키는 것

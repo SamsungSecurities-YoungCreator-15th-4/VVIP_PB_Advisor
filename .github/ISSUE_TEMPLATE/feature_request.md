@@ -21,5 +21,5 @@ assignees: ''
 
 ## 참고
 
-- 작업은 `develop`에서 브랜치를 따서 PR(+ 리뷰 1명)로 진행합니다 — [`docs/CONTRIBUTING.md`](../../docs/CONTRIBUTING.md) 참조.
+- 작업은 `develop`에서 브랜치를 따서 PR(+ 리뷰 1명)로 진행합니다 — [`CONTRIBUTING.md`](../../CONTRIBUTING.md) 참조.
 - 세금·지표 계산 기능이라면 근거 자료(법령·국세청 안내 등) 링크를 함께 적어 주세요.

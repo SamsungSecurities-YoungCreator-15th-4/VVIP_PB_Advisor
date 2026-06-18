@@ -42,4 +42,4 @@ PB가 실제 고객 상담에 사용하는 것을 전제로 한 금융 의사결
 - **GitHub 자동 스캔**: Secret scanning(비밀 푸시 감지), Code scanning(CodeQL),
   Dependabot alerts(의존성 취약점) 활성화.
 
-자세한 협업 규칙은 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)를 참고하세요.
+자세한 협업 규칙은 [`CONTRIBUTING.md`](CONTRIBUTING.md)를 참고하세요.
