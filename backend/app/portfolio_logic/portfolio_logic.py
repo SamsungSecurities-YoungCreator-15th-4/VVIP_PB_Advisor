@@ -1,4 +1,4 @@
-﻿# ruff: noqa: E501
+# ruff: noqa: E501
 # flake8: noqa
 from datetime import datetime
 from zoneinfo import ZoneInfo
