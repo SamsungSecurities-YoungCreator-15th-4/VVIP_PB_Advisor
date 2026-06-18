@@ -68,7 +68,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       signal: controller.signal,
     });
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (err instanceof Error && err.name === "AbortError") {
       throw new ApiError(`요청 시간 초과: ${path}`, 0, true);
     }
     // 네트워크 실패(백엔드 다운·CORS·DNS 등). 메시지에 민감정보 미포함.

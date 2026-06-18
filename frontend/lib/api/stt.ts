@@ -5,7 +5,7 @@
  * 처리 시간이 길어 타임아웃을 넉넉히 잡는다(Whisper/Azure + Supabase RPC).
  *
  * 성공: 실 전사/IPS 로 화면 갱신. 실패: mock 상담(CONSULT_LOG/IPS_DEFAULT)으로 폴백(배지).
- * customer_name 은 백엔드 Literal["김성삼","이사조","박기업"] 만 허용 — 그 외엔 404.
+ * customer_name 은 백엔드가 DB(client.name)로 검증한다 — 등록되지 않은 고객이면 404.
  */
 
 import { ApiError, apiPostForm } from "@/lib/api";
@@ -134,7 +134,7 @@ export async function uploadSttConsultation(
     if (err instanceof ApiError) {
       if (err.isTimeout) note = "STT 처리 시간 초과로 데모 상담을 표시합니다.";
       else if (err.status === 404)
-        note = "등록되지 않은 고객입니다(STT 지원 고객: 김성삼·이사조·박기업). 데모 상담을 표시합니다.";
+        note = "등록되지 않은 고객입니다. 데모 상담을 표시합니다.";
       else if (err.status === 400)
         note = "오디오 파일을 처리할 수 없습니다(.wav 확인). 데모 상담을 표시합니다.";
     }

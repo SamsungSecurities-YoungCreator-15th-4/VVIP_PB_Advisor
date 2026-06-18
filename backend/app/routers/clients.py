@@ -114,8 +114,15 @@ def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
         )
         created = result.data[0] if result.data else None
     except Exception as exc:
-        # UNIQUE 제약 충돌(동시 생성 레이스)도 여기로 떨어질 수 있다.
+        # UNIQUE(name) 제약 충돌 — 선검사를 통과한 뒤 동시 생성 레이스로 insert 시점에
+        # ux_client_name 위반(SQLSTATE 23505)이 날 수 있다. 이 경우 선검사와 동일하게
+        # 409 로 응답한다. PostgREST APIError 는 SQLSTATE 를 code 로 노출한다.
         logger.exception("client insert failed")
+        if getattr(exc, "code", None) == "23505":
+            raise HTTPException(
+                status_code=409,
+                detail=f"이미 존재하는 고객명입니다: {request.name}",
+            ) from exc
         raise HTTPException(
             status_code=500,
             detail="고객 저장 중 오류가 발생했습니다.",

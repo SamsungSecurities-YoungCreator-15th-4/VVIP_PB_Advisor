@@ -80,7 +80,7 @@ export default function InsightSection() {
           </span>
           {result?.data.asOf && (
             <span className="ml-auto text-[9px] font-semibold text-muted-foreground/70">
-              기준 {new Date(result.data.asOf).toLocaleString("ko-KR")}
+              기준 {new Date(result.data.asOf).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
             </span>
           )}
         </div>

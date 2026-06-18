@@ -117,7 +117,7 @@ export default function TaxSection() {
               )}
               {summary?.data.asOf && (
                 <span className="text-[9px] font-semibold text-muted-foreground/70">
-                  기준 {new Date(summary.data.asOf).toLocaleString("ko-KR")}
+                  기준 {new Date(summary.data.asOf).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
                 </span>
               )}
               <Button
