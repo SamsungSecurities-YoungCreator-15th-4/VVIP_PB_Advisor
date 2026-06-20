@@ -35,8 +35,10 @@ import zipfile
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+load_dotenv()
 
 from app.db.supabase import get_supabase  # noqa: E402
 from app.services.dart_corp import normalize_corp_name  # noqa: E402
