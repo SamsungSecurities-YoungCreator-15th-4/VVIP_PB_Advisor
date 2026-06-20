@@ -81,6 +81,9 @@ class PortfolioMetrics(BaseModel):
     # 공통 거래일이 부족해 실측 백테스트를 만들 수 없는 경우 None(N/A)
     # — 가짜 시계열로 대체하지 않는다.
     maxDrawdown: float | None
+    # 세후 기대수익률(소수, 예: 0.05 = 5%). 총자산(total_assets)에 따라 달라지므로
+    # 라우트에서 calc_after_tax_return으로 채워 넣는다. 미계산 시 None.
+    afterTaxReturn: float | None = None
     backtestData: list[BacktestPoint]
 
 
@@ -119,6 +122,34 @@ class HistoricalCrisis(BaseModel):
     results: dict[str, float]
 
 
+class AccountSlot(BaseModel):
+    """절세 계좌 배치 활용도 한 칸 — 법정 한도 대비 고객 기납입액(만원).
+    used/limit가 None이면 한도 개념이 없는 계좌(예: 일반계좌)."""
+
+    key: Literal["isa", "pension", "general"]
+    usedManwon: int | None = None
+    limitManwon: int | None = None
+
+
+class TaxAdviceCard(BaseModel):
+    """절세 제안 한 건 — 실제 세법 수식 + 적합성(lock-up) 게이팅 결과.
+    applicable=False면 합산 제외. ineligibleReason이 있으면 제도상 부적합(사유 표시),
+    없으면 절감 효과 없음/한도 소진(비노출 권장)."""
+
+    key: Literal[
+        "isa",
+        "pension_credit",
+        "separate_bond",
+        "low_tax_dividend",
+        "overseas_exemption",
+        "tax_loss",
+    ]
+    savingManwon: int
+    applicable: bool
+    transferableManwon: int = 0  # ISA·연금 등 이전/납입 가능 금액(만원)
+    ineligibleReason: str | None = None  # 제도상 부적합 사유(있으면 사유와 함께 표시)
+
+
 class StressedPortfolio(BaseModel):
     """스트레스 조율기(슬라이더) 적용 결과 — 기준/충격 적용 후 전체 지표 쌍."""
 
@@ -126,6 +157,13 @@ class StressedPortfolio(BaseModel):
     nameKr: str
     base: PortfolioMetrics
     stressed: PortfolioMetrics
+    # 포트폴리오의 연간 이자·배당성 금융소득(억 원) — 종합과세 기준선(2천만) 점검용.
+    # 기준(base) 기대수익률 기반. 고객의 다른 금융소득과 합산해 초과 여부를 판정한다.
+    dividendIncome: float = 0.0
+    # 절세 계좌 배치 활용도(법정 한도 대비 기납입액) — tax_optimizer로 채운다.
+    accountAllocation: list[AccountSlot] = []
+    # 절세 제안 4종의 실제 절감액 — tax_optimizer로 채운다.
+    taxAdvice: list[TaxAdviceCard] = []
 
 
 class AfterTaxReturnResult(BaseModel):

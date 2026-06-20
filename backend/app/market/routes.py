@@ -5,7 +5,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Query
 
 from app.market import yfinance_client
-from app.market.financial_calc import apply_stress_scenario, calc_portfolio_metrics
+from app.market.financial_calc import (
+    DEFAULT_MARGINAL_INCOME_TAX_RATE,
+    apply_stress_scenario,
+    calc_after_tax_return,
+    calc_financial_income,
+    calc_portfolio_metrics,
+)
 from app.market.portfolios import (
     ALL_TICKERS,
     DEFAULT_PORTFOLIOS,
@@ -15,6 +21,7 @@ from app.market.portfolios import (
     combine_tuner_shocks,
 )
 from app.market.schemas import (
+    AccountSlot,
     HistoricalCrisis,
     IndicatorData,
     MacroIndicators,
@@ -22,7 +29,9 @@ from app.market.schemas import (
     PortfolioProposal,
     StressedPortfolio,
     StressScenario,
+    TaxAdviceCard,
 )
+from app.market.tax_optimizer import calc_account_allocation, calc_tax_advice
 
 router = APIRouter(prefix="/api", tags=["market"])
 
@@ -47,10 +56,12 @@ MACRO_FALLBACKS: dict[str, IndicatorData] = {
 
 
 @router.get("/macro-indicators", response_model=MacroIndicators)
-async def get_macro_indicators() -> MacroIndicators:
+async def get_macro_indicators(
+    force: bool = Query(False, description="true면 5분 캐시를 무시하고 강제 재조회 (새로고침 버튼용)"),
+) -> MacroIndicators:
     quotes, forex_result = await asyncio.gather(
-        yfinance_client.fetch_quotes(["^KS11", "^GSPC", "^TNX"]),
-        yfinance_client.fetch_usd_krw(),
+        yfinance_client.fetch_quotes(["^KS11", "^GSPC", "^TNX"], force=force),
+        yfinance_client.fetch_usd_krw(force=force),
     )
 
     def pick(symbol: str, key: str) -> IndicatorData:
@@ -153,23 +164,99 @@ async def get_stressed_portfolios(
     krw_usd_delta: float = Query(
         0.0, ge=-1000, le=1000, description="원/달러 변화량 (원, 슬라이더 - 현재값)"
     ),
+    total_assets: float = Query(
+        50.0, gt=0, le=100000, description="고객 운용자산 (억 원) — 세후수익률 계산용"
+    ),
+    other_financial_income: float = Query(
+        0.0, ge=0, le=100000, description="고객의 다른 금융소득 (억 원) — 종합과세 합산용"
+    ),
+    isa_used_manwon: float = Query(
+        0.0, ge=0, le=10000, description="고객 ISA 당해 기납입액 (만원) — 잔여 한도 계산용"
+    ),
+    pension_used_manwon: float = Query(
+        0.0, ge=0, le=10000, description="고객 연금저축+IRP 당해 납입액 (만원) — 세액공제 활용도"
+    ),
+    realized_loss_manwon: float = Query(
+        0.0, ge=0, le=1000000, description="확정 가능 평가손실 (만원) — Tax-loss harvesting용"
+    ),
+    marginal_tax_rate: float = Query(
+        DEFAULT_MARGINAL_INCOME_TAX_RATE,
+        ge=0,
+        le=0.495,
+        description="고객 한계세율(지방세 포함, 0~0.495) — 종합과세 추가과세·분리과세 비교용",
+    ),
+    age: int | None = Query(
+        None, ge=0, le=120, description="고객 나이 — 연금 55세 수령요건 게이팅용"
+    ),
+    horizon_years: float | None = Query(
+        None, ge=0, le=100, description="투자기간(년) — ISA 3년·연금 lock-up 게이팅용"
+    ),
+    near_term_need_manwon: float = Query(
+        0.0, ge=0, le=100000000, description="단기 필요자금(만원) — 묶이는 금액에서 제외"
+    ),
+    near_term_need_years: float | None = Query(
+        None, ge=0, le=100, description="단기 필요자금 필요 시점(년)"
+    ),
+    isa_opened: bool = Query(
+        True, description="ISA 기존 개설 여부 — False면 신규 개설 가능 판정 적용"
+    ),
 ) -> list[StressedPortfolio]:
     """스트레스 조율기(슬라이더) 입력을 받아 포트폴리오 3종의 전체 지표를
-    충격 주입 후 재계산한다 — 기대수익률·변동성·샤프·소르티노·MDD 모두 변한다.
+    충격 주입 후 재계산한다 — 기대수익률·변동성·샤프·소르티노·MDD·세후수익률 모두 변한다.
 
     충격은 기준 시나리오(+100bp, +200원) 계수의 선형 스케일링이며, 시계열에
     드리프트+변동성 확대로 주입된다 (financial_calc.calc_portfolio_metrics 참고).
+    세후수익률은 총자산 규모에 따라 종합과세 구간이 달라져 total_assets가 필요하다.
     """
     market_data = await _fetch_all_market_data()
     shocks = combine_tuner_shocks(base_rate_delta_bp, krw_usd_delta)
+
+    def with_after_tax(metrics, allocations):
+        after_tax, _, _ = calc_after_tax_return(
+            metrics.expectedReturn, allocations, total_assets, other_financial_income
+        )
+        return metrics.model_copy(update={"afterTaxReturn": after_tax})
+
+    # 계좌 배치 활용도는 고객 입력(기납입액)에만 의존 — 포트폴리오와 무관하게 동일.
+    account_allocation = [
+        AccountSlot(**slot)
+        for slot in calc_account_allocation(isa_used_manwon, pension_used_manwon)
+    ]
 
     results: list[StressedPortfolio] = []
     for portfolio in DEFAULT_PORTFOLIOS:
         base = calc_portfolio_metrics(portfolio.allocations, market_data)
         stressed = calc_portfolio_metrics(portfolio.allocations, market_data, shocks=shocks)
+        # 절세 제안은 해당 포트폴리오의 보유 구성에 따라 절감액이 달라진다.
+        tax_advice = [
+            TaxAdviceCard(**card)
+            for card in calc_tax_advice(
+                portfolio.allocations,
+                base.expectedReturn,
+                total_assets,
+                isa_used_manwon,
+                realized_loss_manwon,
+                other_financial_income=other_financial_income,
+                marginal_income_tax_rate=marginal_tax_rate,
+                pension_used_manwon=pension_used_manwon,
+                age=age,
+                horizon_years=horizon_years,
+                near_term_need_manwon=near_term_need_manwon,
+                near_term_need_years=near_term_need_years,
+                isa_opened=isa_opened,
+            )
+        ]
         results.append(
             StressedPortfolio(
-                id=portfolio.id, nameKr=portfolio.nameKr, base=base, stressed=stressed
+                id=portfolio.id,
+                nameKr=portfolio.nameKr,
+                base=with_after_tax(base, portfolio.allocations),
+                stressed=with_after_tax(stressed, portfolio.allocations),
+                dividendIncome=calc_financial_income(
+                    base.expectedReturn, portfolio.allocations, total_assets
+                ),
+                accountAllocation=account_allocation,
+                taxAdvice=tax_advice,
             )
         )
 

@@ -299,11 +299,15 @@ OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE = 0.22
 DEFAULT_WITHHOLDING_TAX_RATE = 0.154
 # 종합과세 초과분 추가과세에 쓰는 한계세율 가정(지방소득세 포함). 실제로는 고객
 # 전체 소득 구간에 따라 달라지므로 호출 시 인자로 덮어쓸 수 있게 둔다.
-DEFAULT_MARGINAL_INCOME_TAX_RATE = 0.385
+# 기본값은 계산 로직 PortfolioRequest.marginal_income_tax_rate 기본값(0.24)과 통일한다.
+# VVIP 고소득 구간을 가정할 때는 호출 측에서 명시적으로 더 높은 세율을 넘길 것.
+DEFAULT_MARGINAL_INCOME_TAX_RATE = 0.24
 
 # 배당·이자 수익률 간이 가정. 기대수익률 중 이 수준까지만 이자·배당성 금융소득으로 본다.
-# (portfolio_logic_8th.ASSET_INCOME_YIELD_ASSUMPTIONS와 동일. cash는 market 측 미사용)
+# (portfolio_logic_8th.ASSET_INCOME_YIELD_ASSUMPTIONS와 동일 — cash 포함.
+#  cash income yield는 계산 로직의 DEFAULT_CASH_RETURN(2.5%)과 동일하게 둔다.)
 ASSET_INCOME_YIELD_ASSUMPTIONS: dict[str, float] = {
+    "cash": 0.025,
     "general_bond": 0.030,
     "low_coupon_bond": 0.015,
     "separate_tax_bond": 0.025,
@@ -381,6 +385,27 @@ def calc_after_tax_return(
     after_tax_return = (gross_profit_won - total_tax_won) / total_won
 
     return after_tax_return, total_tax_won / 1e8, is_comprehensive
+
+
+def calc_financial_income(
+    gross_return: float,
+    portfolio: list[AssetAllocation],
+    total_assets: float,  # 억 원
+) -> float:
+    """포트폴리오의 연간 이자·배당성 금융소득(억 원) — 종합과세 합산 대상.
+
+    다른 금융소득과 합쳐 2,000만 원(=0.2억) 초과 여부를 판정하는 데 쓴다.
+    자산별 income yield 가정까지만 금융소득으로 인정(자본이득 제외).
+    """
+    if gross_return <= 0 or total_assets <= 0:
+        return 0.0
+    total_won = total_assets * 1e8
+    income_won = 0.0
+    for a in portfolio:
+        if a.assetClass in INCOME_TAXABLE_ASSETS:
+            income_yield = ASSET_INCOME_YIELD_ASSUMPTIONS[a.assetClass]
+            income_won += a.weight * total_won * min(gross_return, max(income_yield, 0.0))
+    return income_won / 1e8
 
 
 def apply_stress_scenario(

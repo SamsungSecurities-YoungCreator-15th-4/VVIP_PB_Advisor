@@ -85,17 +85,21 @@ def _fetch_quote_sync(symbol: str) -> QuoteResult:
     return QuoteResult(price=price, change=change, changePct=change_pct)
 
 
-async def fetch_quotes(symbols: list[str]) -> dict[str, QuoteResult]:
+async def fetch_quotes(symbols: list[str], force: bool = False) -> dict[str, QuoteResult]:
+    # force=True면 5분 캐시를 무시하고 강제 재조회한다(새로고침 버튼용).
+    # 단 조회 성공값은 캐시에 다시 저장해, 이후 자동 갱신·일반 호출의 캐시 보호는 유지된다.
     cache_key = f"quotes:{','.join(sorted(symbols))}"
-    cached = _quotes_batch_cache.get(cache_key)
-    if cached is not None:
-        return cached
+    if not force:
+        cached = _quotes_batch_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
     async def fetch_one(symbol: str) -> tuple[str, QuoteResult] | None:
         sym_key = f"quote:{symbol}"
-        sym_cached = _quote_cache.get(sym_key)
-        if sym_cached is not None:
-            return symbol, sym_cached
+        if not force:
+            sym_cached = _quote_cache.get(sym_key)
+            if sym_cached is not None:
+                return symbol, sym_cached
         try:
             data = await asyncio.to_thread(_fetch_quote_sync, symbol)
         except Exception as exc:
@@ -180,11 +184,12 @@ def _fetch_er_api_rate() -> float:
     return float(price)
 
 
-def _fetch_usd_krw_sync() -> ForexResult:
+def _fetch_usd_krw_sync(force: bool = False) -> ForexResult:
     cache_key = "forex:USDKRW"
-    cached = _forex_cache.get(cache_key)
-    if cached is not None:
-        return cached
+    if not force:
+        cached = _forex_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
     # 1순위: Wise (~1분 실시간) / 2순위: open.er-api.com (하루 1회 고시환율) / 3순위: 파일 캐시
     price = 0.0
@@ -241,8 +246,8 @@ def _fetch_usd_krw_sync() -> ForexResult:
     return entry
 
 
-async def fetch_usd_krw() -> ForexResult:
-    return await asyncio.to_thread(_fetch_usd_krw_sync)
+async def fetch_usd_krw(force: bool = False) -> ForexResult:
+    return await asyncio.to_thread(_fetch_usd_krw_sync, force)
 
 
 # ── 과거 데이터 (포트폴리오 백테스트용) ─────────────────────────────────────
