@@ -55,6 +55,7 @@ export interface PortfolioMetrics {
   sharpeRatio: number;
   sortinoRatio: number | null; // 실측 하방편차 부족 시 null(N/A)
   maxDrawdown: number | null; // % — 실측 백테스트가 부족하면 null(N/A)
+  afterTaxReturn: number | null; // 세후 기대수익률(소수). 총자산 필요 → 미계산 시 null
   backtestData: BacktestPoint[];
 }
 
@@ -74,6 +75,37 @@ export interface StressedPortfolio {
   nameKr: string;
   base: PortfolioMetrics;
   stressed: PortfolioMetrics;
+  dividendIncome: number; // 포트폴리오 연간 이자·배당 금융소득(억). 종합과세 기준선 점검용
+  // 절세 계좌 배치 활용도(법정 한도 대비 기납입액, 만원) — backend tax_optimizer
+  accountAllocation?: AccountSlot[];
+  // 절세 제안 4종의 실제 절감액(만원) — backend tax_optimizer
+  taxAdvice?: TaxAdviceCard[];
+}
+
+// 절세 계좌 배치 한 칸 — backend AccountSlot과 1:1. used/limit가 null이면 한도 개념 없음.
+export interface AccountSlot {
+  key: "isa" | "pension" | "general";
+  usedManwon: number | null;
+  limitManwon: number | null;
+}
+
+// 절세 제안 한 건 — backend TaxAdviceCard와 1:1.
+// applicable=false면 합산 제외. ineligibleReason 있으면 제도상 부적합(사유 표시),
+// 없으면 절감 효과 없음/한도 소진(비노출 권장).
+export type TaxAdviceKey =
+  | "isa"
+  | "pension_credit"
+  | "separate_bond"
+  | "low_tax_dividend"
+  | "overseas_exemption"
+  | "tax_loss";
+
+export interface TaxAdviceCard {
+  key: TaxAdviceKey;
+  savingManwon: number;
+  applicable: boolean;
+  transferableManwon: number; // ISA·연금 등 이전/납입 가능 금액(만원)
+  ineligibleReason?: string | null; // 제도상 부적합 사유
 }
 
 // 과거 주요 경제 위기 재현 시나리오 — 위기 기간 실제 수익률 기반 예상 P&L

@@ -1,30 +1,45 @@
 "use client";
 
-import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
-import { TAX_THRESHOLD } from "@/lib/mockData";
+import { PORTFOLIOS, TAX_THRESHOLD } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
+import {
+  BACKEND_PORTFOLIO_ID,
+  useStressedPortfolios,
+} from "@/lib/useStressedPortfolios";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR");
 
 /**
- * 종합과세 임계선 탭 — 기타 금융소득 슬라이더 + 기준선 게이지 + 판정.
+ * 종합과세 임계선 탭 — 기타 금융소득 입력 + 기준선 게이지 + 판정.
  * 기준선 2,000만원: 소득세법 제14조 제3항 제6호 (금융소득종합과세).
- * 그 외 수치(예상 배당 등)는 백엔드 연동 전 더미.
+ * 기타 금융소득은 store, 포트폴리오 예상 이자·배당은 백엔드 실데이터(dividendIncome).
  */
 export default function TaxGauge() {
   const {
     thresholdManwon,
-    gaugeMaxManwon,
-    otherIncomeDefault,
     otherIncomeMax,
     portfolioDividendManwon,
     separateRateLabel,
     comprehensiveRateLabel,
   } = TAX_THRESHOLD;
 
-  const [otherIncome, setOtherIncome] = useState(otherIncomeDefault);
-  const total = otherIncome + portfolioDividendManwon;
+  const otherIncome = useDashboardStore((s) => s.otherIncomeManwon);
+  const setOtherIncome = useDashboardStore((s) => s.setOtherIncome);
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const { byId, failed } = useStressedPortfolios();
+
+  // 선택 포트폴리오의 실제 연간 이자·배당(억→만원). 미연결 시 목값 폴백.
+  const live = byId[BACKEND_PORTFOLIO_ID[selectedPortfolioId]];
+  const portfolioDividend =
+    !failed && live ? Math.round(live.dividendIncome * 10000) : portfolioDividendManwon;
+  const pfName =
+    PORTFOLIOS.find((p) => p.id === selectedPortfolioId)?.name ?? "포트폴리오";
+
+  const total = otherIncome + portfolioDividend;
   const isOver = total > thresholdManwon;
+  // 게이지 최대치는 합산소득에 맞춰 동적으로(기준선이 항상 보이도록).
+  const gaugeMaxManwon = Math.max(3000, Math.ceil((total * 1.15) / 100) * 100);
   const totalPct = (Math.min(total, gaugeMaxManwon) / gaugeMaxManwon) * 100;
   const thresholdPct = (thresholdManwon / gaugeMaxManwon) * 100;
 
@@ -35,12 +50,21 @@ export default function TaxGauge() {
           <p className="text-[9.5px] font-bold text-muted-foreground">
             고객 기타 금융소득 입력 (연 이자·배당)
           </p>
-          <p className="mt-1 text-lg font-extrabold tabular-nums">
-            {fmt(otherIncome)}
-            <span className="text-[11px]">만원</span>
-          </p>
+          <div className="mt-1 flex items-baseline gap-1">
+            <input
+              type="number"
+              min={0}
+              step={10}
+              value={otherIncome}
+              onChange={(e) =>
+                setOtherIncome(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+              className="w-24 rounded-md border bg-card px-1.5 py-0.5 text-lg font-extrabold tabular-nums outline-none focus:border-brand focus:ring-1 focus:ring-brand [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <span className="text-[11px] font-bold text-muted-foreground">만원</span>
+          </div>
           <Slider
-            value={[otherIncome]}
+            value={[Math.min(otherIncome, otherIncomeMax)]}
             onValueChange={([v]) => setOtherIncome(v)}
             min={0}
             max={otherIncomeMax}
@@ -50,11 +74,12 @@ export default function TaxGauge() {
         </div>
         <div className="w-[130px] rounded-xl border bg-brand/5 p-3">
           <p className="text-[9.5px] font-bold text-muted-foreground">
-            포트폴리오 A<br />
+            {pfName}
+            <br />
             예상 이자·배당
           </p>
           <p className="mt-1 text-sm font-extrabold tabular-nums text-brand-dark">
-            +{fmt(portfolioDividendManwon)}
+            +{fmt(portfolioDividend)}
             <span className="text-[11px]">만원</span>
           </p>
           <p className="mt-0.5 text-[8.5px] font-semibold text-muted-foreground">
