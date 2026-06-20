@@ -3188,14 +3188,14 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     normalized = text_value.replace(",", "")
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]{1,18}(?:\.[0-9]{1,4})?)\s*([억만천])", normalized):
+    for number_text, unit in re.findall(r"([0-9]{1,18}(?:\.[0-9]+)?)\s*([억만천])", normalized):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
 
     if matched_unit:
         return float(total)
 
-    number_match = re.search(r"-?[0-9]{1,18}(?:\.[0-9]{1,4})?", normalized)
+    number_match = re.search(r"-?[0-9]{1,18}(?:\.[0-9]+)?", normalized)
     if number_match:
         return safe_float(number_match.group(0), default)
 
@@ -3291,7 +3291,7 @@ def calculate_account_age_years_from_start_year(start_year: Optional[int]) -> fl
 
 def parse_relative_years_from_text(text: str) -> Optional[float]:
     match = re.search(
-        r"([0-9]{1,18}(?:\.[0-9]{1,4})?)\s*년\s*(?:후|뒤|내|안|이내)",
+        r"([0-9]{1,18}(?:\.[0-9]+)?)\s*년\s*(?:후|뒤|내|안|이내)",
         text,
     )
     if match:
@@ -3314,13 +3314,13 @@ def parse_explicit_money_amount_krw(value: Any) -> float:
 
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]{1,18}(?:\.[0-9]{1,4})?)\s*([억만천])", text_value):
+    for number_text, unit in re.findall(r"([0-9]{1,18}(?:\.[0-9]+)?)\s*([억만천])", text_value):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
     if matched_unit:
         return float(total)
 
-    won_match = re.search(r"([0-9]{1,18}(?:\.[0-9]{1,4})?)\s*원", text_value)
+    won_match = re.search(r"([0-9]{1,18}(?:\.[0-9]+)?)\s*원", text_value)
     if won_match:
         return safe_float(won_match.group(1), 0.0)
 
@@ -3338,7 +3338,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
         return 0.0
 
     current_year_match = re.search(
-        r"(?:올해|금년|당해).{0,40}([0-9]{1,18}(?:\.[0-9]{1,4})?\s{0,4}[억만천]?)\s{0,4}(?:원)?\s{0,4}(?:납입|입금)",
+        r"(?:올해|금년|당해).{0,40}([0-9]{1,18}(?:\.[0-9]+)?\s{0,4}[억만천]?)\s{0,4}(?:원)?\s{0,4}(?:납입|입금)",
         window,
     )
     if current_year_match:
