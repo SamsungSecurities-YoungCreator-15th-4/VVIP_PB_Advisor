@@ -65,7 +65,7 @@ export default function AccountAllocation({
 
   return (
     <div>
-      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold">
+      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-extrabold">
         <span className="flex size-4 items-center justify-center rounded-full bg-brand/10 text-[10px] text-brand-dark">
           2
         </span>
@@ -80,21 +80,21 @@ export default function AccountAllocation({
           return (
             <div key={acct.name}>
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs font-extrabold">
+                <span className="flex items-center gap-1.5 text-[12px] font-extrabold">
                   {acct.name}
-                  <span className="rounded-md bg-brand/10 px-1.5 py-0.5 text-[8.5px] font-bold text-brand-dark">
+                  <span className="rounded-md bg-brand/10 px-1.5 py-0.5 text-[12px] font-bold text-brand-dark">
                     {acct.tag}
                   </span>
                 </span>
-                {acct.used !== null ? (
-                  <span className="text-[11px] font-extrabold tabular-nums">
+                {acct.used != null ? (
+                  <span className="text-[12px] font-extrabold tabular-nums">
                     {acct.used.toLocaleString()}{" "}
                     <span className="font-bold text-muted-foreground/60">
                       / {acct.limit?.toLocaleString()}만
                     </span>
                   </span>
                 ) : (
-                  <span className="text-[11px] font-bold text-muted-foreground">
+                  <span className="text-[12px] font-bold text-muted-foreground">
                     잔여 자산 배치
                   </span>
                 )}
@@ -109,7 +109,7 @@ export default function AccountAllocation({
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <p className="mt-1 text-[9px] font-semibold leading-snug text-muted-foreground">
+              <p className="mt-1 text-[12px] font-semibold leading-snug text-muted-foreground">
                 {acct.caption}
               </p>
             </div>

@@ -105,9 +105,9 @@ export default function Sidebar() {
           <PanelLeftOpen className="size-4" />
           <span
             className="text-[9px] font-bold leading-none text-muted-foreground"
-            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+            style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            고객·IPS
+            고객IPS
           </span>
         </button>
       </div>
@@ -134,9 +134,7 @@ export default function Sidebar() {
         {/* 고객 선택 */}
         <Card className="gap-0 p-3">
           <div className="mb-2">
-            <p className="text-[10px] font-bold tracking-wider text-muted-foreground">
-              고객 선택
-            </p>
+            <p className="text-[14px] font-bold">고객 선택</p>
           </div>
 
           {/* 드롭다운 트리거 */}
@@ -170,9 +168,7 @@ export default function Sidebar() {
 
         {/* 상담 입력 */}
         <Card className="gap-0 p-3">
-          <p className="mb-2 text-[10px] font-bold tracking-wider text-muted-foreground">
-            상담 입력
-          </p>
+          <p className="mb-2 text-[14px] font-bold">상담 입력</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -183,9 +179,9 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 p-3 text-center"
+            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
           >
-            <span className="mx-auto mb-1.5 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+            <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
               <Upload className="size-4 text-brand" />
             </span>
             <span className="block text-[13px] font-bold text-brand-dark">
@@ -206,7 +202,7 @@ export default function Sidebar() {
         {/* 상담 내역 */}
         <Card className="gap-0 p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-[13px] font-bold">상담 내역</p>
+            <p className="text-[14px] font-bold">상담 내역</p>
           </div>
           <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-0.5">
             {CONSULT_LOG.map((m, i) => (
@@ -220,7 +216,7 @@ export default function Sidebar() {
                 >
                   {m.speaker}
                 </span>
-                <span className="flex-1 text-[11px] font-medium leading-snug text-muted-foreground">
+                <span className="flex-1 text-[13px] font-medium leading-snug text-muted-foreground">
                   {m.text}
                 </span>
                 <span className="mt-0.5 shrink-0 text-[9px] font-semibold tabular-nums text-muted-foreground/60">
@@ -232,7 +228,7 @@ export default function Sidebar() {
           <Button
             variant="outline"
             size="sm"
-            className="mt-2 w-full font-bold"
+            className="mt-2 w-full border-muted font-bold text-foreground/60 hover:text-foreground/60"
             onClick={() => setHistoryOpen(true)}
           >
             <RotateCcw />
@@ -243,23 +239,23 @@ export default function Sidebar() {
         {/* IPS 조율기 */}
         <Card className="flex-1 gap-0 p-3">
           <div className="mb-1">
-            <p className="text-[13px] font-bold">IPS 조율기</p>
+            <p className="text-[14px] font-bold">IPS 조율기</p>
           </div>
           <IpsRow k="Goal" sub="목표">
             <Input
               value={ips.goal}
               onChange={(e) => setIps({ goal: e.target.value })}
-              className="h-6 text-[11px]"
+              className="h-6 text-[13px] md:text-[13px]"
             />
           </IpsRow>
           <IpsRow k="Asset" sub="자산">
-            <span className="text-xs font-extrabold tabular-nums text-brand-dark">
+            <span className="text-[13px] font-extrabold tabular-nums text-brand-dark">
               {customer.aumEokwon}억원
             </span>
           </IpsRow>
           <IpsRow k="Return" sub="수익">
             <div className="flex flex-1 items-center gap-2">
-              <span className="w-8 text-xs font-extrabold tabular-nums text-brand-dark">
+              <span className="w-8 text-[13px] font-extrabold tabular-nums text-brand-dark">
                 {ips.returnPct}%
               </span>
               <Slider
@@ -281,7 +277,7 @@ export default function Sidebar() {
           </IpsRow>
           <IpsRow k="Time" sub="기간">
             <div className="flex flex-1 items-center gap-2">
-              <span className="w-8 text-xs font-extrabold tabular-nums text-brand-dark">
+              <span className="w-8 text-[13px] font-extrabold tabular-nums text-brand-dark">
                 {ips.timeYears}년
               </span>
               <Slider
@@ -298,7 +294,7 @@ export default function Sidebar() {
             <Input
               value={ips.tax}
               onChange={(e) => setIps({ tax: e.target.value })}
-              className="h-6 text-[11px]"
+              className="h-6 text-[13px] md:text-[13px]"
             />
           </IpsRow>
           <IpsRow k="Liquid" sub="유동성">
@@ -312,14 +308,14 @@ export default function Sidebar() {
             <Input
               value={ips.legal}
               onChange={(e) => setIps({ legal: e.target.value })}
-              className="h-6 text-[11px]"
+              className="h-6 text-[13px] md:text-[13px]"
             />
           </IpsRow>
           <IpsRow k="Unique" sub="특수" last>
             <Input
               value={ips.unique}
               onChange={(e) => setIps({ unique: e.target.value })}
-              className="h-6 text-[11px]"
+              className="h-6 text-[13px] md:text-[13px]"
             />
           </IpsRow>
         </Card>
@@ -495,8 +491,8 @@ function IpsRow({
       className={`flex items-center gap-2 py-1.5 ${last ? "" : "border-b border-muted"}`}
     >
       <div className="w-14 shrink-0">
-        <b className="block text-[11px] font-extrabold">{k}</b>
-        <span className="block text-[8px] font-semibold leading-none text-muted-foreground">
+        <b className="block text-[13px] font-extrabold">{k}</b>
+        <span className="block text-[10px] font-semibold leading-none text-muted-foreground">
           {sub}
         </span>
       </div>
@@ -521,7 +517,7 @@ function Segment<T extends string>({
           key={opt}
           type="button"
           onClick={() => onChange(opt)}
-          className={`flex-1 rounded-md py-1 text-[10px] font-bold transition-colors ${
+          className={`flex-1 rounded-md py-1 text-[13px] font-bold transition-colors ${
             value === opt
               ? "bg-white text-brand-dark shadow-sm"
               : "text-muted-foreground"

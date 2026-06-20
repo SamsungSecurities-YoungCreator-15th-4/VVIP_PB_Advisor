@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 from supabase import Client, create_client
 
+from app.core.azure_openai import build_azure_client
+
 load_dotenv()
 
 # 임베딩 모델은 명세 확정값. 변경 시 document_chunk.embedding(vector(1536)) 차원과
@@ -34,24 +36,17 @@ EMBEDDING_API_VERSION = os.getenv("AZURE_OPENAI_EMBEDDING_API_VERSION", "2023-05
 #   배포명: ai-insight-llm / 모델: gpt-4o / API 버전: 2025-01-01-preview
 
 DEFAULT_TOP_K = 8
-DEFAULT_SIMILARITY_THRESHOLD = 0.5
+# 교차언어 검색 대응값. 한국어 질의 → 영문 문서(FOMC 등)는 임베딩 유사도가
+# 0.37~0.4 수준이라 0.5에서는 404가 잦았다(2단계 검증). RPC가 top-K를 먼저 뽑고
+# 바깥에서 threshold를 거는 구조라 값만 0.4로 낮춘다. 무관 질의는 0.4 미만으로
+# 걸러진다(검증: "오늘 점심 메뉴" 류 top_sim < 0.4 확인).
+DEFAULT_SIMILARITY_THRESHOLD = 0.4
 
 
 @lru_cache(maxsize=1)
 def get_openai_client() -> AzureOpenAI:
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    if not endpoint or not api_key:
-        # 키·엔드포인트 값 자체는 절대 메시지/로그에 포함하지 않는다.
-        raise RuntimeError(
-            "AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY 환경변수가 설정되지 "
-            "않았습니다. backend/.env 에 추가하세요 (.env.example 참고)."
-        )
-    return AzureOpenAI(
-        azure_endpoint=endpoint,
-        api_key=api_key,
-        api_version=EMBEDDING_API_VERSION,
-    )
+    # 엔드포인트·키 읽기와 클라이언트 생성은 공용 팩토리로 일원화(임베딩/LLM 공통).
+    return build_azure_client(EMBEDDING_API_VERSION)
 
 
 @lru_cache(maxsize=1)
