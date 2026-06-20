@@ -57,7 +57,9 @@ MACRO_FALLBACKS: dict[str, IndicatorData] = {
 
 @router.get("/macro-indicators", response_model=MacroIndicators)
 async def get_macro_indicators(
-    force: bool = Query(False, description="true면 5분 캐시를 무시하고 강제 재조회 (새로고침 버튼용)"),
+    force: bool = Query(
+        False, description="true면 5분 캐시를 무시하고 강제 재조회 (새로고침 버튼용)"
+    ),
 ) -> MacroIndicators:
     quotes, forex_result = await asyncio.gather(
         yfinance_client.fetch_quotes(["^KS11", "^GSPC", "^TNX"], force=force),

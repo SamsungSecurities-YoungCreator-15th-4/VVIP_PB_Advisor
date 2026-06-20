@@ -3,9 +3,6 @@
 원칙(AGENTS.md): 세법 수식의 불변식·경계조건을 검증한다. 더미값이 아니라 출처 있는
 상수(ISA 한도·분리과세율·양도세율 등)로부터 유도되는 관계를 확인한다.
 """
-import pytest
-
-from app.market.financial_calc import DEFAULT_WITHHOLDING_TAX_RATE
 from app.market.schemas import AssetAllocation
 from app.market.tax_optimizer import (
     ISA_ANNUAL_LIMIT_WON,
@@ -100,7 +97,11 @@ def test_tax_loss_harvesting_offsets_overseas_gain():
     with_loss = _cards(realized_loss_manwon=1800)
     assert with_loss["tax_loss"]["applicable"] is True
     # 절감액 ≈ min(손실, 해외양도차익) × 22% — 손실 한도 내에서는 22%를 넘지 않는다
-    assert 0 < with_loss["tax_loss"]["savingManwon"] <= round(1800 * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE)
+    assert (
+        0
+        < with_loss["tax_loss"]["savingManwon"]
+        <= round(1800 * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE)
+    )
 
 
 def test_all_six_cards_present():
