@@ -3338,7 +3338,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
         return 0.0
 
     current_year_match = re.search(
-        r"(?:올해|금년|당해).{0,40}([0-9]{1,18}(?:\.[0-9]{1,4})?\s*[억만천]?)\s*(?:원)?\s*(?:납입|입금)",
+        r"(?:올해|금년|당해).{0,40}([0-9]{1,18}(?:\.[0-9]{1,4})?\s{0,4}[억만천]?)\s{0,4}(?:원)?\s{0,4}(?:납입|입금)",
         window,
     )
     if current_year_match:
