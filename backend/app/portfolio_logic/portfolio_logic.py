@@ -3306,7 +3306,6 @@ def build_tax_optimizer_payload(
     before_after_tax_profit = gross_profit - tax_before
     after_strategy_profit = gross_profit - tax_after
     before_after_tax_return = before_after_tax_profit / request.total_asset
-    after_strategy_return = after_strategy_profit / request.total_asset
     six_strategy = build_six_tax_strategy_cards(portfolio_response, request)
     combined_tax_saving = safe_float(six_strategy["combined_total"])
     modeled_tax_reduction = min(combined_tax_saving, max(tax_before, 0.0))

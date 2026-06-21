@@ -227,9 +227,12 @@ def test_external_income_tax_is_not_fully_charged_to_portfolio_return() -> None:
     extra_rate = 0.385 - 0.154
 
     assert status["estimated_additional_tax_total"] == pytest.approx(20_000_000 * extra_rate)
-    assert status["estimated_additional_tax_external_baseline"] == pytest.approx(10_000_000 * extra_rate)
-    assert status["estimated_additional_tax_attributable_to_portfolio"] == pytest.approx(10_000_000 * extra_rate)
-
+    assert status[
+    "estimated_additional_tax_external_baseline"
+] == pytest.approx(10_000_000 * extra_rate)
+    assert status[
+    "estimated_additional_tax_attributable_to_portfolio"
+] == pytest.approx(10_000_000 * extra_rate)
 
 def test_external_financial_income_unit_priority() -> None:
     by_manwon = _request(
