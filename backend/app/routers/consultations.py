@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, get_args
@@ -754,9 +755,32 @@ def _to_kst_iso(created_at: str) -> str:
 
 
 def _parse_datetime(datetime_text: str) -> datetime:
-    normalized = datetime_text.replace("Z", "+00:00")
+    normalized = _normalize_datetime_text(datetime_text)
     created_datetime = datetime.fromisoformat(normalized)
     if created_datetime.tzinfo is None:
         created_datetime = created_datetime.replace(tzinfo=timezone.utc)
 
     return created_datetime
+
+
+def _normalize_datetime_text(datetime_text: str) -> str:
+    normalized = str(datetime_text).strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+
+    match = re.match(
+        r"^(?P<head>.+?\.)(?P<fraction>\d+)(?P<tail>(?:[+-]\d{2}:?\d{2})?)$",
+        normalized,
+    )
+    if match:
+        fraction = f"{match.group('fraction')}000000"[:6]
+        normalized = f"{match.group('head')}{fraction}{match.group('tail')}"
+
+    offset_match = re.match(r"^(?P<head>.+)(?P<offset>[+-]\d{2})(?P<minute>\d{2})$", normalized)
+    if offset_match:
+        normalized = (
+            f"{offset_match.group('head')}"
+            f"{offset_match.group('offset')}:{offset_match.group('minute')}"
+        )
+
+    return normalized
