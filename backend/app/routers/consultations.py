@@ -84,6 +84,72 @@ def create_stt_consultation(
     )
 
 
+@router.get("/stt/realtime/spec")
+def get_realtime_stt_spec() -> dict:
+    """Swagger 문서용 실시간 STT WebSocket 프로토콜 명세."""
+    return {
+        "transport": "websocket",
+        "path": "/consultations/stt/realtime",
+        "local_url": "ws://127.0.0.1:8000/consultations/stt/realtime",
+        "production_url": "wss://{render-backend-domain}/consultations/stt/realtime",
+        "audio_format": {
+            "content_type": "binary",
+            "encoding": "PCM signed 16-bit little-endian",
+            "sample_rate": DEFAULT_SAMPLE_RATE,
+            "bits_per_sample": DEFAULT_BITS_PER_SAMPLE,
+            "channels": DEFAULT_CHANNELS,
+        },
+        "client_messages": [
+            {
+                "step": "start",
+                "type": "text/json",
+                "example": {
+                    "customer_name": "김성삼",
+                    "sample_rate": DEFAULT_SAMPLE_RATE,
+                    "bits_per_sample": DEFAULT_BITS_PER_SAMPLE,
+                    "channels": DEFAULT_CHANNELS,
+                },
+            },
+            {
+                "step": "audio",
+                "type": "binary",
+                "description": "재생 중인 마이크 PCM audio chunk를 반복 전송합니다.",
+            },
+            {
+                "step": "pause",
+                "type": "text/json",
+                "example": {"event": "pause"},
+            },
+            {
+                "step": "resume",
+                "type": "text/json",
+                "example": {"event": "play"},
+                "aliases": [{"event": "resume"}],
+            },
+            {
+                "step": "finish",
+                "type": "text/json",
+                "example": {"event": "finish"},
+                "aliases": [{"event": "stop"}],
+            },
+        ],
+        "server_events": [
+            {"event": "started"},
+            {"event": "partial_transcript", "payload": {"transcript": "Raw STT segment"}},
+            {"event": "paused"},
+            {"event": "resumed"},
+            {"event": "ignored"},
+            {"event": "completed", "payload": {"consultation": "ConsultationResponse"}},
+            {"event": "error"},
+        ],
+        "notes": [
+            "Swagger UI는 WebSocket을 직접 실행하지 못하므로 이 엔드포인트는 문서용입니다.",
+            "프론트는 사용자 기기 마이크 권한을 받고 PCM chunk를 WebSocket으로 전송해야 합니다.",
+            "finish 이후 기존 STT 파이프라인과 동일하게 상담 스크립트와 IPS를 DB에 저장합니다.",
+        ],
+    }
+
+
 @router.websocket("/stt/realtime")
 async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
     """실시간 STT WebSocket.
