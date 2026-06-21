@@ -331,38 +331,50 @@ def _save_stt_consultation_result(
         customer_name=customer_name,
     )
 
+    rpc_payload = {
+        "p_client_id": client["id"],
+        "p_raw_note": raw_note,
+        "p_transcript_json": pipeline_result.transcript_json,
+        "p_ips_json": ips_json,
+        "p_goal": snapshot_payload["goal"],
+        "p_asset": snapshot_payload["asset"],
+        "p_return": snapshot_payload["return"],
+        "p_risk": snapshot_payload["risk"],
+        "p_time": snapshot_payload["time"],
+        "p_tax": snapshot_payload["tax"],
+        "p_liquidity": snapshot_payload["liquidity"],
+        "p_legal": snapshot_payload["legal"],
+        "p_unique": snapshot_payload["unique"],
+        "p_raw_ips_json": snapshot_payload["raw_ips_json"],
+    }
+    titled_rpc_payload = {
+        **rpc_payload,
+        "p_transcript_title": transcript_title,
+        "p_ips_title": ips_title,
+    }
+
     try:
-        created_result = (
-            supabase.rpc(
-                "create_stt_consultation_with_snapshot",
-                {
-                    "p_client_id": client["id"],
-                    "p_raw_note": raw_note,
-                    "p_transcript_title": transcript_title,
-                    "p_ips_title": ips_title,
-                    "p_transcript_json": pipeline_result.transcript_json,
-                    "p_ips_json": ips_json,
-                    "p_goal": snapshot_payload["goal"],
-                    "p_asset": snapshot_payload["asset"],
-                    "p_return": snapshot_payload["return"],
-                    "p_risk": snapshot_payload["risk"],
-                    "p_time": snapshot_payload["time"],
-                    "p_tax": snapshot_payload["tax"],
-                    "p_liquidity": snapshot_payload["liquidity"],
-                    "p_legal": snapshot_payload["legal"],
-                    "p_unique": snapshot_payload["unique"],
-                    "p_raw_ips_json": snapshot_payload["raw_ips_json"],
-                },
-            )
-            .execute()
-        )
-        created = _first_row(created_result.data)
+        created = _execute_stt_consultation_rpc(supabase, titled_rpc_payload)
     except Exception as exc:
-        logger.exception("STT consultation RPC failed")
-        raise HTTPException(
-            status_code=500,
-            detail="상담 결과 저장 중 오류가 발생했습니다.",
-        ) from exc
+        if not _is_missing_stt_rpc_signature_error(exc):
+            logger.exception("STT consultation RPC failed")
+            raise HTTPException(
+                status_code=500,
+                detail="상담 결과 저장 중 오류가 발생했습니다.",
+            ) from exc
+
+        logger.warning(
+            "STT consultation RPC title-parameter signature missing; "
+            "retrying legacy signature."
+        )
+        try:
+            created = _execute_stt_consultation_rpc(supabase, rpc_payload)
+        except Exception as fallback_exc:
+            logger.exception("Legacy STT consultation RPC failed")
+            raise HTTPException(
+                status_code=500,
+                detail="상담 결과 저장 중 오류가 발생했습니다.",
+            ) from fallback_exc
 
     if not created:
         raise HTTPException(
@@ -372,15 +384,34 @@ def _save_stt_consultation_result(
 
     return ConsultationResponse(
         consultation_id=created["consultation_id"],
-        customer_id=created["customer_id"],
+        customer_id=created.get("customer_id") or client["id"],
         customer_name=customer_name,
         consultation_date=_consultation_date(created["created_at"]),
-        transcript_title=created["transcript_title"],
-        ips_title=created["ips_title"],
+        transcript_title=created.get("transcript_title") or transcript_title,
+        ips_title=created.get("ips_title") or ips_title,
         transcript_json=pipeline_result.transcript_json,
         ips_json=ips_json,
-        ips_snapshot_id=created["ips_snapshot_id"],
+        ips_snapshot_id=created.get("ips_snapshot_id"),
         created_at=_to_kst_iso(created["created_at"]),
+    )
+
+
+def _execute_stt_consultation_rpc(supabase, payload: dict) -> dict | None:
+    result = (
+        supabase.rpc(
+            "create_stt_consultation_with_snapshot",
+            payload,
+        )
+        .execute()
+    )
+    return _first_row(result.data)
+
+
+def _is_missing_stt_rpc_signature_error(exc: Exception) -> bool:
+    message = str(exc)
+    return (
+        "PGRST202" in message
+        and "create_stt_consultation_with_snapshot" in message
     )
 
 
