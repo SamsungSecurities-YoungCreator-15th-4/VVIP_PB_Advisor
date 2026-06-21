@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, time, timedelta, timezone
+from pathlib import Path
 from typing import Annotated, get_args
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,7 @@ from fastapi import (
     status,
 )
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 
 from app.db.supabase import get_supabase
 from app.schemas.consultations import (
@@ -43,6 +45,7 @@ from app.stt.stt_realtime import (
 router = APIRouter(prefix="/consultations", tags=["consultations"])
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
+STT_TEST_PAGE = Path(__file__).resolve().parents[1] / "stt" / "realtime_test.html"
 
 
 @router.post(
@@ -148,6 +151,12 @@ def get_realtime_stt_spec() -> dict:
             "finish 이후 기존 STT 파이프라인과 동일하게 상담 스크립트와 IPS를 DB에 저장합니다.",
         ],
     }
+
+
+@router.get("/stt/realtime/test", response_class=FileResponse)
+def get_realtime_stt_test_page() -> FileResponse:
+    """로컬 개발용 실시간 STT WebSocket 테스트 페이지."""
+    return FileResponse(STT_TEST_PAGE)
 
 
 @router.websocket("/stt/realtime")
