@@ -10,7 +10,13 @@
   · "㈜"(U+321C), "（주）"(전각 괄호) 도 같은 마커의 표기 변형이라 함께 제거한다.
     DART corp_name 실데이터에 섞여 들어와 미제거 시 정확일치가 깨지기 때문이다.
   · 모든 공백 제거 — \\s 는 전각 공백(U+3000)까지 포함(파이썬 str 정규식은 유니코드 기본).
+  · 영문 대소문자 정규화(.lower()) — DART corp_name 의 영문 표기 대소문자 불일치로
+    매칭이 빗나가는 문제를 막는다(게이트③에서 349건 변경·신규 충돌 0건 확인).
+    ※ 저장 컬럼(corp_name_normalized)은 적재시점 계산값이라, 이 변경 후 사람이 직접
+      재적재(scripts/ingest_corp_code.py)해야 저장값도 소문자화된다. 그 전까지는 조회
+      측에서 대소문자 무시 매칭(ilike)으로 보완한다(dart_resolve 참고).
 예) "삼성전자(주)" → "삼성전자", "(주)카카오" → "카카오", "주식회사 우아한형제들" → "우아한형제들"
+   "SK(주)" → "sk", "(주)KCC" → "kcc"
 """
 
 import re
@@ -33,4 +39,6 @@ def normalize_corp_name(name: str) -> str:
     normalized = name
     for marker in _CORP_MARKERS:
         normalized = normalized.replace(marker, "")
-    return _WHITESPACE_RE.sub("", normalized)
+    # 공백 제거 후 영문 대소문자 정규화(.lower()). 적재·조회 양쪽이 같은 함수를 거치므로
+    # 정규화 기준이 일관된다(게이트③: 신규 충돌 0건 확인).
+    return _WHITESPACE_RE.sub("", normalized).lower()
