@@ -47,6 +47,10 @@ export interface Customer {
   nearTermNeedManwon: number; // 단기 필요자금(만원) — 묶이는 금액에서 제외 (IPS Unique)
   nearTermNeedYears: number | null; // 단기 필요자금 필요 시점(년)
   isaOpened: boolean; // ISA 기존 개설 여부(시나리오: 다들 옛날 개설=true)
+  /** DB(client 테이블) UUID. 초기 mock 3명·미저장(데모) 고객은 없음. */
+  clientId?: string;
+  /** DB 저장 성공 여부. false = 데모(로컬에만 추가). undefined = mock 초기 고객. */
+  persisted?: boolean;
 }
 
 export const CUSTOMERS: Customer[] = [

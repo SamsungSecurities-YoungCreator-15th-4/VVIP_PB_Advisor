@@ -5,12 +5,15 @@
 
 import { create } from "zustand";
 import {
+  type ConsultMessage,
   type Customer,
+  CONSULT_LOG,
   CUSTOMERS,
   IPS_DEFAULT,
   SCENARIO_BASE,
   TAX_THRESHOLD,
 } from "./mockData";
+import type { DataSource } from "./api";
 
 interface IpsState {
   returnPct: number;
@@ -22,6 +25,9 @@ interface IpsState {
   legal: string;
   unique: string;
 }
+
+/** STT 상담 연동 상태(비동기 흐름·출처 표시용). */
+export type SttStatus = "idle" | "uploading" | "done" | "error";
 
 interface DashboardState {
   customers: Customer[];
@@ -36,6 +42,16 @@ interface DashboardState {
   /** 고객의 다른 금융소득(연 이자·배당, 만원) — 종합과세 기준선 점검 입력값 */
   otherIncomeManwon: number;
 
+  // ── STT/상담 연동 상태 ──
+  /** 화면에 표시하는 상담 전사. 초기값은 mock(CONSULT_LOG). */
+  transcript: ConsultMessage[];
+  /** 전사 데이터 출처(mock 초기 표시 = fallback). */
+  transcriptSource: DataSource;
+  /** STT 로 확보한 실 consultation_id(RAG·tax 재사용). 없으면 빈 문자열. */
+  consultationId: string;
+  sttStatus: SttStatus;
+  sttNote?: string;
+
   addCustomer: (c: Customer) => void;
   selectCustomer: (id: string) => void;
   selectPortfolio: (id: string) => void;
@@ -45,6 +61,10 @@ interface DashboardState {
   /** 실시간 현재값 주입 — 최초 1회는 슬라이더(scenario)도 실시간 값으로 맞춘다. */
   setLiveBase: (base: { ratePct: number; fxKrw: number }) => void;
   setOtherIncome: (manwon: number) => void;
+
+  setTranscript: (transcript: ConsultMessage[], source: DataSource) => void;
+  setConsultationId: (id: string) => void;
+  setSttStatus: (status: SttStatus, note?: string) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -66,6 +86,13 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   liveBaseLoaded: false,
   otherIncomeManwon: TAX_THRESHOLD.otherIncomeDefault,
 
+  // 초기 상담 전사는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
+  transcript: CONSULT_LOG,
+  transcriptSource: "fallback",
+  consultationId: "",
+  sttStatus: "idle",
+  sttNote: undefined,
+
   addCustomer: (c) => set((s) => ({ customers: [...s.customers, c] })),
   selectCustomer: (id) => set({ selectedCustomerId: id }),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
@@ -81,4 +108,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       liveBaseLoaded: true,
     })),
   setOtherIncome: (manwon) => set({ otherIncomeManwon: Math.max(0, manwon) }),
+
+  setTranscript: (transcript, source) => set({ transcript, transcriptSource: source }),
+  setConsultationId: (id) => set({ consultationId: id }),
+  setSttStatus: (status, note) => set({ sttStatus: status, sttNote: note }),
 }));
