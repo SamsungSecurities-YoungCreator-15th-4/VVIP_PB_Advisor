@@ -87,6 +87,29 @@ def test_combined_less_than_naive_sum():
     print(f"   기여분: {combined['contributions']}")
 
 
+def test_isa_not_applicable_does_not_starve_pool():
+    # ISA 한도 소진(isa_used=2000만) → ISA 적용 불가 → rem(공유 풀) 차감 안 됨
+    args = {**BASE, "isa_used_manwon": 2000}
+    combined = T.calc_combined_tax_saving(**args)
+    assert combined["contributions"]["isa"] == 0
+    # ISA가 풀을 안 깎으므로 저율배당은 전체 excess 기준(=단독 카드 절감액)과 동일
+    cards = {c["key"]: c for c in T.calc_tax_advice(**args)}
+    assert abs(combined["contributions"]["low_tax_dividend"]
+               - cards["low_tax_dividend"]["savingManwon"]) <= 1
+    print("✅ ISA 미적용 시 저율배당이 풀을 온전히 사용 (버그픽스 검증)")
+
+
+def test_none_kwargs_do_not_crash():
+    # 선택 인자가 None으로 와도 TypeError 안 남 (방어코드)
+    combined = T.calc_combined_tax_saving(
+        portfolio=PORTFOLIO, gross_return=0.06, total_assets=50.0,
+        marginal_income_tax_rate=None, other_financial_income=None,
+        realized_loss_manwon=None, isa_used_manwon=None, near_term_need_manwon=None,
+    )
+    assert combined["totalManwon"] >= 0
+    print("✅ None 인자 방어: 크래시 없음")
+
+
 def test_overseas_stack_is_capped_by_gain():
     # 손익통산 + 250만 공제는 차익을 넘지 못함
     combined = T.calc_combined_tax_saving(**BASE)

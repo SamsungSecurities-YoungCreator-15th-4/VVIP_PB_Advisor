@@ -61,10 +61,11 @@ def _income_won_by_asset(
     if gross_return <= 0 or total_won <= 0:
         return out
     for a in portfolio:
-        cls = a["asset_class"]
+        cls = a.get("asset_class")
         if cls in INCOME_TAXABLE_ASSETS:
             y = ASSET_INCOME_YIELD_ASSUMPTIONS[cls]
-            out[cls] = out.get(cls, 0.0) + a["weight"] * total_won * min(gross_return, max(y, 0.0))
+            weight = a.get("weight", 0.0)
+            out[cls] = out.get(cls, 0.0) + weight * total_won * min(gross_return, max(y, 0.0))
     return out
 
 
@@ -76,13 +77,14 @@ def _overseas_capital_gain_won(
         return 0.0
     gain = 0.0
     for a in portfolio:
-        cls = a["asset_class"]
+        cls = a.get("asset_class")
         if cls in OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS:
-            total_profit = a["weight"] * total_won * gross_return
+            weight = a.get("weight", 0.0)
+            total_profit = weight * total_won * gross_return
             income_part = 0.0
             if cls in INCOME_TAXABLE_ASSETS:
                 y = ASSET_INCOME_YIELD_ASSUMPTIONS[cls]
-                income_part = a["weight"] * total_won * min(gross_return, max(y, 0.0))
+                income_part = weight * total_won * min(gross_return, max(y, 0.0))
             gain += max(total_profit - income_part, 0.0)
     return gain
 
@@ -110,6 +112,15 @@ def calc_tax_advice(
     주의: 각 카드는 '단독 적용 시' 절감액이라 단순 합산하면 과대평가됨
           (공유 풀 중복). 합산 표시는 calc_combined_tax_saving 사용.
     """
+    # 선택 인자가 None으로 와도 안전하게(기본값으로) 처리
+    if marginal_income_tax_rate is None:
+        marginal_income_tax_rate = DEFAULT_MARGINAL_INCOME_TAX_RATE
+    isa_used_manwon = isa_used_manwon or 0.0
+    pension_used_manwon = pension_used_manwon or 0.0
+    realized_loss_manwon = realized_loss_manwon or 0.0
+    other_financial_income = other_financial_income or 0.0
+    near_term_need_manwon = near_term_need_manwon or 0.0
+
     total_won = max(total_assets, 0.0) * 1e8
     other_income_won = max(other_financial_income, 0.0) * 1e8
     income_by_asset = _income_won_by_asset(portfolio, gross_return, total_won)
@@ -125,7 +136,8 @@ def calc_tax_advice(
     # ① ISA 계좌 활용
     isa_headroom_won = max(ISA_ANNUAL_LIMIT_WON - isa_used_manwon * 10_000, 0.0)
     income_asset_value_won = sum(
-        a["weight"] * total_won for a in portfolio if a["asset_class"] in INCOME_TAXABLE_ASSETS
+        a.get("weight", 0.0) * total_won
+        for a in portfolio if a.get("asset_class") in INCOME_TAXABLE_ASSETS
     )
     transferable_won = min(isa_headroom_won, income_asset_value_won, investable_won)
     isa_saving_won, isa_applicable, isa_reason = 0.0, False, None
@@ -233,10 +245,13 @@ def calc_combined_tax_saving(
     반환: {totalManwon, contributions: {key: manwon}, ineligible: {key: reason}}
     각 contributions 합 == totalManwon (단순 합산과 달리 과대평가 없음).
     """
-    marginal = kwargs.get("marginal_income_tax_rate", DEFAULT_MARGINAL_INCOME_TAX_RATE)
+    marginal = kwargs.get("marginal_income_tax_rate")
+    if marginal is None:
+        marginal = DEFAULT_MARGINAL_INCOME_TAX_RATE
     extra_rate = max(marginal - WITHHOLDING_TAX_RATE, 0.0)
     total_won = max(total_assets, 0.0) * 1e8
-    other_income_won = max(kwargs.get("other_financial_income", 0.0), 0.0) * 1e8
+    other_income = kwargs.get("other_financial_income")
+    other_income_won = max(other_income if other_income is not None else 0.0, 0.0) * 1e8
 
     # 적합성(게이팅)은 단독 카드와 동일 판정 재사용
     cards = {c["key"]: c for c in calc_tax_advice(portfolio, gross_return, total_assets, **kwargs)}
@@ -256,19 +271,25 @@ def calc_combined_tax_saving(
     if isa["ineligibleReason"]:
         ineligible["isa"] = isa["ineligibleReason"]
         contrib["isa"] = 0.0
+    elif not isa["applicable"]:
+        # ISA가 실제 적용되지 않음(절감 0/한도 소진) → rem(공유 풀)을 차감하지 않는다.
+        contrib["isa"] = 0.0
     else:
         contrib["isa"] = isa["savingManwon"] * 10_000
         # ISA가 종합과세 구간에서 소진한 income(=이전 income 중 excess 부분) 만큼 차감
         income_asset_value = sum(
-            a["weight"] * total_won for a in portfolio if a["asset_class"] in INCOME_TAXABLE_ASSETS
+            a.get("weight", 0.0) * total_won
+            for a in portfolio if a.get("asset_class") in INCOME_TAXABLE_ASSETS
         )
         if income_asset_value > 0:
             avg_rate = sum(income_by_asset.values()) / income_asset_value
+            isa_used = kwargs.get("isa_used_manwon")
             isa_headroom = max(
-                ISA_ANNUAL_LIMIT_WON - kwargs.get("isa_used_manwon", 0.0) * 10_000, 0.0
+                ISA_ANNUAL_LIMIT_WON - (isa_used if isa_used is not None else 0.0) * 10_000, 0.0
             )
+            near_term = kwargs.get("near_term_need_manwon")
             investable = max(
-                total_won - max(kwargs.get("near_term_need_manwon", 0.0), 0.0) * 10_000, 0.0
+                total_won - max(near_term if near_term is not None else 0.0, 0.0) * 10_000, 0.0
             )
             transferable = min(isa_headroom, income_asset_value, investable)
             rem = max(rem - min(transferable * avg_rate, rem), 0.0)
@@ -287,7 +308,8 @@ def calc_combined_tax_saving(
 
     # --- 해외 양도차익: 손익통산 + 250만 공제 스택 ---
     gain = _overseas_capital_gain_won(portfolio, gross_return, total_won)
-    loss = max(kwargs.get("realized_loss_manwon", 0.0), 0.0) * 10_000
+    realized_loss = kwargs.get("realized_loss_manwon")
+    loss = max(realized_loss if realized_loss is not None else 0.0, 0.0) * 10_000
     offset = min(loss, gain)
     contrib["tax_loss"] = offset * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
     remaining_gain = gain - offset
