@@ -354,7 +354,7 @@ def _save_stt_consultation_result(
     }
 
     try:
-        created = _execute_stt_consultation_rpc(supabase, titled_rpc_payload)
+        created = _execute_stt_consultation_rpc(supabase, rpc_payload)
     except Exception as exc:
         if not _is_missing_stt_rpc_signature_error(exc):
             logger.exception("STT consultation RPC failed")
@@ -364,13 +364,13 @@ def _save_stt_consultation_result(
             ) from exc
 
         logger.warning(
-            "STT consultation RPC title-parameter signature missing; "
-            "retrying legacy signature."
+            "STT consultation RPC current signature missing; "
+            "retrying title-parameter signature."
         )
         try:
-            created = _execute_stt_consultation_rpc(supabase, rpc_payload)
+            created = _execute_stt_consultation_rpc(supabase, titled_rpc_payload)
         except Exception as fallback_exc:
-            logger.exception("Legacy STT consultation RPC failed")
+            logger.exception("Title-parameter STT consultation RPC failed")
             raise HTTPException(
                 status_code=500,
                 detail="상담 결과 저장 중 오류가 발생했습니다.",
