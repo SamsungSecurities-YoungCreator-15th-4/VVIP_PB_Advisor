@@ -174,7 +174,9 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
     """
     await websocket.accept()
     transcriber: RealtimeConversationTranscriber | None = None
+    transcript_task: asyncio.Task[None] | None = None
     transcript_queue: asyncio.Queue[dict] = asyncio.Queue()
+    send_lock = asyncio.Lock()
     loop = asyncio.get_running_loop()
 
     def queue_transcript(item: dict) -> None:
@@ -200,13 +202,15 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
         )
 
         supabase = get_supabase()
-        client = _get_client_by_name(supabase, customer_name)
+        client = await run_in_threadpool(_get_client_by_name, supabase, customer_name)
         if not client:
-            await websocket.send_json(
+            await _send_realtime_json(
+                websocket,
                 {
                     "event": "error",
                     "detail": f"고객 정보를 찾을 수 없습니다: {customer_name}",
-                }
+                },
+                send_lock,
             )
             await websocket.close(code=1008)
             return
@@ -219,45 +223,54 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
             on_transcript=queue_transcript,
         )
         await run_in_threadpool(transcriber.start)
-        await websocket.send_json({"event": "started"})
+        await _send_realtime_json(websocket, {"event": "started"}, send_lock)
+        transcript_task = asyncio.create_task(
+            _stream_realtime_transcripts(websocket, transcript_queue, send_lock)
+        )
         paused = False
 
-        while True:
-            message = await websocket.receive()
-            if message["type"] == "websocket.disconnect":
-                raise WebSocketDisconnect()
+        try:
+            while True:
+                message = await websocket.receive()
+                if message["type"] == "websocket.disconnect":
+                    raise WebSocketDisconnect()
 
-            audio_chunk = message.get("bytes")
-            if audio_chunk is not None:
-                if not paused:
-                    await run_in_threadpool(transcriber.write, audio_chunk)
-                await _drain_realtime_transcripts(websocket, transcript_queue)
-                continue
+                audio_chunk = message.get("bytes")
+                if audio_chunk is not None:
+                    if not paused:
+                        await run_in_threadpool(transcriber.write, audio_chunk)
+                    continue
 
-            text_payload = message.get("text")
-            if text_payload is None:
-                continue
-            control = _parse_realtime_control_message(text_payload)
-            event = _normalize_realtime_control_event(control)
-            if event == "pause":
-                paused = True
-                await websocket.send_json({"event": "paused"})
-                continue
-            if event in {"play", "resume"}:
-                paused = False
-                await websocket.send_json({"event": "resumed"})
-                continue
-            if event in {"finish", "stop"}:
-                break
-            await websocket.send_json(
-                {
-                    "event": "ignored",
-                    "detail": f"지원하지 않는 제어 이벤트입니다: {event}",
-                }
-            )
+                text_payload = message.get("text")
+                if text_payload is None:
+                    continue
+                control = _parse_realtime_control_message(text_payload)
+                event = _normalize_realtime_control_event(control)
+                if event == "pause":
+                    paused = True
+                    await _send_realtime_json(websocket, {"event": "paused"}, send_lock)
+                    continue
+                if event in {"play", "resume"}:
+                    paused = False
+                    await _send_realtime_json(websocket, {"event": "resumed"}, send_lock)
+                    continue
+                if event in {"finish", "stop"}:
+                    break
+                await _send_realtime_json(
+                    websocket,
+                    {
+                        "event": "ignored",
+                        "detail": f"지원하지 않는 제어 이벤트입니다: {event}",
+                    },
+                    send_lock,
+                )
+        finally:
+            if transcript_task and transcript_task.done():
+                await transcript_task
 
         transcript = await run_in_threadpool(transcriber.stop)
-        await _drain_realtime_transcripts(websocket, transcript_queue)
+        await _stop_realtime_transcript_task(transcript_task)
+        transcript_task = None
         mapped_transcript, ips_json = await run_in_threadpool(
             build_realtime_pipeline_result,
             transcript,
@@ -272,32 +285,53 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
                 ips_json=ips_json,
             ),
         )
-        await websocket.send_json(
+        await _send_realtime_json(
+            websocket,
             {
                 "event": "completed",
                 "consultation": response.model_dump(),
-            }
+            },
+            send_lock,
         )
         await websocket.close(code=1000)
     except WebSocketDisconnect:
         logger.info("Realtime STT websocket disconnected")
+        await _stop_realtime_transcript_task(transcript_task)
         if transcriber:
             await run_in_threadpool(transcriber.stop)
     except ValueError as exc:
-        await websocket.send_json({"event": "error", "detail": str(exc)})
+        await _stop_realtime_transcript_task(transcript_task)
+        if transcriber:
+            await _stop_realtime_transcriber(transcriber)
+        await _send_realtime_json(
+            websocket,
+            {"event": "error", "detail": str(exc)},
+            send_lock,
+        )
         await websocket.close(code=1003)
+    except HTTPException as exc:
+        logger.error("Realtime STT consultation HTTP error: %s", exc.detail)
+        await _stop_realtime_transcript_task(transcript_task)
+        if transcriber:
+            await _stop_realtime_transcriber(transcriber)
+        await _send_realtime_json(
+            websocket,
+            {"event": "error", "detail": exc.detail},
+            send_lock,
+        )
+        await websocket.close(code=1011)
     except Exception:
         logger.exception("Realtime STT consultation pipeline failed")
+        await _stop_realtime_transcript_task(transcript_task)
         if transcriber:
-            try:
-                await run_in_threadpool(transcriber.stop)
-            except Exception as cleanup_error:
-                logger.warning("Realtime STT websocket cleanup failed: %s", cleanup_error)
-        await websocket.send_json(
+            await _stop_realtime_transcriber(transcriber)
+        await _send_realtime_json(
+            websocket,
             {
                 "event": "error",
                 "detail": "실시간 STT 상담 처리 중 오류가 발생했습니다.",
-            }
+            },
+            send_lock,
         )
         await websocket.close(code=1011)
 
@@ -454,18 +488,68 @@ def _normalize_realtime_control_event(control: dict) -> str:
     return str(event).strip().lower()
 
 
-async def _drain_realtime_transcripts(
+async def _send_realtime_json(
+    websocket: WebSocket,
+    payload: dict,
+    send_lock: asyncio.Lock,
+) -> None:
+    async with send_lock:
+        await websocket.send_json(payload)
+
+
+async def _stream_realtime_transcripts(
     websocket: WebSocket,
     transcript_queue: asyncio.Queue[dict],
+    send_lock: asyncio.Lock,
 ) -> None:
-    while not transcript_queue.empty():
-        transcript = transcript_queue.get_nowait()
-        await websocket.send_json(
-            {
-                "event": "partial_transcript",
-                "transcript": transcript,
-            }
-        )
+    try:
+        while True:
+            transcript = await transcript_queue.get()
+            await _send_realtime_transcript(websocket, transcript, send_lock)
+    except asyncio.CancelledError:
+        while not transcript_queue.empty():
+            transcript = transcript_queue.get_nowait()
+            await _send_realtime_transcript(websocket, transcript, send_lock)
+        raise
+
+
+async def _send_realtime_transcript(
+    websocket: WebSocket,
+    transcript: dict,
+    send_lock: asyncio.Lock,
+) -> None:
+    await _send_realtime_json(
+        websocket,
+        {
+            "event": "partial_transcript",
+            "transcript": transcript,
+        },
+        send_lock,
+    )
+
+
+async def _stop_realtime_transcript_task(
+    transcript_task: asyncio.Task[None] | None,
+) -> None:
+    if not transcript_task:
+        return
+    if not transcript_task.done():
+        transcript_task.cancel()
+    try:
+        await transcript_task
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        logger.warning("Realtime STT transcript sender stopped with error: %s", exc)
+
+
+async def _stop_realtime_transcriber(
+    transcriber: RealtimeConversationTranscriber,
+) -> None:
+    try:
+        await run_in_threadpool(transcriber.stop)
+    except Exception as cleanup_error:
+        logger.warning("Realtime STT websocket cleanup failed: %s", cleanup_error)
 
 
 @router.get("/initial-ips", response_model=InitialIpsResponse)

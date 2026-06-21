@@ -32,7 +32,6 @@ from app.stt.stt_record import (  # noqa: E402
     MAPPED_TRANSCRIPT_OUTPUT_FILE,
     SPEECH_KEY,
     SPEECH_REGION,
-    SPEECH_TRANSCRIPTION_TIMEOUT_SECONDS,
     extract_customer_text,
     extract_goal_rrttllu,
     map_speaker_roles,
@@ -128,6 +127,8 @@ class RealtimeConversationTranscriber:
                 "실시간 전사 세션이 시작되지 않았습니다. "
                 "start()를 먼저 호출하세요."
             )
+        if self._cancellation_error:
+            raise self._cancellation_error
         if self._done:
             raise RuntimeError(
                 "이미 종료된 실시간 전사 세션에는 오디오를 쓸 수 없습니다."
@@ -135,7 +136,7 @@ class RealtimeConversationTranscriber:
         if audio_chunk:
             self._push_stream.write(audio_chunk)
 
-    def stop(self, *, timeout_seconds: float = SPEECH_TRANSCRIPTION_TIMEOUT_SECONDS) -> list[dict]:
+    def stop(self, *, timeout_seconds: float = 15.0) -> list[dict]:
         if not self._started:
             return self.results
 
