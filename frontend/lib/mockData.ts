@@ -35,6 +35,18 @@ export interface Customer {
   pbCode: string;
   aumLabel: string; // 표시용
   aumEokwon: number; // 계산용 (억원)
+  // 절세계좌 기납입액·세부담 입력값(만원/%) — 절세 제안 실계산용 고객 데이터.
+  // 실서비스에서는 PB가 입력/연동(준호님 DB 반영 예정). 여기선 현실적 자리표시자.
+  isaUsedManwon: number; // ISA 당해 기납입액 (법정 연 한도 2,000만)
+  pensionUsedManwon: number; // 연금저축+IRP 당해 납입액 (세액공제 한도 900만)
+  realizedLossManwon: number; // 확정 가능 평가손실 (Tax-loss harvesting용)
+  marginalRatePct: number; // 한계세율(지방세 포함, %) — 종합과세 추가과세 비교용
+  // 적합성(lock-up) 게이팅 입력 — 임시 수기 입력(추후 DB/IPS 연동).
+  age: number; // 나이 — 연금 55세 수령요건 게이팅
+  horizonYears: number; // 투자기간(년) — ISA 3년·연금 lock-up 게이팅 (IPS Time)
+  nearTermNeedManwon: number; // 단기 필요자금(만원) — 묶이는 금액에서 제외 (IPS Unique)
+  nearTermNeedYears: number | null; // 단기 필요자금 필요 시점(년)
+  isaOpened: boolean; // ISA 기존 개설 여부(시나리오: 다들 옛날 개설=true)
 }
 
 export const CUSTOMERS: Customer[] = [
@@ -45,6 +57,15 @@ export const CUSTOMERS: Customer[] = [
     pbCode: "PB-100482",
     aumLabel: "운용자산 18억원",
     aumEokwon: 18,
+    isaUsedManwon: 2000, // ISA 연 한도 소진
+    pensionUsedManwon: 900, // 연금계좌 세액공제 한도 소진
+    realizedLossManwon: 1800,
+    marginalRatePct: 38.5,
+    age: 54,
+    horizonYears: 10, // 장기 증여 준비
+    nearTermNeedManwon: 30000, // 내년 가을 자녀 전세 3억
+    nearTermNeedYears: 1,
+    isaOpened: true,
   },
   {
     id: "cust-002",
@@ -53,6 +74,15 @@ export const CUSTOMERS: Customer[] = [
     pbCode: "PB-100483",
     aumLabel: "운용자산 52억원",
     aumEokwon: 52,
+    isaUsedManwon: 800, // ISA 여유 있음
+    pensionUsedManwon: 600,
+    realizedLossManwon: 3200,
+    marginalRatePct: 49.5,
+    age: 33,
+    horizonYears: 3, // 변경: 1년 → 3년
+    nearTermNeedManwon: 0, // 창업 대금(금액 미상) — 추후 입력
+    nearTermNeedYears: null,
+    isaOpened: true,
   },
   {
     id: "cust-003",
@@ -61,6 +91,15 @@ export const CUSTOMERS: Customer[] = [
     pbCode: "PB-100484",
     aumLabel: "운용자산 31억원",
     aumEokwon: 31,
+    isaUsedManwon: 0, // ISA 미납입
+    pensionUsedManwon: 300,
+    realizedLossManwon: 0,
+    marginalRatePct: 38.5,
+    age: 62,
+    horizonYears: 10, // 초장기(10년 이상)
+    nearTermNeedManwon: 0, // 법인 운전자금은 별도 관리
+    nearTermNeedYears: null,
+    isaOpened: true,
   },
 ];
 

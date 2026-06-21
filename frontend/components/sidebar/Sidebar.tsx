@@ -77,6 +77,16 @@ export default function Sidebar() {
       pbCode: `PB-${Math.floor(100000 + Math.random() * 900000)}`,
       aumLabel: aumVal > 0 ? `운용자산 ${aumVal}억원` : "운용자산 미입력",
       aumEokwon: aumVal,
+      // 절세계좌·적합성 입력값은 신규 고객 등록 시 미상 — 기본값으로 시작(추후 PB 입력/DB 연동)
+      isaUsedManwon: 0,
+      pensionUsedManwon: 0,
+      realizedLossManwon: 0,
+      marginalRatePct: 38.5,
+      age: 50,
+      horizonYears: 10,
+      nearTermNeedManwon: 0,
+      nearTermNeedYears: null,
+      isaOpened: true,
     });
     setNewName("");
     setNewAum("");
