@@ -276,3 +276,6 @@ def test_portfolio_response_exposes_financial_income_tax_gauge() -> None:
         gauge["external_financial_income_manwon"]
         + gauge["portfolio_financial_income_manwon"]
     )
+
+
+# PR checks retrigger
