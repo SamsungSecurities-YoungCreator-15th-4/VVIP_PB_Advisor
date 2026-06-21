@@ -18,5 +18,8 @@
 -- ① UNIQUE constraint 제거 (ALTER TABLE ... DROP CONSTRAINT)
 ALTER TABLE client DROP CONSTRAINT IF EXISTS client_name_key;
 
--- ② UNIQUE index 제거 (DROP INDEX)
+-- ② UNIQUE index 제거 (DROP INDEX) 및 일반 인덱스 추가
+--    name 기반 조회(SELECT ... WHERE name = ?)는 계속 사용되므로
+--    Full Table Scan 방지를 위해 non-unique index 로 교체한다.
 DROP INDEX IF EXISTS ux_client_name;
+CREATE INDEX IF NOT EXISTS idx_client_name ON client(name);
