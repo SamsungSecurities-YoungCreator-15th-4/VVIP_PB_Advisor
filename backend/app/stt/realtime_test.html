@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>실시간 STT 테스트</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f6f8fb;
+        color: #111827;
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 32px 20px;
+      }
+
+      h1 {
+        margin: 0 0 20px;
+        font-size: 24px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      select,
+      button {
+        height: 40px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background: white;
+        padding: 0 12px;
+        font-size: 14px;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button.primary {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: white;
+      }
+
+      button.danger {
+        border-color: #dc2626;
+        background: #dc2626;
+        color: white;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .status {
+        margin-bottom: 16px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .panel {
+        min-height: 180px;
+        margin-bottom: 16px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: white;
+        padding: 16px;
+      }
+
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+
+      #transcript {
+        display: grid;
+        gap: 8px;
+      }
+
+      .line {
+        border-left: 3px solid #2563eb;
+        padding-left: 10px;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      pre {
+        overflow: auto;
+        max-height: 260px;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>실시간 STT 로컬 테스트</h1>
+
+      <div class="toolbar">
+        <label>
+          고객
+          <select id="customerName">
+            <option value="김성삼">김성삼</option>
+            <option value="이사조">이사조</option>
+            <option value="박기업">박기업</option>
+          </select>
+        </label>
+        <button id="playButton" class="primary">재생</button>
+        <button id="pauseButton" disabled>Pause</button>
+        <button id="finishButton" class="danger" disabled>■ 마침</button>
+      </div>
+
+      <div id="status" class="status">대기 중</div>
+
+      <section class="panel">
+        <h2>실시간 전사</h2>
+        <div id="transcript"></div>
+      </section>
+
+      <section class="panel">
+        <h2>이벤트 로그</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script>
+      const SAMPLE_RATE = 16000;
+      const playButton = document.getElementById("playButton");
+      const pauseButton = document.getElementById("pauseButton");
+      const finishButton = document.getElementById("finishButton");
+      const customerName = document.getElementById("customerName");
+      const statusNode = document.getElementById("status");
+      const transcriptNode = document.getElementById("transcript");
+      const logNode = document.getElementById("log");
+
+      let ws = null;
+      let mediaStream = null;
+      let audioContext = null;
+      let sourceNode = null;
+      let processorNode = null;
+      let started = false;
+      let paused = false;
+
+      function log(message, data) {
+        const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+        const payload = data ? `\n${JSON.stringify(data, null, 2)}` : "";
+        logNode.textContent = `${line}${payload}\n\n${logNode.textContent}`;
+      }
+
+      function setStatus(text) {
+        statusNode.textContent = text;
+      }
+
+      function websocketUrl() {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        return `${protocol}//${window.location.host}/consultations/stt/realtime`;
+      }
+
+      function appendTranscript(segment) {
+        const line = document.createElement("div");
+        line.className = "line";
+        line.textContent = `${segment.speaker_label || "speaker"}: ${segment.text}`;
+        transcriptNode.appendChild(line);
+      }
+
+      function downsampleTo16k(input, inputSampleRate) {
+        if (inputSampleRate === SAMPLE_RATE) {
+          return input;
+        }
+        const ratio = inputSampleRate / SAMPLE_RATE;
+        const outputLength = Math.floor(input.length / ratio);
+        const output = new Float32Array(outputLength);
+        for (let i = 0; i < outputLength; i += 1) {
+          const start = Math.floor(i * ratio);
+          const end = Math.floor((i + 1) * ratio);
+          let sum = 0;
+          let count = 0;
+          for (let j = start; j < end && j < input.length; j += 1) {
+            sum += input[j];
+            count += 1;
+          }
+          output[i] = count > 0 ? sum / count : 0;
+        }
+        return output;
+      }
+
+      function floatToInt16Pcm(float32) {
+        const pcm = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i += 1) {
+          const sample = Math.max(-1, Math.min(1, float32[i]));
+          pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        }
+        return pcm;
+      }
+
+      async function setupAudio() {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+        audioContext = new AudioContext();
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+
+        processorNode.onaudioprocess = (event) => {
+          if (!started || paused || !ws || ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          const input = event.inputBuffer.getChannelData(0);
+          const downsampled = downsampleTo16k(input, audioContext.sampleRate);
+          const pcm = floatToInt16Pcm(downsampled);
+          ws.send(pcm.buffer);
+        };
+
+        sourceNode.connect(processorNode);
+        processorNode.connect(audioContext.destination);
+      }
+
+      async function startSession() {
+        if (ws && ws.readyState === WebSocket.OPEN && paused) {
+          ws.send(JSON.stringify({ event: "play" }));
+          return;
+        }
+
+        setStatus("마이크 권한 요청 중");
+        await setupAudio();
+
+        ws = new WebSocket(websocketUrl());
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = () => {
+          ws.send(
+            JSON.stringify({
+              customer_name: customerName.value,
+              sample_rate: SAMPLE_RATE,
+              bits_per_sample: 16,
+              channels: 1,
+            }),
+          );
+        };
+
+        ws.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+          log(`server event: ${message.event}`, message);
+
+          if (message.event === "started") {
+            started = true;
+            paused = false;
+            playButton.disabled = true;
+            pauseButton.disabled = false;
+            finishButton.disabled = false;
+            setStatus("전사 중");
+          }
+          if (message.event === "partial_transcript") {
+            appendTranscript(message.transcript);
+          }
+          if (message.event === "paused") {
+            paused = true;
+            playButton.disabled = false;
+            pauseButton.disabled = true;
+            setStatus("일시정지");
+          }
+          if (message.event === "resumed") {
+            paused = false;
+            playButton.disabled = true;
+            pauseButton.disabled = false;
+            setStatus("전사 중");
+          }
+          if (message.event === "completed") {
+            started = false;
+            paused = false;
+            cleanupAudio();
+            playButton.disabled = false;
+            pauseButton.disabled = true;
+            finishButton.disabled = true;
+            setStatus("완료 및 저장됨");
+          }
+          if (message.event === "error") {
+            setStatus(`오류: ${message.detail}`);
+          }
+        };
+
+        ws.onclose = () => {
+          started = false;
+          paused = false;
+          cleanupAudio();
+          playButton.disabled = false;
+          pauseButton.disabled = true;
+          finishButton.disabled = true;
+          log("websocket closed");
+        };
+      }
+
+      function pauseSession() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ event: "pause" }));
+        }
+      }
+
+      function finishSession() {
+        started = false;
+        paused = false;
+        cleanupAudio();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ event: "finish" }));
+        }
+        setStatus("마침 처리 중");
+      }
+
+      function cleanupAudio() {
+        if (processorNode) {
+          processorNode.disconnect();
+          processorNode = null;
+        }
+        if (sourceNode) {
+          sourceNode.disconnect();
+          sourceNode = null;
+        }
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
+        }
+        if (audioContext) {
+          audioContext.close();
+          audioContext = null;
+        }
+      }
+
+      playButton.addEventListener("click", () => {
+        startSession().catch((error) => {
+          log("start failed", { message: error.message });
+          setStatus(`시작 실패: ${error.message}`);
+        });
+      });
+      pauseButton.addEventListener("click", pauseSession);
+      finishButton.addEventListener("click", finishSession);
+    </script>
+  </body>
+</html>

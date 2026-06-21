@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from app.routers.consultations import _build_stt_titles
+from app.routers.consultations import _build_stt_titles, _to_kst_iso
 
 
 class FakeResult:
@@ -83,6 +83,11 @@ class SttTitleTest(unittest.TestCase):
         )
 
         self.assertEqual(ips_title, "260611_김성삼_ips(3)")
+
+    def test_parses_postgres_timestamp_with_short_microseconds(self):
+        created_at = _to_kst_iso("2026-06-21T22:34:39.04894+09:00")
+
+        self.assertEqual(created_at, "2026-06-21T22:34:39.048940+09:00")
 
 
 if __name__ == "__main__":
