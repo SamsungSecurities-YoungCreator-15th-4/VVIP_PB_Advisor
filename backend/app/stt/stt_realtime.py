@@ -26,7 +26,7 @@ BACKEND_DIR = STT_DIR.parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.stt.stt_record import (
+from app.stt.stt_record import (  # noqa: E402
     DEFAULT_OUTPUT_DIR,
     GOAL_RRTTLLU_OUTPUT_FILE,
     MAPPED_TRANSCRIPT_OUTPUT_FILE,
