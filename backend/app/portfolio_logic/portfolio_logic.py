@@ -37,6 +37,13 @@ DEFAULT_RANDOM_SEED = 42
 # 둔다. S&P500(overseas_blue_chip) 등으로 바꾸려면 이 한 줄만 수정하면 된다.
 BETA_BENCHMARK_ASSET = "domestic_equity"
 
+# 시계열 충격 주입(calculate_metrics(shocks=...))에서 쓰는 변동성 확대 계수와 상한.
+# 충격 |s| 1단위(=100%p)당 변동성 확대량 BETA, 상한 CAP. |s|=15%면 변동성 약 1.3배.
+# 위기 국면(2008/2020/2022)에서 실현변동성이 1.3~2배 확대된 사례를 참고한 선형 근사
+# (점추정 가정이며 실측 회귀계수는 아님).
+VOL_STRESS_BETA = 2.0
+VOL_STRESS_CAP = 1.6
+
 # 기준 금리와 시나리오 금리는 분리한다.
 # 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는
 # 서로 다른 입력으로 둘 수 있다.
@@ -1851,6 +1858,79 @@ def calculate_stress_test(
     }
 
 
+# ── 시계열 충격 주입 ──────────────────────────────────────────────────────────
+# calculate_stress_test가 '스트레스 수익률 한 값'을 내는 것과 달리, 아래 헬퍼는
+# 자산별 연간 충격 s를 실측 일별수익률 시계열에 주입해 변동성·샤프·MDD·소르티노·
+# 세후수익률까지 '전부' 일관되게 재계산할 수 있게 한다(calculate_metrics(shocks=...)).
+# 충격의 정의(듀레이션·환노출)는 calculate_stress_test와 동일한 상수를 재사용한다.
+
+
+def _vol_multiplier(shock: float) -> float:
+    """충격 |s|에 따른 변동성 확대 계수. min(1 + BETA*|s|, CAP)."""
+    return min(1.0 + VOL_STRESS_BETA * abs(float(shock)), VOL_STRESS_CAP)
+
+
+def derive_asset_shocks_from_macro(
+    assets: List[str],
+    request: PortfolioRequest,
+) -> Dict[str, float]:
+    """슬라이더(금리·환율) 입력을 자산별 연간 기대수익률 충격으로 환산한다.
+
+    calculate_stress_test와 '동일한' 듀레이션·환노출 민감도를 쓰되, 합산하지 않고
+    자산별 효과를 그대로 돌려준다. 따라서 이 충격을 시계열에 주입하면 기존 스트레스
+    모델과 같은 가정 위에서 전 지표가 재계산된다.
+        s_asset = -duration_asset × 금리충격 (+) 환노출자산이면 + 환율충격
+    """
+    shocks: Dict[str, float] = {}
+    for asset in assets:
+        s = 0.0
+        if asset in INTEREST_RATE_SENSITIVE_ASSETS:
+            s += -ASSET_DURATION_YEARS.get(asset, 0.0) * request.stress_interest_rate_shock
+        if asset in FX_SENSITIVE_ASSETS:
+            s += request.stress_fx_shock
+        if s != 0.0:
+            shocks[asset] = float(s)
+    return shocks
+
+
+def apply_return_shocks(
+    selected_returns: pd.DataFrame,
+    selected_expected_returns: pd.Series,
+    shocks: Dict[str, float],
+) -> Tuple[pd.DataFrame, pd.Series]:
+    """자산별 연간 충격 s를 일별수익률 시계열에 주입한다(원본 비변형, 복사본 반환).
+
+        r'_t = mean + (r_t - mean) × vol_mult(s) + s / TRADING_DAYS
+    - 드리프트 s/252: 연간 충격의 일별 환산
+    - 변동성 확대 vol_mult(s): 위기 국면 변동성 동반 상승의 선형 근사
+    기대수익률에는 s를 그대로 가산한다. 입력 DataFrame/Series는 변형하지 않는다.
+    """
+    stressed_returns = selected_returns.copy()
+    stressed_expected = selected_expected_returns.copy()
+    for asset in stressed_returns.columns:
+        s = float(shocks.get(asset, 0.0))
+        if s == 0.0:
+            continue
+        col = stressed_returns[asset]
+        m = float(col.mean())
+        vm = _vol_multiplier(s)
+        stressed_returns[asset] = m + (col - m) * vm + s / TRADING_DAYS
+        if asset in stressed_expected.index:
+            stressed_expected[asset] = float(stressed_expected[asset]) + s
+    return stressed_returns, stressed_expected
+
+
+def shift_expected_returns(
+    expected_returns: pd.Series,
+    shocks: Dict[str, float],
+) -> pd.Series:
+    """세금 계산용 전체 기대수익률 시리즈에 자산별 충격 s를 가산한다(복사본)."""
+    shifted = expected_returns.copy()
+    for asset, s in shocks.items():
+        if asset in shifted.index:
+            shifted[asset] = float(shifted[asset]) + float(s)
+    return shifted
+
 
 def calculate_metric_amounts(
     metrics: Dict[str, Any],
@@ -1903,7 +1983,14 @@ def calculate_metrics(
     expected_returns: pd.Series,
     request: PortfolioRequest,
     cov_matrix: Optional[pd.DataFrame] = None,
+    shocks: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
+    """포트폴리오 지표 계산.
+
+    shocks(자산→연간 기대수익률 충격)를 주면 일별수익률 시계열·기대수익률에 충격을
+    주입한 뒤 변동성·샤프·소르티노·MDD·세후수익률을 일관되게 재계산한다. shocks가
+    None이거나 비어 있으면 기존 동작과 100% 동일하다(하위호환).
+    """
     weights = normalize_weights(weights)
     validate_required_assets_available(weights, list(returns.columns), "portfolio_weights")
 
@@ -1920,6 +2007,18 @@ def calculate_metrics(
 
     selected_returns = returns[assets]
     selected_expected_returns = expected_returns.reindex(assets).fillna(0.0)
+
+    # 세금 계산은 전체 자산 기대수익률 시리즈를 사용한다(충격 시 함께 이동).
+    expected_returns_for_tax = expected_returns
+
+    if shocks:
+        # 충격 주입: 시계열·기대수익률을 흔든 복사본으로 교체한다. 변동성 확대가
+        # 반영되도록 공분산은 반드시 '흔든 시계열'에서 다시 계산한다(넘어온 cov 무시).
+        selected_returns, selected_expected_returns = apply_return_shocks(
+            selected_returns, selected_expected_returns, shocks
+        )
+        expected_returns_for_tax = shift_expected_returns(expected_returns, shocks)
+        cov_matrix = None
 
     if cov_matrix is None:
         selected_cov_matrix = selected_returns.cov() * TRADING_DAYS
@@ -1948,14 +2047,14 @@ def calculate_metrics(
 
     after_tax_return, tax_breakdown = calculate_after_tax_return(
         weights=weights,
-        expected_returns=expected_returns,
+        expected_returns=expected_returns_for_tax,
         total_asset=request.total_asset,
         request=request,
     )
 
     taxable_financial_income = estimate_taxable_financial_income(
         weights=weights,
-        expected_returns=expected_returns,
+        expected_returns=expected_returns_for_tax,
         total_asset=request.total_asset,
     )
 
@@ -3132,14 +3231,14 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     normalized = text_value.replace(",", "")
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", normalized):
+    for number_text, unit in re.findall(r"([0-9]{1,18}(?:\.[0-9]+)?)\s*([억만천])", normalized):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
 
     if matched_unit:
         return float(total)
 
-    number_match = re.search(r"-?[0-9]+(?:\.[0-9]+)?", normalized)
+    number_match = re.search(r"-?[0-9]{1,18}(?:\.[0-9]+)?", normalized)
     if number_match:
         return safe_float(number_match.group(0), default)
 
@@ -3235,7 +3334,7 @@ def calculate_account_age_years_from_start_year(start_year: Optional[int]) -> fl
 
 def parse_relative_years_from_text(text: str) -> Optional[float]:
     match = re.search(
-        r"([0-9]+(?:\.[0-9]+)?)\s*년\s*(?:후|뒤|내|안|이내)",
+        r"([0-9]{1,18}(?:\.[0-9]+)?)\s*년\s*(?:후|뒤|내|안|이내)",
         text,
     )
     if match:
@@ -3258,13 +3357,13 @@ def parse_explicit_money_amount_krw(value: Any) -> float:
 
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", text_value):
+    for number_text, unit in re.findall(r"([0-9]{1,18}(?:\.[0-9]+)?)\s*([억만천])", text_value):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
     if matched_unit:
         return float(total)
 
-    won_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*원", text_value)
+    won_match = re.search(r"([0-9]{1,18}(?:\.[0-9]+)?)\s*원", text_value)
     if won_match:
         return safe_float(won_match.group(1), 0.0)
 
@@ -3282,7 +3381,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
         return 0.0
 
     current_year_match = re.search(
-        r"(?:올해|금년|당해).{0,40}([0-9]+(?:\.[0-9]+)?\s*[억만천]?)\s*(?:원)?\s*(?:납입|입금)",
+        r"(?:올해|금년|당해).{0,40}([0-9]{1,18}(?:\.[0-9]+)?\s{0,4}[억만천]?)\s{0,4}(?:원)?\s{0,4}(?:납입|입금)",
         window,
     )
     if current_year_match:
@@ -4229,6 +4328,61 @@ def portfolio_stress_test(request: Dict[str, Any]):
             "scenario_summary": response["scenario_summary"],
             "data_snapshot": response.get("data_snapshot", {}),
             "input_adapter": response["input_adapter"],
+        }
+    except Exception as e:
+        raise public_http_exception(e)
+
+
+class StressMetricsRequest(BaseModel):
+    """충격 후 전체 지표 재계산용 입력. weights를 안 주면 기본(현재) 비중을 쓴다."""
+
+    weights: Optional[Dict[str, float]] = Field(None)
+    portfolio: PortfolioRequest
+
+
+@router.post("/portfolio/stress-metrics", response_model=Dict[str, Any])
+def portfolio_stress_metrics(request: StressMetricsRequest):
+    """슬라이더(금리·환율) 충격을 시계열에 주입해 기준/스트레스 지표를 함께 반환한다.
+
+    /portfolio/stress-test가 '스트레스 수익률 한 값'을 주는 것과 달리, 여기서는 충격
+    후 기대수익률·변동성·샤프·소르티노·MDD·세후수익률 6종을 모두 재계산한다. 충격은
+    request.portfolio의 stress_interest_rate_shock·stress_fx_shock를 자산별 효과로
+    환산해(calculate_stress_test와 동일한 듀레이션·환노출 가정) 주입한다.
+    """
+    try:
+        req = request.portfolio
+        weights = canonicalize_weights(request.weights) or get_default_current_weights()
+        weights = normalize_weights(weights)
+
+        prices = download_price_data(period=req.period, cash_return=req.cash_return)
+        returns = calculate_daily_returns(prices)
+        expected_returns = calculate_expected_returns(
+            returns=returns,
+            expected_return_haircut=req.expected_return_haircut,
+            enable_black_litterman=req.enable_black_litterman,
+            view_expected_returns=req.view_expected_returns,
+            view_weight=req.view_weight,
+        )
+
+        base = calculate_metrics(weights, returns, expected_returns, req)
+
+        assets = [
+            asset
+            for asset in weights
+            if asset in returns.columns and weights[asset] > 1e-12
+        ]
+        asset_shocks = derive_asset_shocks_from_macro(assets, req)
+        stressed = calculate_metrics(
+            weights, returns, expected_returns, req, shocks=asset_shocks
+        )
+
+        return {
+            "as_of": datetime.now(KST).isoformat(timespec="seconds"),
+            "stress_interest_rate_shock": req.stress_interest_rate_shock,
+            "stress_fx_shock": req.stress_fx_shock,
+            "asset_shocks": {k: safe_round(v, 6) for k, v in asset_shocks.items()},
+            "base": base,
+            "stressed": stressed,
         }
     except Exception as e:
         raise public_http_exception(e)

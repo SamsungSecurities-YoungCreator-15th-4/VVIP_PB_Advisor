@@ -35,8 +35,10 @@ import zipfile
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+load_dotenv()
 
 from app.db.supabase import get_supabase  # noqa: E402
 from app.services.dart_corp import normalize_corp_name  # noqa: E402
@@ -85,6 +87,8 @@ def fetch_corp_code_xml(api_key: str) -> bytes:
             status = (root.findtext("status") or "").strip()
             message = (root.findtext("message") or "").strip()
         except ET.ParseError:
+            # 에러 본문 파싱은 보조 정보(status/message) 추출용이다.
+            # 파싱에 실패해도 아래에서 일반 오류 메시지로 안전하게 폴백한다.
             pass
         detail = f"status={status}, message={message}" if status else "응답이 zip 이 아님"
         raise SystemExit(f"DART corpCode 응답 오류({detail}). DART_API_KEY 를 확인하세요.")
