@@ -91,9 +91,11 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
     프로토콜:
     1) 최초 text JSON:
        {"customer_name":"김성삼","sample_rate":16000,"bits_per_sample":16,"channels":1}
-    2) 이후 binary PCM chunk 전송
-    3) 종료 text JSON: {"event":"stop"}
-    4) 서버가 partial_transcript 이벤트와 completed 이벤트를 JSON으로 반환
+    2) 재생 중에는 binary PCM chunk 전송
+    3) 일시정지 text JSON: {"event":"pause"}
+    4) 재개 text JSON: {"event":"play"} 또는 {"event":"resume"}
+    5) 완료 text JSON: {"event":"finish"} 또는 {"event":"stop"}
+    6) 서버가 partial_transcript 이벤트와 completed 이벤트를 JSON으로 반환
     """
     await websocket.accept()
     transcriber: RealtimeConversationTranscriber | None = None
@@ -143,6 +145,7 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
         )
         await run_in_threadpool(transcriber.start)
         await websocket.send_json({"event": "started"})
+        paused = False
 
         while True:
             message = await websocket.receive()
@@ -151,7 +154,8 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
 
             audio_chunk = message.get("bytes")
             if audio_chunk is not None:
-                await run_in_threadpool(transcriber.write, audio_chunk)
+                if not paused:
+                    await run_in_threadpool(transcriber.write, audio_chunk)
                 await _drain_realtime_transcripts(websocket, transcript_queue)
                 continue
 
@@ -159,8 +163,23 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
             if text_payload is None:
                 continue
             control = _parse_realtime_control_message(text_payload)
-            if control.get("event") == "stop":
+            event = _normalize_realtime_control_event(control)
+            if event == "pause":
+                paused = True
+                await websocket.send_json({"event": "paused"})
+                continue
+            if event in {"play", "resume"}:
+                paused = False
+                await websocket.send_json({"event": "resumed"})
+                continue
+            if event in {"finish", "stop"}:
                 break
+            await websocket.send_json(
+                {
+                    "event": "ignored",
+                    "detail": f"지원하지 않는 제어 이벤트입니다: {event}",
+                }
+            )
 
         transcript = await run_in_threadpool(transcriber.stop)
         await _drain_realtime_transcripts(websocket, transcript_queue)
@@ -320,6 +339,13 @@ def _parse_realtime_control_message(text_payload: str) -> dict:
     if not isinstance(control, dict):
         raise ValueError("제어 메시지는 JSON object 여야 합니다.")
     return control
+
+
+def _normalize_realtime_control_event(control: dict) -> str:
+    event = control.get("event")
+    if event is None:
+        return ""
+    return str(event).strip().lower()
 
 
 async def _drain_realtime_transcripts(
