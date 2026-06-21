@@ -1,9 +1,22 @@
+import asyncio
+import json
 import logging
 from datetime import datetime, time, timedelta, timezone
-from typing import Annotated
+from typing import Annotated, get_args
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from fastapi.concurrency import run_in_threadpool
 
 from app.db.supabase import get_supabase
 from app.schemas.consultations import (
@@ -17,8 +30,15 @@ from app.services.ips import (
     build_ips_snapshot_payload,
     flatten_ips_json,
 )
-from app.services.stt_pipeline import run_uploaded_wav_pipeline
+from app.services.stt_pipeline import SttPipelineResult, run_uploaded_wav_pipeline
 from app.services.transcript import transcript_to_raw_note
+from app.stt.stt_realtime import (
+    DEFAULT_BITS_PER_SAMPLE,
+    DEFAULT_CHANNELS,
+    DEFAULT_SAMPLE_RATE,
+    RealtimeConversationTranscriber,
+    build_realtime_pipeline_result,
+)
 
 router = APIRouter(prefix="/consultations", tags=["consultations"])
 logger = logging.getLogger(__name__)
@@ -56,6 +76,145 @@ def create_stt_consultation(
             detail="STT 상담 처리 중 오류가 발생했습니다.",
         ) from exc
 
+    return _save_stt_consultation_result(
+        supabase=supabase,
+        client=client,
+        customer_name=customer_name,
+        pipeline_result=pipeline_result,
+    )
+
+
+@router.websocket("/stt/realtime")
+async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
+    """실시간 STT WebSocket.
+
+    프로토콜:
+    1) 최초 text JSON:
+       {"customer_name":"김성삼","sample_rate":16000,"bits_per_sample":16,"channels":1}
+    2) 이후 binary PCM chunk 전송
+    3) 종료 text JSON: {"event":"stop"}
+    4) 서버가 partial_transcript 이벤트와 completed 이벤트를 JSON으로 반환
+    """
+    await websocket.accept()
+    transcriber: RealtimeConversationTranscriber | None = None
+    transcript_queue: asyncio.Queue[dict] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def queue_transcript(item: dict) -> None:
+        loop.call_soon_threadsafe(transcript_queue.put_nowait, item)
+
+    try:
+        start_payload = await websocket.receive_json()
+        customer_name = _parse_realtime_customer_name(start_payload)
+        sample_rate = _parse_positive_int(
+            start_payload.get("sample_rate"),
+            default=DEFAULT_SAMPLE_RATE,
+            field_name="sample_rate",
+        )
+        bits_per_sample = _parse_positive_int(
+            start_payload.get("bits_per_sample"),
+            default=DEFAULT_BITS_PER_SAMPLE,
+            field_name="bits_per_sample",
+        )
+        channels = _parse_positive_int(
+            start_payload.get("channels"),
+            default=DEFAULT_CHANNELS,
+            field_name="channels",
+        )
+
+        supabase = get_supabase()
+        client = _get_client_by_name(supabase, customer_name)
+        if not client:
+            await websocket.send_json(
+                {
+                    "event": "error",
+                    "detail": f"고객 정보를 찾을 수 없습니다: {customer_name}",
+                }
+            )
+            await websocket.close(code=1008)
+            return
+
+        transcriber = await run_in_threadpool(
+            RealtimeConversationTranscriber,
+            sample_rate=sample_rate,
+            bits_per_sample=bits_per_sample,
+            channels=channels,
+            on_transcript=queue_transcript,
+        )
+        await run_in_threadpool(transcriber.start)
+        await websocket.send_json({"event": "started"})
+
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect()
+
+            audio_chunk = message.get("bytes")
+            if audio_chunk is not None:
+                await run_in_threadpool(transcriber.write, audio_chunk)
+                await _drain_realtime_transcripts(websocket, transcript_queue)
+                continue
+
+            text_payload = message.get("text")
+            if text_payload is None:
+                continue
+            control = _parse_realtime_control_message(text_payload)
+            if control.get("event") == "stop":
+                break
+
+        transcript = await run_in_threadpool(transcriber.stop)
+        await _drain_realtime_transcripts(websocket, transcript_queue)
+        mapped_transcript, ips_json = await run_in_threadpool(
+            build_realtime_pipeline_result,
+            transcript,
+        )
+        response = await run_in_threadpool(
+            _save_stt_consultation_result,
+            supabase=supabase,
+            client=client,
+            customer_name=customer_name,
+            pipeline_result=SttPipelineResult(
+                transcript_json=mapped_transcript,
+                ips_json=ips_json,
+            ),
+        )
+        await websocket.send_json(
+            {
+                "event": "completed",
+                "consultation": response.model_dump(),
+            }
+        )
+        await websocket.close(code=1000)
+    except WebSocketDisconnect:
+        logger.info("Realtime STT websocket disconnected")
+        if transcriber:
+            await run_in_threadpool(transcriber.stop)
+    except ValueError as exc:
+        await websocket.send_json({"event": "error", "detail": str(exc)})
+        await websocket.close(code=1003)
+    except Exception:
+        logger.exception("Realtime STT consultation pipeline failed")
+        if transcriber:
+            try:
+                await run_in_threadpool(transcriber.stop)
+            except Exception as cleanup_error:
+                logger.warning("Realtime STT websocket cleanup failed: %s", cleanup_error)
+        await websocket.send_json(
+            {
+                "event": "error",
+                "detail": "실시간 STT 상담 처리 중 오류가 발생했습니다.",
+            }
+        )
+        await websocket.close(code=1011)
+
+
+def _save_stt_consultation_result(
+    *,
+    supabase,
+    client: dict,
+    customer_name: CustomerName,
+    pipeline_result: SttPipelineResult,
+) -> ConsultationResponse:
     try:
         raw_note = transcript_to_raw_note(pipeline_result.transcript_json)
         ips_json = flatten_ips_json(pipeline_result.ips_json)
@@ -129,6 +288,52 @@ def create_stt_consultation(
         ips_snapshot_id=created["ips_snapshot_id"],
         created_at=_to_kst_iso(created["created_at"]),
     )
+
+
+def _parse_realtime_customer_name(payload: dict) -> CustomerName:
+    if not isinstance(payload, dict):
+        raise ValueError("첫 메시지는 JSON object 여야 합니다.")
+    customer_name = payload.get("customer_name")
+    if customer_name not in get_args(CustomerName):
+        allowed = ", ".join(get_args(CustomerName))
+        raise ValueError(f"customer_name 은 다음 중 하나여야 합니다: {allowed}")
+    return customer_name
+
+
+def _parse_positive_int(value, *, default: int, field_name: str) -> int:
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} 은 정수여야 합니다.") from exc
+    if parsed <= 0:
+        raise ValueError(f"{field_name} 은 1 이상이어야 합니다.")
+    return parsed
+
+
+def _parse_realtime_control_message(text_payload: str) -> dict:
+    try:
+        control = json.loads(text_payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError("제어 메시지는 JSON 형식이어야 합니다.") from exc
+    if not isinstance(control, dict):
+        raise ValueError("제어 메시지는 JSON object 여야 합니다.")
+    return control
+
+
+async def _drain_realtime_transcripts(
+    websocket: WebSocket,
+    transcript_queue: asyncio.Queue[dict],
+) -> None:
+    while not transcript_queue.empty():
+        transcript = transcript_queue.get_nowait()
+        await websocket.send_json(
+            {
+                "event": "partial_transcript",
+                "transcript": transcript,
+            }
+        )
 
 
 @router.get("/initial-ips", response_model=InitialIpsResponse)
