@@ -60,11 +60,11 @@ export function useStressedPortfolios(): UseStressedResult {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     // 슬라이더 드래그 연사 방지용 디바운스 (setState는 effect 본문이 아닌
     // 타임아웃 콜백 안에서 호출 — react-hooks/set-state-in-effect 회피)
     const timer = setTimeout(() => {
       if (cancelled) return;
+      setLoading(true);
       fetchStressedPortfolios(rateDeltaBp, fxDelta, aumEokwon, otherIncomeEok, {
         isaUsedManwon,
         pensionUsedManwon,

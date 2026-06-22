@@ -152,8 +152,9 @@ def _read_forex_history() -> dict | None:
 def _write_forex_history(history: dict) -> None:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        with open(FOREX_HISTORY_PATH, "w", encoding="utf-8") as f:
-            json.dump(history, f, indent=2)
+        with _SNAPSHOT_LOCK:
+            with open(FOREX_HISTORY_PATH, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2)
     except OSError:
         logger.warning("Failed to write forex history cache: %s", FOREX_HISTORY_PATH, exc_info=True)
 
