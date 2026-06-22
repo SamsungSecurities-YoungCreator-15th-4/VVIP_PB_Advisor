@@ -156,43 +156,93 @@ export default function TaxSection() {
 
         {/* 탭 3: 절세 제안 */}
         <TabsContent value="advice">
-          <div className="grid grid-cols-2 gap-2">
-            {TAX_ADVICE.cards.map((card) => (
-              <div
-                key={card.title}
-                className="flex flex-col rounded-xl border p-2.5"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="flex size-5 items-center justify-center rounded-md bg-brand/10 text-[12px] font-extrabold text-brand-dark">
-                    {card.icon}
-                  </span>
-                  <span className="text-[12px] font-extrabold">
-                    {card.title}
-                  </span>
-                </div>
-                <p className="mt-1.5 flex-1 text-[12px] font-semibold leading-snug text-muted-foreground">
-                  {card.body}
-                </p>
-                <p className="mt-1 text-[12px] font-bold text-muted-foreground/60">
-                  {card.tag}
-                </p>
-                <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
-                  {card.saving}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 flex items-center justify-between rounded-xl bg-brand px-3 py-2">
-            <span className="text-[12px] font-bold text-white">
-              {TAX_ADVICE.totalLabel}
-            </span>
-            <span className="text-[12px] font-extrabold tabular-nums text-white">
-              {TAX_ADVICE.totalSaving}
-            </span>
-          </div>
+          <AdviceCards />
         </TabsContent>
       </Card>
     </Tabs>
+  );
+}
+
+type AdviceTab = "제안설명" | "상품추천";
+
+function AdviceCards() {
+  const [tabs, setTabs] = useState<Record<string, AdviceTab>>({});
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        {TAX_ADVICE.cards.map((card) => {
+          const active = tabs[card.title] ?? "제안설명";
+          return (
+            <div key={card.title} className="flex flex-col rounded-xl border p-2.5">
+              {/* 헤더: 아이콘 + 제목 + 세그먼트 */}
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-brand/10 text-[12px] font-extrabold text-brand-dark">
+                  {card.icon}
+                </span>
+                <span className="flex-1 text-[12px] font-extrabold leading-tight">
+                  {card.title}
+                </span>
+                <div className="flex shrink-0 rounded-md bg-muted p-0.5">
+                  {(["제안설명", "상품추천"] as AdviceTab[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTabs((prev) => ({ ...prev, [card.title]: t }))}
+                      className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                        active === t
+                          ? "bg-white text-brand-dark shadow-sm"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 콘텐츠 */}
+              {active === "제안설명" ? (
+                <>
+                  <p className="flex-1 text-[12px] font-semibold leading-snug text-muted-foreground">
+                    {card.body}
+                  </p>
+                  <p className="mt-1 text-[12px] font-bold text-muted-foreground/60">
+                    {card.tag}
+                  </p>
+                  {card.saving && (
+                    <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
+                      {card.saving}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {card.products.map((p) => (
+                    <div key={p.name} className="rounded-lg bg-brand/5 px-2 py-1.5">
+                      <p className="text-[12px] font-extrabold text-brand-dark">
+                        {p.name}
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-semibold leading-snug text-muted-foreground">
+                        {p.desc}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-brand px-3 py-2">
+        <span className="text-[12px] font-bold text-white">
+          {TAX_ADVICE.totalLabel}
+        </span>
+        <span className="text-[12px] font-extrabold tabular-nums text-white">
+          {TAX_ADVICE.totalSaving}
+        </span>
+      </div>
+    </>
   );
 }
 
