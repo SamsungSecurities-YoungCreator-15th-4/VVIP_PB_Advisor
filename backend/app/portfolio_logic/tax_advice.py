@@ -217,9 +217,14 @@ def calc_tax_advice(
         if bond_income_won <= 0:
             bond_reason = "보유 채권의 이자소득이 없어 분리과세 전환 대상 없음"
         elif excess_won <= 0:
-            bond_reason = "금융소득종합과세 구간(2,000만 초과) 아님 → 분리과세 실익 없음"
+            bond_reason = (
+                f"금융소득종합과세 구간({_won_to_manwon(COMPREHENSIVE_TAX_THRESHOLD)}만 초과) 아님 "
+                "→ 분리과세 실익 없음"
+            )
         else:
-            bond_reason = "한계세율이 분리과세율(33%) 이하 → 실익 없음"
+            bond_reason = (
+                f"한계세율이 분리과세율({LONG_BOND_SEPARATE_TAX_RATE * 100:g}%) 이하 → 실익 없음"
+            )
     cards.append({
         "key": "separate_bond", "savingManwon": _won_to_manwon(bond_saving_won),
         "applicable": bond_saving_won > 0, "transferableManwon": 0,
@@ -237,7 +242,9 @@ def calc_tax_advice(
         elif excess_won <= 0:
             dividend_reason = "금융소득종합과세 구간 아님 → 추가과세 회피 실익 없음"
         else:
-            dividend_reason = "한계세율이 원천징수율(15.4%) 이하 → 실익 없음"
+            dividend_reason = (
+                f"한계세율이 원천징수율({WITHHOLDING_TAX_RATE * 100:g}%) 이하 → 실익 없음"
+            )
     cards.append({
         "key": "low_tax_dividend", "savingManwon": _won_to_manwon(dividend_saving_won),
         "applicable": dividend_saving_won > 0, "transferableManwon": 0,
@@ -251,7 +258,7 @@ def calc_tax_advice(
     exemption_saving_won = exemption_realizable_won * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
     exemption_reason = (
         None if exemption_saving_won > 0
-        else "해외주식·ETF 양도차익이 없어 기본공제(250만) 활용 대상 없음"
+        else f"해외주식·ETF 양도차익이 없어 기본공제({_won_to_manwon(OVERSEAS_STOCK_GAIN_DEDUCTION)}만) 활용 대상 없음"
     )
     cards.append({
         "key": "overseas_exemption", "savingManwon": _won_to_manwon(exemption_saving_won),
