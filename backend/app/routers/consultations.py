@@ -360,6 +360,7 @@ def _save_stt_consultation_result(
         source_type="consultation",
         raw_ips_json=ips_json,
     )
+
     transcript_title, ips_title = _build_stt_titles(
         supabase=supabase,
         client_id=client["id"],
@@ -539,7 +540,7 @@ async def _stop_realtime_transcript_task(
     try:
         await transcript_task
     except asyncio.CancelledError:
-        pass
+        pass  # 태스크 취소는 정상 종료 경로 — 의도적으로 억제
     except Exception as exc:
         logger.warning("Realtime STT transcript sender stopped with error: %s", exc)
 
