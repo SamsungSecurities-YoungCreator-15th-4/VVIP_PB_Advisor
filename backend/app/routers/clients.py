@@ -1,8 +1,8 @@
 """POST /clients — 고객(client) 생성.
 
 고객 SSOT 는 DB(client 테이블)다. STT 는 고객명으로 client 를 조회해 client_id(FK)를
-채우므로(Option A), 이름이 사실상 조회 키가 된다. 동명이인은 허용하며, 고유성은
-PK(id uuid)가 보장한다.
+채우므로(Option A), 이름이 사실상 조회 키가 된다. 따라서 동명이인 모호성을 막기 위해
+이름 중복을 거부한다(앱 레벨 선검사 + DB UNIQUE 제약이 durable 가드).
 
 운용자산(AUM)은 client 테이블에 전용 컬럼이 없어 meta.aum_eokwon(억원)으로 저장한다.
 Supabase 호출이 블로킹이라 핸들러는 동기 def 로 둔다(rag.py·tax.py 와 동일).
@@ -86,6 +86,20 @@ class ClientCreateResponse(BaseModel):
 def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
     supabase = get_supabase()
 
+    # 동명이인 차단(Option A). DB UNIQUE(name) 가 최종 가드지만, 명확한 409 를 위해 선검사.
+    existing = (
+        supabase.table("client")
+        .select("id")
+        .eq("name", request.name)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(
+            status_code=409,
+            detail=f"이미 존재하는 고객명입니다: {request.name}",
+        )
+
     try:
         result = (
             supabase.table("client")
@@ -100,7 +114,15 @@ def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
         )
         created = result.data[0] if result.data else None
     except Exception as exc:
+        # UNIQUE(name) 제약 충돌 — 선검사를 통과한 뒤 동시 생성 레이스로 insert 시점에
+        # ux_client_name 위반(SQLSTATE 23505)이 날 수 있다. 이 경우 선검사와 동일하게
+        # 409 로 응답한다. PostgREST APIError 는 SQLSTATE 를 code 로 노출한다.
         logger.exception("client insert failed")
+        if getattr(exc, "code", None) == "23505":
+            raise HTTPException(
+                status_code=409,
+                detail=f"이미 존재하는 고객명입니다: {request.name}",
+            ) from exc
         raise HTTPException(
             status_code=500,
             detail="고객 저장 중 오류가 발생했습니다.",

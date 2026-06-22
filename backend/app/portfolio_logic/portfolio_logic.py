@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -46,7 +47,7 @@ BENCHMARK_LABEL = "MSCI ACWI (ACWI ETF proxy)"
 PENSION_RECEIVE_AGE = 55
 
 # 기준 금리와 시나리오 금리는 분리한다.
-# 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.  # noqa: E501
+# 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.
 # 프로젝트용 가정: 기준 무위험이자율은 미국 기준 3.5%를 기본값으로 사용한다.
 DEFAULT_RISK_FREE_RATE = 0.035
 DEFAULT_CASH_RETURN = 0.025
@@ -377,7 +378,7 @@ RISK_LEVEL_NAME = {
 # 2. 기준표 및 리스크 관리 기준
 # ============================================================
 # 검증된 사실:
-# - 투자위험 판단에는 변동성, 최대 손실 가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등이 고려될 수 있음.  # noqa: E501
+# - 투자위험 판단에는 변동성, 최대 손실 가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등이 고려될 수 있음.
 # - 투자자 성향보다 높은 위험도의 상품 권유는 제한됨.
 # - 금융소득 2,000만 원, ISA 3년, 해외주식 양도차익 250만 원 공제 등은 세법/제도상 기본 기준.
 #
@@ -717,7 +718,7 @@ def canonicalize_asset_return_map(
 def validate_unique_asset(unique_asset: str) -> str:
     canonical = canonicalize_asset_key(unique_asset)
     if canonical not in UNIQUE_ASSETS:
-        raise ValueError(f"unique_asset은 {UNIQUE_ASSETS} 중 하나여야 합니다. 입력값: {unique_asset}")  # noqa: E501
+        raise ValueError(f"unique_asset은 {UNIQUE_ASSETS} 중 하나여야 합니다. 입력값: {unique_asset}")
     return canonical
 
 
@@ -920,7 +921,7 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
     if excluded_assets:
         raise RuntimeError(
             "확정 자산군 중 가격 데이터를 가져오지 못한 자산이 있습니다. "
-            f"excluded_assets={excluded_assets}. 티커, 상장일, yfinance 다운로드 상태를 확인해 주세요."  # noqa: E501
+            f"excluded_assets={excluded_assets}. 티커, 상장일, yfinance 다운로드 상태를 확인해 주세요."
         )
 
     first_valid_dates = {asset: prices[asset].first_valid_index() for asset in available_assets}
@@ -930,7 +931,7 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
     ]
 
     # 추천·위험지표·기대수익률은 실제 가격 데이터만 사용한다.
-    # 신규 상장 자산의 과거 구간을 현금으로 채우지 않고, 모든 자산이 실제 가격을 가진 공통 구간만 사용한다.  # noqa: E501
+    # 신규 상장 자산의 과거 구간을 현금으로 채우지 않고, 모든 자산이 실제 가격을 가진 공통 구간만 사용한다.
     benchmark_available = (
         BENCHMARK_SERIES_KEY in prices.columns
         and prices[BENCHMARK_SERIES_KEY].notna().any()
@@ -945,7 +946,7 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
             "공통 실제 가격 데이터 구간이 너무 짧습니다. "
             f"observations={len(common_prices)}, min_required={MIN_COMMON_PRICE_OBSERVATIONS}, "
             f"common_start={common_start.date() if common_start is not None else None}, "
-            f"limiting_assets={limiting_assets}. 최근 상장 ETF proxy를 더 긴 이력 proxy로 바꾸는지 검토해 주세요."  # noqa: E501
+            f"limiting_assets={limiting_assets}. 최근 상장 ETF proxy를 더 긴 이력 proxy로 바꾸는지 검토해 주세요."
         )
 
     daily_cash_return = (1 + cash_return) ** (1 / TRADING_DAYS) - 1
@@ -2164,7 +2165,7 @@ def calculate_stress_test(
         "fx_effect": round(float(fx_effect), 6),
         "total_stress_return": round(float(total_stress_return), 6),
         "estimated_loss_ratio": round(float(estimated_loss_ratio), 6),
-        "method": "금리효과는 -듀레이션×금리변화, 환율효과는 외화노출자산비중×환율변화로 단순 추정.",  # noqa: E501
+        "method": "금리효과는 -듀레이션×금리변화, 환율효과는 외화노출자산비중×환율변화로 단순 추정.",
     }
 
 
@@ -2272,7 +2273,7 @@ def calculate_metric_amounts(
         ),
         "note": (
             "원화 지표는 현재 총자산에 각 포트폴리오의 비율 지표를 곱한 값. "
-            "after_tax_return_amount만 세후 기대 이익이며, MDD/VaR는 과거 수익률 기반 손실률의 원화 환산이다."  # noqa: E501
+            "after_tax_return_amount만 세후 기대 이익이며, MDD/VaR는 과거 수익률 기반 손실률의 원화 환산이다."
         ),
     }
 
@@ -3037,12 +3038,12 @@ def get_guideline_definition() -> Dict[str, Any]:
         "verified_basis": {
             "financial_income_threshold": "금융소득종합과세 검토 기준 2,000만 원",
             "overseas_stock_deduction": "해외주식 양도소득 기본공제 250만 원",
-            "isa": "ISA 의무보유기간 3년, 일반형 비과세 200만 원, 서민형 비과세 400만 원, 초과분 저율 분리과세 가정",  # noqa: E501
+            "isa": "ISA 의무보유기간 3년, 일반형 비과세 200만 원, 서민형 비과세 400만 원, 초과분 저율 분리과세 가정",
             "risk_suitability": "투자자성향보다 높은 위험도의 투자성 상품 권유 제한 원칙 반영",
-            "risk_factors": "변동성, 최대손실가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등을 위험 판단 요소로 반영",  # noqa: E501
+            "risk_factors": "변동성, 최대손실가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등을 위험 판단 요소로 반영",
         },
         "project_assumptions": {
-            "risk_profile_thresholds": "안정형/균형형/공격형별 변동성, MDD, 자산군 비중 한도는 프로젝트용 수치화 기준",  # noqa: E501
+            "risk_profile_thresholds": "안정형/균형형/공격형별 변동성, MDD, 자산군 비중 한도는 프로젝트용 수치화 기준",
             "selection_risk_controls": SELECTION_RISK_CONTROLS,
             "selection_ranking_basis": SELECTION_RANKING_BASIS,
             "second_portfolio_max_correlation": SECOND_PORTFOLIO_MAX_CORRELATION,
@@ -3339,6 +3340,7 @@ def build_tax_optimizer_payload(
     tax_saving = max(tax_before - tax_after, 0.0)
 
     before_after_tax_profit = gross_profit - tax_before
+    after_strategy_profit = gross_profit - tax_after
     before_after_tax_return = before_after_tax_profit / request.total_asset
     six_strategy = build_six_tax_strategy_cards(portfolio_response, request)
     combined_tax_saving = safe_float(six_strategy["combined_total"])
@@ -3391,9 +3393,9 @@ def build_tax_optimizer_payload(
                 "tax_amount": safe_round(tax_before, 0),
             },
             "after_tax_strategy": {
-                "after_tax_profit": safe_round(combined_after_tax_profit, 0),
-                "tax_amount": safe_round(combined_tax_after, 0),
-                "tax_saving": safe_round(modeled_tax_reduction, 0),
+                "after_tax_profit": safe_round(after_strategy_profit, 0),
+                "tax_amount": safe_round(tax_after, 0),
+                "tax_saving": safe_round(tax_saving, 0),
             },
         },
         "common_tax_rules": get_common_tax_rules(),
@@ -3653,12 +3655,12 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
                 "Monte Carlo 방식으로 후보 포트폴리오 생성. "
                 "8th 기본값은 5,000개이며 request.random_seed로 재현 가능."
             ),
-            "optimization_basis": "Mean-Variance 기반: 실제 가격 데이터의 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",  # noqa: E501
-            "risk_classification": "변동성, MDD, 유동성 커버리지, 자산구성비중을 hard filter로 사용.",  # noqa: E501
-            "selection_logic": "임의 점수 가중치 없이 적합성, VaR, ERC 통과 후보를 세후수익률 중심으로 정렬.",  # noqa: E501
+            "optimization_basis": "Mean-Variance 기반: 실제 가격 데이터의 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",
+            "risk_classification": "변동성, MDD, 유동성 커버리지, 자산구성비중을 hard filter로 사용.",
+            "selection_logic": "임의 점수 가중치 없이 적합성, VaR, ERC 통과 후보를 세후수익률 중심으로 정렬.",
             "duration_logic": "듀레이션은 채권형 자산에만 적용하고 ETF proxy 기준 수치를 사용.",
             "suitability_filter": "포트폴리오 위험등급이 고객 위험성향 이하인 경우만 추천.",
-            "liquidity_metric": "현금+일반채/저쿠폰채/분리과세채 금액에서 ISA 의무기간 잠김 금액을 제외한 값 / 단기 필요금액.",  # noqa: E501
+            "liquidity_metric": "현금+일반채/저쿠폰채/분리과세채 금액에서 ISA 의무기간 잠김 금액을 제외한 값 / 단기 필요금액.",
             "tax_logic": (
                 "금융소득종합과세 검토액, 해외주식 양도세 추정액, "
                 "ISA/IRP 효과를 포트폴리오별로 계산. 배당·이자성 수익과 "
@@ -3669,7 +3671,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
                 f"{SECOND_PORTFOLIO_MAX_CORRELATION} 이하인 후보 중 우선순위가 높은 후보."
             ),
             "stress_test_logic": "금리 충격은 채권형 자산에만 -듀레이션×금리변화를 적용.",
-            "var_erc_logic": "95% historical VaR와 공분산 기반 위험기여도 집중도를 리스크 관리에 반영.",  # noqa: E501
+            "var_erc_logic": "95% historical VaR와 공분산 기반 위험기여도 집중도를 리스크 관리에 반영.",
             "benchmark_beta_logic": (
                 "각 포트폴리오의 국내·미국 주식 슬리브 비중으로 KOSPI와 S&P500 "
                 "일간수익률을 합성하고, 동일 벤치마크 대비 회귀 베타를 계산."
@@ -3741,7 +3743,7 @@ def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
 # 프론트 연동용 보조 로직.
 # 검증된 사실: consultations API의 ips_json은 Goal/Asset/Return/Risk/Time/Tax/Liquidity/Legal/Unique
 # 형태이고, 포트폴리오 계산 로직은 AnalysisRequest 형태를 사용한다.
-# 프로젝트용 처리: /portfolio/calculate는 AnalysisRequest와 consultations 응답/ips_json을 모두 받을 수 있게 정규화한다.  # noqa: E501
+# 프로젝트용 처리: /portfolio/calculate는 AnalysisRequest와 consultations 응답/ips_json을 모두 받을 수 있게 정규화한다.
 
 KOREAN_MONEY_UNITS = {
     "억": 100_000_000,
@@ -4080,7 +4082,7 @@ def extract_unique_profile(unique_value: Any) -> Dict[str, Any]:
     isa_start_year = parse_start_year_from_text(isa_window)
     isa_contribution = parse_explicit_money_amount_krw(isa_window) if isa_window else 0.0
     isa_account_exists = bool(isa_window) and not bool(
-        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", isa_window)  # noqa: E501
+        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", isa_window)
     )
 
     irp_start_year = parse_start_year_from_text(irp_window)
@@ -4090,7 +4092,7 @@ def extract_unique_profile(unique_value: Any) -> Dict[str, Any]:
     )
     irp_cumulative_contribution = parse_explicit_money_amount_krw(irp_window) if irp_window else 0.0
     irp_account_exists = bool(irp_window) and not bool(
-        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", irp_window)  # noqa: E501
+        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", irp_window)
     )
 
     items: List[Dict[str, Any]] = []
@@ -4541,13 +4543,13 @@ def normalize_analysis_request_payload(
     unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
     if unique_need_amount <= 0:
         adapter_warnings.append(
-            "IPS의 Unique 값에서 별도 필요자금을 숫자로 추출하지 못해 unique_need_amount=0으로 계산했습니다."  # noqa: E501
+            "IPS의 Unique 값에서 별도 필요자금을 숫자로 추출하지 못해 unique_need_amount=0으로 계산했습니다."
         )
 
     scenario_input = payload.get("scenario") if isinstance(payload.get("scenario"), dict) else {}
     if not scenario_input:
         adapter_warnings.append(
-            "scenario 입력이 없어 stress shock은 0으로 두고, 기준 금리는 기본 risk_free_rate를 사용했습니다."  # noqa: E501
+            "scenario 입력이 없어 stress shock은 0으로 두고, 기준 금리는 기본 risk_free_rate를 사용했습니다."
         )
 
     base_fx_rate = safe_float(
@@ -4556,7 +4558,7 @@ def normalize_analysis_request_payload(
     )
     if base_fx_rate == 1.0 and "base_fx_rate_krw_per_usd" not in scenario_input:
         adapter_warnings.append(
-            "base_fx_rate_krw_per_usd가 없어 1.0을 표시용 기본값으로 사용했습니다. 스트레스 테스트 화면에서는 실제 환율 입력을 넘겨야 합니다."  # noqa: E501
+            "base_fx_rate_krw_per_usd가 없어 1.0을 표시용 기본값으로 사용했습니다. 스트레스 테스트 화면에서는 실제 환율 입력을 넘겨야 합니다."
         )
 
     analysis_payload = {

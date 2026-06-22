@@ -37,7 +37,6 @@
       }
 
       select,
-      input,
       button {
         height: 40px;
         border: 1px solid #d1d5db;
@@ -89,10 +88,6 @@
         font-size: 16px;
       }
 
-      input {
-        min-width: 340px;
-      }
-
       #transcript {
         display: grid;
         gap: 8px;
@@ -121,13 +116,12 @@
 
       <div class="toolbar">
         <label>
-          client_id
-          <input
-            id="clientId"
-            type="text"
-            placeholder="Supabase client.id UUID"
-            autocomplete="off"
-          />
+          고객
+          <select id="customerName">
+            <option value="김성삼">김성삼</option>
+            <option value="이사조">이사조</option>
+            <option value="박기업">박기업</option>
+          </select>
         </label>
         <button id="playButton" class="primary">재생</button>
         <button id="pauseButton" disabled>Pause</button>
@@ -152,7 +146,7 @@
       const playButton = document.getElementById("playButton");
       const pauseButton = document.getElementById("pauseButton");
       const finishButton = document.getElementById("finishButton");
-      const clientId = document.getElementById("clientId");
+      const customerName = document.getElementById("customerName");
       const statusNode = document.getElementById("status");
       const transcriptNode = document.getElementById("transcript");
       const logNode = document.getElementById("log");
@@ -248,11 +242,6 @@
           ws.send(JSON.stringify({ event: "play" }));
           return;
         }
-        const selectedClientId = clientId.value.trim();
-        if (!selectedClientId) {
-          setStatus("client_id를 입력하세요");
-          return;
-        }
 
         setStatus("마이크 권한 요청 중");
         await setupAudio();
@@ -263,7 +252,7 @@
         ws.onopen = () => {
           ws.send(
             JSON.stringify({
-              client_id: selectedClientId,
+              customer_name: customerName.value,
               sample_rate: SAMPLE_RATE,
               bits_per_sample: 16,
               channels: 1,
