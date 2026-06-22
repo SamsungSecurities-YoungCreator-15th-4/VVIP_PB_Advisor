@@ -58,7 +58,7 @@ export default function TaxWaterfall() {
             />
             <Bar dataKey="afterTax" stackId="flow" isAnimationActive={false}>
               {data.map((_, i) => (
-                <Cell key={i} fill={AFTER_TAX_COLORS[i]} radius={6} />
+                <Cell key={i} fill={AFTER_TAX_COLORS[i]} radius={10} />
               ))}
               <LabelList
                 dataKey="afterTax"
@@ -71,7 +71,7 @@ export default function TaxWaterfall() {
             </Bar>
             <Bar dataKey="tax" stackId="flow" isAnimationActive={false}>
               {data.map((_, i) => (
-                <Cell key={i} fill={TAX_COLORS[i]} radius={6} />
+                <Cell key={i} fill={TAX_COLORS[i]} radius={10} />
               ))}
               <LabelList
                 dataKey="tax"
