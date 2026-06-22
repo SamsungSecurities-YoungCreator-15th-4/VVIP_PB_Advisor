@@ -110,6 +110,7 @@ def list_clients() -> ClientListResponse:
             .order("created_at", desc=False)
             .execute()
         )
+        clients = [_client_response_from_row(row) for row in (result.data or [])]
     except Exception as exc:
         logger.exception("client list failed")
         raise HTTPException(
@@ -117,9 +118,7 @@ def list_clients() -> ClientListResponse:
             detail="고객 목록 조회 중 오류가 발생했습니다.",
         ) from exc
 
-    return ClientListResponse(
-        clients=[_client_response_from_row(row) for row in (result.data or [])],
-    )
+    return ClientListResponse(clients=clients)
 
 
 @router.post("", response_model=ClientCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -204,12 +203,15 @@ def _client_response_from_row(row: dict) -> ClientResponse:
     except (TypeError, ValueError):
         aum_eokwon = 0.0
 
+    created_at_raw = row.get("created_at")
+    created_at = _to_kst_iso(created_at_raw) if created_at_raw else ""
+
     return ClientResponse(
-        client_id=row["id"],
-        name=row["name"],
+        client_id=row.get("id", ""),
+        name=row.get("name", "Unknown"),
         aum_eokwon=aum_eokwon,
         is_persona=bool(meta.get("persona", False)),
-        created_at=_to_kst_iso(row["created_at"]),
+        created_at=created_at,
     )
 
 

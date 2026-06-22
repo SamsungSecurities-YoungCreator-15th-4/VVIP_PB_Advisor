@@ -33,15 +33,15 @@ interface ClientCreateResponseRaw {
 }
 
 interface ClientListItemRaw {
-  client_id: string;
-  name: string;
-  aum_eokwon: number;
-  is_persona: boolean;
-  created_at: string;
+  client_id?: string | null;
+  name?: string | null;
+  aum_eokwon?: number | null;
+  is_persona?: boolean | null;
+  created_at?: string | null;
 }
 
 interface ClientListResponseRaw {
-  clients: ClientListItemRaw[];
+  clients?: ClientListItemRaw[] | null;
 }
 
 export type CreateClientResult =
@@ -87,12 +87,12 @@ export async function listClients(): Promise<ApiResult<ListedClient[]>> {
   try {
     const res = await apiGet<ClientListResponseRaw>("/clients");
     return live(
-      res.clients.map((client) => ({
-        clientId: client.client_id,
-        name: client.name,
-        aumEokwon: client.aum_eokwon,
-        isPersona: client.is_persona,
-        createdAt: client.created_at,
+      (res.clients ?? []).map((client) => ({
+        clientId: client.client_id ?? "",
+        name: client.name ?? "",
+        aumEokwon: client.aum_eokwon ?? 0,
+        isPersona: client.is_persona ?? false,
+        createdAt: client.created_at ?? "",
       })),
     );
   } catch {

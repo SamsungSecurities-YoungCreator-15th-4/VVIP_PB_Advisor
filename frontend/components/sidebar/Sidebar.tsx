@@ -56,18 +56,20 @@ const DEFAULT_CLIENT_TAX_PROFILE = {
 
 function toDashboardCustomer(client: ListedClient): Customer {
   const persona = CUSTOMERS.find((c) => c.name === client.name);
+  const safeClientId = client.clientId || "";
+  const displayId = safeClientId || `client-${client.name || "unknown"}`;
   const aumEokwon =
     client.aumEokwon > 0 ? client.aumEokwon : (persona?.aumEokwon ?? 0);
 
   return {
     ...(persona ?? DEFAULT_CLIENT_TAX_PROFILE),
-    id: client.clientId,
-    name: client.name,
+    id: displayId,
+    name: client.name || "Unknown",
     grade: "VVIP",
-    pbCode: persona?.pbCode ?? `PB-${client.clientId.slice(0, 6).toUpperCase()}`,
+    pbCode: persona?.pbCode ?? `PB-${displayId.slice(0, 6).toUpperCase()}`,
     aumLabel: aumEokwon > 0 ? `운용자산 ${aumEokwon}억원` : "운용자산 미입력",
     aumEokwon,
-    clientId: client.clientId,
+    clientId: safeClientId || undefined,
     persisted: true,
   };
 }
