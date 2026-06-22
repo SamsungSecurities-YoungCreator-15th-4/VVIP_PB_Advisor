@@ -2,9 +2,10 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import Annotated, get_args
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
 from fastapi import (
@@ -55,20 +56,17 @@ STT_TEST_PAGE = Path(__file__).resolve().parents[1] / "stt" / "realtime_test.htm
     status_code=status.HTTP_201_CREATED,
 )
 def create_stt_consultation(
-    customer_name: Annotated[CustomerName, Form()],
+    client_id: Annotated[str, Form()],
     audio_file: Annotated[UploadFile, File()],
 ) -> ConsultationResponse:
     supabase = get_supabase()
-    client = _get_client_by_name(supabase, customer_name)
+    client = _get_client_by_id(supabase, client_id)
     if not client:
-        raise HTTPException(
-            status_code=404,
-            detail=f"고객 정보를 찾을 수 없습니다: {customer_name}",
-        )
+        raise _client_not_found(client_id)
 
     try:
         pipeline_result = run_uploaded_wav_pipeline(
-            customer_name=customer_name,
+            customer_name=client["name"],
             audio_file=audio_file,
         )
     except ValueError as exc:
@@ -83,7 +81,6 @@ def create_stt_consultation(
     return _save_stt_consultation_result(
         supabase=supabase,
         client=client,
-        customer_name=customer_name,
         pipeline_result=pipeline_result,
     )
 
@@ -108,7 +105,7 @@ def get_realtime_stt_spec() -> dict:
                 "step": "start",
                 "type": "text/json",
                 "example": {
-                    "customer_name": "김성삼",
+                    "client_id": "00000000-0000-0000-0000-000000000000",
                     "sample_rate": DEFAULT_SAMPLE_RATE,
                     "bits_per_sample": DEFAULT_BITS_PER_SAMPLE,
                     "channels": DEFAULT_CHANNELS,
@@ -166,7 +163,7 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
 
     프로토콜:
     1) 최초 text JSON:
-       {"customer_name":"김성삼","sample_rate":16000,"bits_per_sample":16,"channels":1}
+       {"client_id":"uuid","sample_rate":16000,"bits_per_sample":16,"channels":1}
     2) 재생 중에는 binary PCM chunk 전송
     3) 일시정지 text JSON: {"event":"pause"}
     4) 재개 text JSON: {"event":"play"} 또는 {"event":"resume"}
@@ -185,7 +182,7 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
 
     try:
         start_payload = await websocket.receive_json()
-        customer_name = _parse_realtime_customer_name(start_payload)
+        client_id = _parse_realtime_client_id(start_payload)
         sample_rate = _parse_positive_int(
             start_payload.get("sample_rate"),
             default=DEFAULT_SAMPLE_RATE,
@@ -203,13 +200,13 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
         )
 
         supabase = get_supabase()
-        client = await run_in_threadpool(_get_client_by_name, supabase, customer_name)
+        client = await run_in_threadpool(_get_client_by_id, supabase, client_id)
         if not client:
             await _send_realtime_json(
                 websocket,
                 {
                     "event": "error",
-                    "detail": f"고객 정보를 찾을 수 없습니다: {customer_name}",
+                    "detail": f"고객 정보를 찾을 수 없습니다: {client_id}",
                 },
                 send_lock,
             )
@@ -280,7 +277,6 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
             _save_stt_consultation_result,
             supabase=supabase,
             client=client,
-            customer_name=customer_name,
             pipeline_result=SttPipelineResult(
                 transcript_json=mapped_transcript,
                 ips_json=ips_json,
@@ -341,9 +337,9 @@ def _save_stt_consultation_result(
     *,
     supabase,
     client: dict,
-    customer_name: CustomerName,
     pipeline_result: SttPipelineResult,
 ) -> ConsultationResponse:
+    customer_name = client["name"]
     try:
         raw_note = transcript_to_raw_note(pipeline_result.transcript_json)
         ips_json = flatten_ips_json(pipeline_result.ips_json)
@@ -451,14 +447,13 @@ def _is_missing_stt_rpc_signature_error(exc: Exception) -> bool:
     )
 
 
-def _parse_realtime_customer_name(payload: dict) -> CustomerName:
+def _parse_realtime_client_id(payload: dict) -> str:
     if not isinstance(payload, dict):
         raise ValueError("첫 메시지는 JSON object 여야 합니다.")
-    customer_name = payload.get("customer_name")
-    if customer_name not in get_args(CustomerName):
-        allowed = ", ".join(get_args(CustomerName))
-        raise ValueError(f"customer_name 은 다음 중 하나여야 합니다: {allowed}")
-    return customer_name
+    client_id = payload.get("client_id")
+    if not isinstance(client_id, str) or not client_id.strip():
+        raise ValueError("client_id 는 비어 있지 않은 문자열이어야 합니다.")
+    return client_id.strip()
 
 
 def _parse_positive_int(value, *, default: int, field_name: str) -> int:
@@ -555,19 +550,16 @@ async def _stop_realtime_transcriber(
 
 
 @router.get("/initial-ips", response_model=InitialIpsResponse)
-def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
+def get_initial_ips(client_id: str) -> InitialIpsResponse:
     supabase = get_supabase()
-    client = _get_client_by_name(supabase, customer_name)
+    client = _get_client_by_id(supabase, client_id)
     if not client:
-        raise HTTPException(
-            status_code=404,
-            detail=f"고객 정보를 찾을 수 없습니다: {customer_name}",
-        )
+        raise _client_not_found(client_id)
 
     result = (
         supabase.table("ips_snapshot")
         .select("id,client_id,source_type,raw_ips_json,created_at")
-        .eq("client_id", client["id"])
+        .eq("client_id", client_id)
         .eq("source_type", "initial")
         .limit(1)
         .execute()
@@ -576,7 +568,7 @@ def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
     if not snapshot:
         raise HTTPException(
             status_code=404,
-            detail=f"최초 IPS 정보를 찾을 수 없습니다: {customer_name}",
+            detail=f"최초 IPS 정보를 찾을 수 없습니다: {client_id}",
         )
 
     try:
@@ -591,7 +583,7 @@ def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
     return InitialIpsResponse(
         ips_snapshot_id=snapshot["id"],
         customer_id=snapshot["client_id"],
-        customer_name=customer_name,
+        customer_name=client["name"],
         source_type="initial",
         ips_json=ips_json,
         created_at=_to_kst_iso(snapshot["created_at"]),
@@ -600,7 +592,7 @@ def get_initial_ips(customer_name: CustomerName) -> InitialIpsResponse:
 
 @router.get("/detail", response_model=ConsultationResponse)
 def get_consultation_detail(
-    customer_name: CustomerName,
+    client_id: str,
     consultation_id: Annotated[str | None, Query()] = None,
     transcript_title: Annotated[str | None, Query()] = None,
 ) -> ConsultationResponse:
@@ -611,12 +603,9 @@ def get_consultation_detail(
         )
 
     supabase = get_supabase()
-    client = _get_client_by_name(supabase, customer_name)
+    client = _get_client_by_id(supabase, client_id)
     if not client:
-        raise HTTPException(
-            status_code=404,
-            detail=f"고객 정보를 찾을 수 없습니다: {customer_name}",
-        )
+        raise _client_not_found(client_id)
 
     query = (
         supabase.table("consultation")
@@ -624,7 +613,7 @@ def get_consultation_detail(
             "id,client_id,transcript_title,ips_title,"
             "transcript_json,ips_json,created_at"
         )
-        .eq("client_id", client["id"])
+        .eq("client_id", client_id)
     )
     if consultation_id:
         query = query.eq("id", consultation_id)
@@ -641,24 +630,21 @@ def get_consultation_detail(
 
     return _build_consultation_response(
         consultation=consultation,
-        customer_name=customer_name,
+        customer_name=client["name"],
     )
 
 
 @router.get("", response_model=ConsultationListResponse)
-def list_consultations(customer_name: CustomerName) -> ConsultationListResponse:
+def list_consultations(client_id: str) -> ConsultationListResponse:
     supabase = get_supabase()
-    client = _get_client_by_name(supabase, customer_name)
+    client = _get_client_by_id(supabase, client_id)
     if not client:
-        raise HTTPException(
-            status_code=404,
-            detail=f"고객 정보를 찾을 수 없습니다: {customer_name}",
-        )
+        raise _client_not_found(client_id)
 
     result = (
         supabase.table("consultation")
         .select("id,client_id,transcript_title,ips_title,created_at")
-        .eq("client_id", client["id"])
+        .eq("client_id", client_id)
         .order("created_at", desc=True)
         .execute()
     )
@@ -667,7 +653,7 @@ def list_consultations(customer_name: CustomerName) -> ConsultationListResponse:
         ConsultationSummaryResponse(
             consultation_id=row["id"],
             customer_id=row["client_id"],
-            customer_name=customer_name,
+            customer_name=client["name"],
             consultation_date=_consultation_date(row["created_at"]),
             transcript_title=row.get("transcript_title") or "",
             ips_title=row.get("ips_title") or "",
@@ -676,18 +662,34 @@ def list_consultations(customer_name: CustomerName) -> ConsultationListResponse:
         for row in result.data
     ]
 
-    return ConsultationListResponse(customer_name=customer_name, consultations=consultations)
+    return ConsultationListResponse(
+        customer_id=client_id,
+        customer_name=client["name"],
+        consultations=consultations,
+    )
 
 
-def _get_client_by_name(supabase, customer_name: str) -> dict | None:
+def _get_client_by_id(supabase, client_id: str) -> dict | None:
+    try:
+        uuid.UUID(client_id)
+    except (TypeError, ValueError):
+        return None
+
     result = (
         supabase.table("client")
         .select("id,name")
-        .eq("name", customer_name)
+        .eq("id", client_id)
         .limit(1)
         .execute()
     )
     return _first_row(result.data)
+
+
+def _client_not_found(client_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail=f"고객 정보를 찾을 수 없습니다: {client_id}",
+    )
 
 
 def _build_stt_titles(
