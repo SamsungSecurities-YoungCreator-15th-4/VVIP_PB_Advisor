@@ -141,7 +141,7 @@ export async function uploadSttConsultation(
     if (err instanceof ApiError) {
       if (err.isTimeout) note = "STT 처리 시간 초과로 데모 상담을 표시합니다.";
       else if (err.status === 404)
-        note = "등록되지 않은 client_id입니다. 데모 상담을 표시합니다.";
+        note = "등록되지 않은 고객입니다. 데모 상담을 표시합니다.";
       else if (err.status === 400)
         note = "오디오 파일을 처리할 수 없습니다(.wav 확인). 데모 상담을 표시합니다.";
     }
