@@ -17,7 +17,7 @@ export default function DataSourceBadge({
   note?: string;
   className?: string;
 }) {
-  if (source === "live") return null;
+  if (source === "live" || source === "fallback") return null;
 
   const config =
     source === "fallback"
