@@ -6,8 +6,8 @@ PB B의 고객은 전혀 보이지 않는다.
 실행: pytest backend/tests/test_pb_isolation.py -v
 """
 
-import sys
 import os
+import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -18,9 +18,27 @@ from app.routers.consultations import _get_client_by_id
 PB_A = "aaaaaaaa-0000-0000-0000-000000000001"
 PB_B = "bbbbbbbb-0000-0000-0000-000000000002"
 
-CLIENT_A1 = {"id": "c1111111-0000-0000-0000-000000000001", "name": "김성삼", "pb_id": PB_A, "meta": {"aum_eokwon": 18.0, "persona": True}, "created_at": "2026-06-22T00:00:00+00:00"}
-CLIENT_A2 = {"id": "c2222222-0000-0000-0000-000000000002", "name": "이사조", "pb_id": PB_A, "meta": {"aum_eokwon": 30.0, "persona": True}, "created_at": "2026-06-22T00:01:00+00:00"}
-CLIENT_B1 = {"id": "c3333333-0000-0000-0000-000000000003", "name": "박기업", "pb_id": PB_B, "meta": {"aum_eokwon": 750.0, "persona": True}, "created_at": "2026-06-22T00:02:00+00:00"}
+CLIENT_A1 = {
+    "id": "c1111111-0000-0000-0000-000000000001",
+    "name": "김성삼",
+    "pb_id": PB_A,
+    "meta": {"aum_eokwon": 18.0, "persona": True},
+    "created_at": "2026-06-22T00:00:00+00:00",
+}
+CLIENT_A2 = {
+    "id": "c2222222-0000-0000-0000-000000000002",
+    "name": "이사조",
+    "pb_id": PB_A,
+    "meta": {"aum_eokwon": 30.0, "persona": True},
+    "created_at": "2026-06-22T00:01:00+00:00",
+}
+CLIENT_B1 = {
+    "id": "c3333333-0000-0000-0000-000000000003",
+    "name": "박기업",
+    "pb_id": PB_B,
+    "meta": {"aum_eokwon": 750.0, "persona": True},
+    "created_at": "2026-06-22T00:02:00+00:00",
+}
 
 ALL_CLIENTS = [CLIENT_A1, CLIENT_A2, CLIENT_B1]
 
