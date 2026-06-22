@@ -171,7 +171,7 @@ function AdviceCards() {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         {TAX_ADVICE.cards.map((card) => {
           const active = tabs[card.title] ?? "제안설명";
           return (
@@ -213,7 +213,7 @@ function AdviceCards() {
                       {card.tag}
                     </p>
                     {card.saving && (
-                      <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
+                      <p className="text-[12px] font-extrabold tabular-nums text-up">
                         {card.saving}
                       </p>
                     )}
