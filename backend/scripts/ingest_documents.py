@@ -8,7 +8,7 @@ document_chunk)에 적재한다.
 처리 흐름
   1) backend/data/<category>/*.pdf 수집 (category = house_view | tax | macro)
   2) pypdf 로 텍스트 추출 (스캔 PDF = 추출 0자 → 경고 후 skip, OCR은 범위 밖)
-  3) tiktoken(cl100k_base) 토큰 기준 청킹 (rag/config.py CHUNK_SIZE/CHUNK_OVERLAP)
+  3) tiktoken(cl100k_base) 토큰 기준 청킹 (CHUNK_SIZE/CHUNK_OVERLAP, 환경변수로 override 가능)
   4) 청크별 Azure 임베딩(text-embedding-3-small, 1536) — retrieval.embed_query 재사용
   5) document + document_chunk upsert (dev_seed 패턴 재사용)
 
