@@ -12,12 +12,6 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-try:
-    from .tax_advice import calc_combined_tax_saving, calc_tax_advice
-except ImportError:  # pragma: no cover - direct script execution fallback
-    from tax_advice import calc_combined_tax_saving, calc_tax_advice
-
-
 router = APIRouter(tags=["portfolio"])
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
@@ -3198,6 +3192,13 @@ def build_six_tax_strategy_cards(
     portfolio_response: Dict[str, Any],
     request: PortfolioRequest,
 ) -> Dict[str, Any]:
+    # tax_advice와 portfolio_logic은 서로를 참조하므로 모듈 레벨 임포트를 피하고
+    # 함수 레벨에서 임포트한다. 호출 시점에는 양쪽 모두 완전히 로드되어 있다.
+    try:
+        from .tax_advice import calc_combined_tax_saving, calc_tax_advice
+    except ImportError:  # pragma: no cover - direct script execution fallback
+        from tax_advice import calc_combined_tax_saving, calc_tax_advice  # type: ignore[no-redef]
+
     portfolio = [
         {"asset_class": asset, "weight": safe_float(info.get("weight"))}
         for asset, info in portfolio_response["weights"].items()

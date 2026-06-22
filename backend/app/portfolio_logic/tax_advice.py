@@ -15,8 +15,26 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
-WITHHOLDING_TAX_RATE = 0.154
-COMPREHENSIVE_TAX_THRESHOLD = 20_000_000
+# 단일 출처 원칙: 세율 상수는 portfolio_logic.py에서만 정의하고 여기서 import한다.
+# portfolio_logic.py가 이 모듈을 import하므로, 순환 임포트를 피하려면
+# portfolio_logic.py에서 세율 상수가 모두 정의된 이후에 tax_advice import가 위치해야 한다.
+try:
+    from .portfolio_logic import (
+        DEFAULT_WITHHOLDING_TAX_RATE as WITHHOLDING_TAX_RATE,
+        FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD as COMPREHENSIVE_TAX_THRESHOLD,
+        OVERSEAS_STOCK_GAIN_DEDUCTION,
+        OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
+        PENSION_RECEIVE_AGE,
+    )
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from portfolio_logic import (  # type: ignore[no-redef]
+        DEFAULT_WITHHOLDING_TAX_RATE as WITHHOLDING_TAX_RATE,
+        FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD as COMPREHENSIVE_TAX_THRESHOLD,
+        OVERSEAS_STOCK_GAIN_DEDUCTION,
+        OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
+        PENSION_RECEIVE_AGE,
+    )
+
 DEFAULT_MARGINAL_INCOME_TAX_RATE = 0.385
 ISA_ANNUAL_LIMIT_WON = 20_000_000
 ISA_TAX_FREE_LIMIT_WON = 2_000_000
@@ -24,10 +42,7 @@ ISA_EXCESS_TAX_RATE = 0.099
 ISA_MANDATORY_HOLDING_YEARS = 3
 PENSION_TAX_CREDIT_LIMIT_WON = 9_000_000
 PENSION_TAX_CREDIT_RATE = 0.132
-PENSION_RECEIVE_AGE = 55
 LONG_BOND_SEPARATE_TAX_RATE = 0.33
-OVERSEAS_STOCK_GAIN_DEDUCTION = 2_500_000
-OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE = 0.22
 
 ASSET_INCOME_YIELD_ASSUMPTIONS = {
     "cash": 0.025,
@@ -37,7 +52,10 @@ ASSET_INCOME_YIELD_ASSUMPTIONS = {
     "overseas_dividend": 0.035,
     "reit": 0.040,
 }
+# 소득수익률 추정 전체 대상 (해외양도차익 income_part 분리, ISA 편입 가능 자산 등)
 INCOME_TAXABLE_ASSETS = set(ASSET_INCOME_YIELD_ASSUMPTIONS)
+# 종합과세 합산 대상 소득 자산 — separate_tax_bond는 33% 분리과세라 합산 제외
+_COMPREHENSIVE_INCOME_ASSETS = INCOME_TAXABLE_ASSETS - {"separate_tax_bond"}
 OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS = {
     "overseas_blue_chip",
     "overseas_growth",
@@ -90,13 +108,17 @@ def _income_won_by_asset(
     total_won: float,
     expected_returns_by_asset: Optional[Mapping[str, float]] = None,
 ) -> dict[str, float]:
-    """Estimate annual interest/dividend-like income by asset class."""
+    """Estimate annual interest/dividend-like income for comprehensive-tax-pool assets.
+
+    separate_tax_bond is excluded: its interest is taxed at the 33% flat rate and
+    is not included in the 2,000-man financial income threshold.
+    """
     out: dict[str, float] = {}
     if total_won <= 0:
         return out
     for item in portfolio:
         asset_class = str(item.get("asset_class") or "")
-        if asset_class not in INCOME_TAXABLE_ASSETS:
+        if asset_class not in _COMPREHENSIVE_INCOME_ASSETS:
             continue
         weight = _safe_nonnegative(item.get("weight"))
         expected_return = _asset_return(
@@ -226,7 +248,7 @@ def calc_tax_advice(
     income_asset_value_won = sum(
         _safe_nonnegative(item.get("weight")) * total_won
         for item in portfolio
-        if item.get("asset_class") in INCOME_TAXABLE_ASSETS
+        if item.get("asset_class") in _COMPREHENSIVE_INCOME_ASSETS
     )
     transferable_won = min(isa_headroom_won, income_asset_value_won, investable_won)
     isa_reason: Optional[str] = None
@@ -468,7 +490,7 @@ def calc_combined_tax_saving(
         income_asset_value = sum(
             _safe_nonnegative(item.get("weight")) * total_won
             for item in portfolio
-            if item.get("asset_class") in INCOME_TAXABLE_ASSETS
+            if item.get("asset_class") in _COMPREHENSIVE_INCOME_ASSETS
         )
         if income_asset_value > 0:
             avg_rate = sum(income_by_asset.values()) / income_asset_value

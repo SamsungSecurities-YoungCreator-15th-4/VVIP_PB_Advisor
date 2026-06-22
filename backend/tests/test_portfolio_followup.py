@@ -30,6 +30,7 @@ from app.portfolio_logic.portfolio_logic import (  # noqa: E402
     extract_unique_profile,
     generate_random_weights,
 )
+from app.portfolio_logic.tax_advice import calc_combined_tax_saving  # noqa: E402
 
 
 def _returns(seed: int = 7, n: int = 600) -> pd.DataFrame:
@@ -279,6 +280,43 @@ def test_portfolio_response_exposes_financial_income_tax_gauge() -> None:
         gauge["external_financial_income_manwon"]
         + gauge["portfolio_financial_income_manwon"]
     )
+
+
+
+def test_pension_gating_near_age_with_sufficient_horizon() -> None:
+    """김성삼 페르소나: 54세/10년 → years_to_receive=1 < horizon=10 → usable=True."""
+    near = _request(age=54, investment_horizon_years=10)
+    status = calculate_irp_status(near)
+    assert status["usable"] is True
+    assert status["years_until_access"] == 1
+
+
+def test_pension_gating_already_past_receive_age() -> None:
+    """박기업 페르소나: 62세 → 이미 55세 초과 → usable=True, years_until_access=0."""
+    past = _request(age=62, investment_horizon_years=10)
+    status = calculate_irp_status(past)
+    assert status["usable"] is True
+    assert status["years_until_access"] == 0
+
+
+def test_pension_credit_zeroed_when_tax_liability_insufficient() -> None:
+    """pension_tax_liability_sufficient=False이면 결합 절감액에서 연금 기여분이 0."""
+    portfolio = [
+        {"asset_class": "general_bond", "weight": 0.5},
+        {"asset_class": "overseas_growth", "weight": 0.3},
+        {"asset_class": "cash", "weight": 0.2},
+    ]
+    result = calc_combined_tax_saving(
+        portfolio,
+        gross_return=0.07,
+        total_assets=30.0,
+        marginal_income_tax_rate=0.385,
+        age=60,
+        horizon_years=10,
+        pension_tax_liability_sufficient=False,
+    )
+    assert result["contributionsWon"]["pension_credit"] == 0
+    assert "pension_credit" in result["ineligible"]
 
 
 # PR checks retrigger
