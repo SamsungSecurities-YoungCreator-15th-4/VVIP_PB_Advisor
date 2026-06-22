@@ -35,6 +35,7 @@ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 """
 
 import argparse
+import os
 import re
 import sys
 import traceback
@@ -47,7 +48,6 @@ from pypdf import PdfReader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.rag.config import CHUNK_OVERLAP, CHUNK_SIZE  # noqa: E402
 from app.rag.retrieval import (  # noqa: E402
     EMBEDDING_DEPLOYMENT,
     EMBEDDING_DIM,
@@ -55,6 +55,9 @@ from app.rag.retrieval import (  # noqa: E402
     get_openai_client,
     get_supabase_client,
 )
+
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "512"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
 
 # 배치 임베딩 크기. 청크당 순차 호출(2000+회)은 느려 한 번에 여러 청크를 임베딩한다.
 # Azure text-embedding-3-small 입력 한도(8191토큰/입력)와 별개로, 한 요청의 입력
