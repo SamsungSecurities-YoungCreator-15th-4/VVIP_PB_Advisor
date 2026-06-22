@@ -37,18 +37,13 @@ VOL_STRESS_CAP = 1.6
 # PR #65 재현성 원칙: 모든 RNG 경로는 동일한 기본 시드를 사용한다.
 DEFAULT_RANDOM_SEED = 42
 
-# 포트폴리오별 지역 주식 벤치마크 정책.
-# 국내 주식 익스포저는 KOSPI, 미국 상장 주식·리츠 익스포저는 S&P 500으로
-# 대표하며 두 지역이 섞이면 주식 슬리브 내 비중으로 일간수익률을 합성한다.
-BENCHMARK_POLICY_VERSION = "regional-equity-blend-v1"
-BENCHMARK_DOMESTIC_ASSET = "domestic_equity"
-BENCHMARK_US_ASSET = "overseas_blue_chip"
-BENCHMARK_US_EXPOSURE_ASSETS = [
-    "overseas_blue_chip",
-    "overseas_growth",
-    "overseas_dividend",
-    "reit",
-]
+# 모든 포트폴리오에 동일하게 적용하는 글로벌 주식시장 벤치마크.
+# 공식 MSCI 지수 원시계열이 아니라 iShares MSCI ACWI ETF(ACWI)의 가격수익률을
+# MSCI ACWI 시장수익률의 대용치로 사용한다. 추천 자산군에는 포함하지 않는다.
+BENCHMARK_POLICY_VERSION = "fixed-msci-acwi-etf-proxy-v1"
+BENCHMARK_SERIES_KEY = "_benchmark_msci_acwi"
+BENCHMARK_TICKER = "ACWI"
+BENCHMARK_LABEL = "MSCI ACWI (ACWI ETF proxy)"
 PENSION_RECEIVE_AGE = 55
 
 # 기준 금리와 시나리오 금리는 분리한다.
@@ -886,9 +881,10 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
     변동성, MDD, VaR, 추천 포트폴리오를 계산한다.
     """
     tickers = {asset: ticker for asset, ticker in ASSET_TICKERS.items() if ticker != "CASH"}
+    download_tickers = list(dict.fromkeys([*tickers.values(), BENCHMARK_TICKER]))
 
     raw = yf.download(
-        list(tickers.values()),
+        download_tickers,
         period=period,
         auto_adjust=True,
         progress=False,
@@ -907,6 +903,7 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
         prices = raw[["Close"]].copy()
 
     reverse_map = {ticker: asset for asset, ticker in tickers.items()}
+    reverse_map[BENCHMARK_TICKER] = BENCHMARK_SERIES_KEY
     prices = prices.rename(columns=reverse_map)
     prices = prices.dropna(how="all").sort_index()
 
@@ -935,7 +932,14 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
 
     # 추천·위험지표·기대수익률은 실제 가격 데이터만 사용한다.
     # 신규 상장 자산의 과거 구간을 현금으로 채우지 않고, 모든 자산이 실제 가격을 가진 공통 구간만 사용한다.
-    common_prices = prices.loc[common_start:, available_assets].ffill().dropna(how="any")
+    benchmark_available = (
+        BENCHMARK_SERIES_KEY in prices.columns
+        and prices[BENCHMARK_SERIES_KEY].notna().any()
+    )
+    common_columns = list(available_assets)
+    if benchmark_available:
+        common_columns.append(BENCHMARK_SERIES_KEY)
+    common_prices = prices.loc[common_start:, common_columns].ffill().dropna(how="any")
 
     if len(common_prices) < MIN_COMMON_PRICE_OBSERVATIONS:
         raise RuntimeError(
@@ -949,7 +953,10 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
     common_prices["cash"] = (1 + daily_cash_return) ** np.arange(len(common_prices))
 
     ordered_assets = [asset for asset in ASSET_TICKERS.keys() if asset in common_prices.columns]
-    common_prices = common_prices[ordered_assets]
+    ordered_columns = list(ordered_assets)
+    if BENCHMARK_SERIES_KEY in common_prices.columns:
+        ordered_columns.append(BENCHMARK_SERIES_KEY)
+    common_prices = common_prices[ordered_columns]
 
     common_prices.attrs["data_snapshot"] = {
         "period_requested": period,
@@ -959,6 +966,13 @@ def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
         "observations": int(len(common_prices)),
         "available_assets": ordered_assets,
         "excluded_assets": excluded_assets,
+        "benchmark": {
+            "policy": BENCHMARK_POLICY_VERSION,
+            "ticker": BENCHMARK_TICKER,
+            "label": BENCHMARK_LABEL,
+            "available": BENCHMARK_SERIES_KEY in common_prices.columns,
+            "official_index_series": False,
+        },
         "first_valid_dates": {
             asset: date.strftime("%Y-%m-%d") for asset, date in first_valid_dates.items()
         },
@@ -987,9 +1001,10 @@ def download_backtest_price_data(period: str, cash_return: float) -> pd.DataFram
         for asset, ticker in ASSET_TICKERS.items()
         if ticker != "CASH"
     }
+    download_tickers = list(dict.fromkeys([*tickers.values(), BENCHMARK_TICKER]))
 
     raw = yf.download(
-        list(tickers.values()),
+        download_tickers,
         period=period,
         auto_adjust=True,
         progress=False,
@@ -1008,6 +1023,7 @@ def download_backtest_price_data(period: str, cash_return: float) -> pd.DataFram
         prices = raw[["Close"]].copy()
 
     reverse_map = {ticker: asset for asset, ticker in tickers.items()}
+    reverse_map[BENCHMARK_TICKER] = BENCHMARK_SERIES_KEY
     prices = prices.rename(columns=reverse_map)
     prices = prices.dropna(how="all").sort_index()
 
@@ -1068,11 +1084,22 @@ def download_backtest_price_data(period: str, cash_return: float) -> pd.DataFram
 
     backtest_prices["cash"] = (1 + daily_cash_return) ** np.arange(len(base_index))
 
+    if (
+        BENCHMARK_SERIES_KEY in prices.columns
+        and prices[BENCHMARK_SERIES_KEY].notna().any()
+    ):
+        backtest_prices[BENCHMARK_SERIES_KEY] = (
+            prices[BENCHMARK_SERIES_KEY].reindex(base_index).ffill()
+        )
+
     ordered_assets = [
         asset for asset in ASSET_TICKERS.keys()
         if asset in backtest_prices.columns
     ]
-    backtest_prices = backtest_prices[ordered_assets]
+    ordered_columns = list(ordered_assets)
+    if BENCHMARK_SERIES_KEY in backtest_prices.columns:
+        ordered_columns.append(BENCHMARK_SERIES_KEY)
+    backtest_prices = backtest_prices[ordered_columns]
 
     if backtest_prices.isna().any().any():
         missing_assets = backtest_prices.columns[
@@ -1098,6 +1125,13 @@ def download_backtest_price_data(period: str, cash_return: float) -> pd.DataFram
         "observations": int(len(backtest_prices)),
         "available_assets": ordered_assets,
         "excluded_assets": excluded_assets,
+        "benchmark": {
+            "policy": BENCHMARK_POLICY_VERSION,
+            "ticker": BENCHMARK_TICKER,
+            "label": BENCHMARK_LABEL,
+            "available": BENCHMARK_SERIES_KEY in backtest_prices.columns,
+            "official_index_series": False,
+        },
         "first_valid_dates": {
             asset: date.strftime("%Y-%m-%d") for asset, date in first_valid_dates.items()
         },
@@ -1839,68 +1873,69 @@ def build_portfolio_benchmark(
     weights: Dict[str, float],
     returns: pd.DataFrame,
 ) -> Tuple[Optional[pd.Series], Dict[str, Any]]:
-    """Build a portfolio-specific KOSPI/S&P500 regional equity benchmark.
+    """Return one fixed MSCI ACWI market proxy for every portfolio.
 
-    The benchmark is normalized inside the equity sleeve, not across the whole
-    portfolio. A bond-heavy portfolio therefore receives a low beta rather than
-    an artificially bond-heavy benchmark.
+    The downloaded series is the iShares MSCI ACWI ETF price return, not the
+    official MSCI index series. Keeping one external benchmark removes the
+    portfolio-dependent KOSPI/S&P 500 blend while preserving beta comparability.
     """
     normalized = normalize_weights(weights)
-    domestic_exposure = normalized.get(BENCHMARK_DOMESTIC_ASSET, 0.0)
-    us_exposure = sum(
-        normalized.get(asset, 0.0) for asset in BENCHMARK_US_EXPOSURE_ASSETS
+    equity_exposure = sum(
+        normalized.get(asset, 0.0) for asset in [*STOCK_ASSETS, "reit"]
     )
-    equity_exposure = domestic_exposure + us_exposure
 
     base_meta = {
         "policy": BENCHMARK_POLICY_VERSION,
-        "domestic_asset": BENCHMARK_DOMESTIC_ASSET,
-        "domestic_ticker": ASSET_TICKERS[BENCHMARK_DOMESTIC_ASSET],
-        "us_asset": BENCHMARK_US_ASSET,
-        "us_ticker": ASSET_TICKERS[BENCHMARK_US_ASSET],
-        "domestic_portfolio_weight": safe_round(domestic_exposure, 6),
-        "us_portfolio_weight": safe_round(us_exposure, 6),
+        "benchmark_key": BENCHMARK_SERIES_KEY,
+        "benchmark_ticker": BENCHMARK_TICKER,
+        "benchmark_label": BENCHMARK_LABEL,
         "equity_portfolio_weight": safe_round(equity_exposure, 6),
+        "official_index_series": False,
+        "proxy_note": (
+            "iShares MSCI ACWI ETF(ACWI)의 가격수익률을 글로벌 주식시장 "
+            "벤치마크 대용치로 사용합니다."
+        ),
+        # 기존 응답 필드 하위호환: 더 이상 지역 혼합 비중을 사용하지 않는다.
+        "domestic_asset": None,
+        "domestic_ticker": None,
+        "us_asset": None,
+        "us_ticker": None,
+        "domestic_portfolio_weight": None,
+        "us_portfolio_weight": None,
+        "domestic_share_in_equity_sleeve": None,
+        "us_share_in_equity_sleeve": None,
     }
 
-    required = [BENCHMARK_DOMESTIC_ASSET, BENCHMARK_US_ASSET]
-    missing = [asset for asset in required if asset not in returns.columns]
-    if equity_exposure <= 1e-12 or missing:
+    if BENCHMARK_SERIES_KEY not in returns.columns:
         return None, {
             **base_meta,
             "applicable": False,
             "mode": "none",
             "label": None,
-            "domestic_share_in_equity_sleeve": None,
-            "us_share_in_equity_sleeve": None,
-            "reason": "no_equity_exposure" if equity_exposure <= 1e-12 else "benchmark_data_missing",
-            "missing_assets": missing,
+            "reason": "benchmark_data_missing",
+            "missing_assets": [BENCHMARK_SERIES_KEY],
         }
 
-    domestic_share = domestic_exposure / equity_exposure
-    us_share = us_exposure / equity_exposure
     benchmark = (
-        returns[BENCHMARK_DOMESTIC_ASSET] * domestic_share
-        + returns[BENCHMARK_US_ASSET] * us_share
+        returns[BENCHMARK_SERIES_KEY]
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna()
     )
-
-    if domestic_share >= 1.0 - 1e-12:
-        mode = "kospi"
-        label = "KOSPI"
-    elif us_share >= 1.0 - 1e-12:
-        mode = "sp500"
-        label = "S&P 500"
-    else:
-        mode = "blended"
-        label = f"KOSPI {domestic_share:.0%} + S&P 500 {us_share:.0%}"
+    if benchmark.empty:
+        return None, {
+            **base_meta,
+            "applicable": False,
+            "mode": "none",
+            "label": None,
+            "reason": "benchmark_data_empty",
+            "missing_assets": [BENCHMARK_SERIES_KEY],
+        }
 
     return benchmark, {
         **base_meta,
         "applicable": True,
-        "mode": mode,
-        "label": label,
-        "domestic_share_in_equity_sleeve": safe_round(domestic_share, 6),
-        "us_share_in_equity_sleeve": safe_round(us_share, 6),
+        "mode": "msci_acwi_proxy",
+        "label": BENCHMARK_LABEL,
         "reason": None,
         "missing_assets": [],
     }
@@ -3307,6 +3342,7 @@ def build_tax_optimizer_payload(
     before_after_tax_profit = gross_profit - tax_before
     after_strategy_profit = gross_profit - tax_after
     before_after_tax_return = before_after_tax_profit / request.total_asset
+    after_strategy_return = after_strategy_profit / request.total_asset
     six_strategy = build_six_tax_strategy_cards(portfolio_response, request)
     combined_tax_saving = safe_float(six_strategy["combined_total"])
     modeled_tax_reduction = min(combined_tax_saving, max(tax_before, 0.0))

@@ -17,6 +17,8 @@ import pytest
 sys.modules.setdefault("yfinance", types.SimpleNamespace(download=lambda *a, **k: None))
 
 from app.portfolio_logic.portfolio_logic import (  # noqa: E402
+    BENCHMARK_SERIES_KEY,
+    BENCHMARK_TICKER,
     DEFAULT_RANDOM_SEED,
     PortfolioRequest,
     allocate_account_buckets,
@@ -50,6 +52,7 @@ def _returns(seed: int = 7, n: int = 600) -> pd.DataFrame:
             "commodity": rng.normal(0.00010, 0.012, n),
             "dollar": rng.normal(0.00005, 0.005, n),
             "cash": np.full(n, 0.00005),
+            BENCHMARK_SERIES_KEY: rng.normal(0.00040, 0.0105, n),
         },
         index=index,
     )
@@ -78,34 +81,51 @@ def test_random_weight_fallback_is_deterministic() -> None:
     assert sum(first.values()) == pytest.approx(1.0)
 
 
-def test_portfolio_specific_benchmark_modes() -> None:
+def test_fixed_msci_acwi_benchmark_is_same_for_every_portfolio() -> None:
     returns = _returns()
 
-    _, domestic = build_portfolio_benchmark(
+    domestic_benchmark, domestic = build_portfolio_benchmark(
         {"domestic_equity": 0.6, "cash": 0.4}, returns
     )
-    _, overseas = build_portfolio_benchmark(
+    overseas_benchmark, overseas = build_portfolio_benchmark(
         {"overseas_growth": 0.6, "cash": 0.4}, returns
     )
-    _, blended = build_portfolio_benchmark(
-        {"domestic_equity": 0.3, "overseas_growth": 0.6, "cash": 0.1},
-        returns,
+    bond_benchmark, bond = build_portfolio_benchmark(
+        {"general_bond": 0.8, "cash": 0.2}, returns
     )
 
-    assert domestic["mode"] == "kospi"
-    assert overseas["mode"] == "sp500"
-    assert blended["mode"] == "blended"
-    assert blended["domestic_share_in_equity_sleeve"] == pytest.approx(1 / 3)
-    assert blended["us_share_in_equity_sleeve"] == pytest.approx(2 / 3)
+    assert domestic_benchmark is not None
+    assert overseas_benchmark is not None
+    assert bond_benchmark is not None
+    pd.testing.assert_series_equal(domestic_benchmark, overseas_benchmark)
+    pd.testing.assert_series_equal(domestic_benchmark, bond_benchmark)
+
+    for metadata in (domestic, overseas, bond):
+        assert metadata["mode"] == "msci_acwi_proxy"
+        assert metadata["benchmark_ticker"] == BENCHMARK_TICKER
+        assert metadata["official_index_series"] is False
+        assert metadata["domestic_share_in_equity_sleeve"] is None
+        assert metadata["us_share_in_equity_sleeve"] is None
 
 
-def test_beta_uses_the_same_portfolio_specific_benchmark() -> None:
+def test_beta_uses_the_same_fixed_msci_acwi_benchmark() -> None:
     returns = _returns()
     weights = {"domestic_equity": 0.4, "overseas_growth": 0.6}
-    benchmark, _ = build_portfolio_benchmark(weights, returns)
+    benchmark, metadata = build_portfolio_benchmark(weights, returns)
     assert benchmark is not None
+    assert metadata["mode"] == "msci_acwi_proxy"
     assert calculate_beta(benchmark, benchmark) == pytest.approx(1.0)
     assert calculate_beta(benchmark * 2.0, benchmark) == pytest.approx(2.0)
+
+
+def test_fixed_benchmark_reports_missing_data() -> None:
+    returns = _returns().drop(columns=[BENCHMARK_SERIES_KEY])
+    benchmark, metadata = build_portfolio_benchmark(
+        {"domestic_equity": 0.6, "cash": 0.4}, returns
+    )
+    assert benchmark is None
+    assert metadata["applicable"] is False
+    assert metadata["reason"] == "benchmark_data_missing"
 
 
 def test_pension_gating_zeroes_irp_for_short_horizon_young_client() -> None:
@@ -228,12 +248,9 @@ def test_external_income_tax_is_not_fully_charged_to_portfolio_return() -> None:
     extra_rate = 0.385 - 0.154
 
     assert status["estimated_additional_tax_total"] == pytest.approx(20_000_000 * extra_rate)
-    assert status[
-    "estimated_additional_tax_external_baseline"
-] == pytest.approx(10_000_000 * extra_rate)
-    assert status[
-    "estimated_additional_tax_attributable_to_portfolio"
-] == pytest.approx(10_000_000 * extra_rate)
+    assert status["estimated_additional_tax_external_baseline"] == pytest.approx(10_000_000 * extra_rate)
+    assert status["estimated_additional_tax_attributable_to_portfolio"] == pytest.approx(10_000_000 * extra_rate)
+
 
 def test_external_financial_income_unit_priority() -> None:
     by_manwon = _request(
@@ -282,7 +299,6 @@ def test_portfolio_response_exposes_financial_income_tax_gauge() -> None:
     )
 
 
-
 def test_pension_gating_near_age_with_sufficient_horizon() -> None:
     """김성삼 페르소나: 54세/10년 → years_to_receive=1 < horizon=10 → usable=True."""
     near = _request(age=54, investment_horizon_years=10)
@@ -317,6 +333,3 @@ def test_pension_credit_zeroed_when_tax_liability_insufficient() -> None:
     )
     assert result["contributionsWon"]["pension_credit"] == 0
     assert "pension_credit" in result["ineligible"]
-
-
-# PR checks retrigger
