@@ -117,6 +117,9 @@ def calc_tax_advice(
     """절세 6종의 '단독' 절감액(만원) + 적합성 게이팅.
 
     각 항목: {key, savingManwon, applicable, transferableManwon, ineligibleReason}.
+    - 항상 6종을 모두 반환한다(부적합도 제외하지 않음). 프론트는 applicable=False 카드를
+      회색 처리하고 ineligibleReason을 사유 문구로 표시한다.
+    - applicable=False면 ineligibleReason이 항상 채워진다(왜 안 되는지 설명).
     주의: 각 카드는 '단독 적용 시' 절감액이라 단순 합산하면 과대평가됨
           (공유 풀 중복). 합산 표시는 calc_combined_tax_saving 사용.
     """
@@ -165,6 +168,14 @@ def calc_tax_advice(
         tax_isa_won = max(moved_income_won - ISA_TAX_FREE_LIMIT_WON, 0.0) * ISA_EXCESS_TAX_RATE
         isa_saving_won = max(tax_outside_won - tax_isa_won, 0.0)
         isa_applicable = isa_saving_won > 0
+    # 게이팅 사유는 없지만 절감 효과가 없는 경우의 사유 보완
+    if not isa_applicable and isa_reason is None:
+        if income_asset_value_won <= 0:
+            isa_reason = "이전할 이자·배당성 자산이 없음"
+        elif transferable_won <= 0:
+            isa_reason = "ISA 잔여 납입한도 또는 가용 자금이 없음"
+        else:
+            isa_reason = "일반계좌 대비 절감 효과 없음"
     cards.append({
         "key": "isa",
         "savingManwon": _won_to_manwon(isa_saving_won) if isa_applicable else 0,
@@ -201,18 +212,36 @@ def calc_tax_advice(
     bond_saving_won = bond_eligible_won * max(
         marginal_income_tax_rate - LONG_BOND_SEPARATE_TAX_RATE, 0.0
     )
+    bond_reason = None
+    if bond_saving_won <= 0:
+        if bond_income_won <= 0:
+            bond_reason = "보유 채권의 이자소득이 없어 분리과세 전환 대상 없음"
+        elif excess_won <= 0:
+            bond_reason = "금융소득종합과세 구간(2,000만 초과) 아님 → 분리과세 실익 없음"
+        else:
+            bond_reason = "한계세율이 분리과세율(33%) 이하 → 실익 없음"
     cards.append({
         "key": "separate_bond", "savingManwon": _won_to_manwon(bond_saving_won),
-        "applicable": bond_saving_won > 0, "transferableManwon": 0, "ineligibleReason": None,
+        "applicable": bond_saving_won > 0, "transferableManwon": 0,
+        "ineligibleReason": bond_reason,
     })
 
     # ④ 저율과세 배당주 (종합과세 추가분 회피, 보수적)
     dividend_income_won = sum(income_by_asset.get(c, 0.0) for c in _DIVIDEND_INCOME_ASSETS)
     dividend_eligible_won = min(dividend_income_won, excess_won)
     dividend_saving_won = dividend_eligible_won * extra_rate
+    dividend_reason = None
+    if dividend_saving_won <= 0:
+        if dividend_income_won <= 0:
+            dividend_reason = "고배당 자산(해외배당·리츠) 보유가 없음"
+        elif excess_won <= 0:
+            dividend_reason = "금융소득종합과세 구간 아님 → 추가과세 회피 실익 없음"
+        else:
+            dividend_reason = "한계세율이 원천징수율(15.4%) 이하 → 실익 없음"
     cards.append({
         "key": "low_tax_dividend", "savingManwon": _won_to_manwon(dividend_saving_won),
-        "applicable": dividend_saving_won > 0, "transferableManwon": 0, "ineligibleReason": None,
+        "applicable": dividend_saving_won > 0, "transferableManwon": 0,
+        "ineligibleReason": dividend_reason,
     })
 
     overseas_gain_won = _overseas_capital_gain_won(portfolio, gross_return, total_won)
@@ -220,18 +249,30 @@ def calc_tax_advice(
     # ⑤ 해외주식 양도 250만 기본공제
     exemption_realizable_won = min(overseas_gain_won, OVERSEAS_STOCK_GAIN_DEDUCTION)
     exemption_saving_won = exemption_realizable_won * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
+    exemption_reason = (
+        None if exemption_saving_won > 0
+        else "해외주식·ETF 양도차익이 없어 기본공제(250만) 활용 대상 없음"
+    )
     cards.append({
         "key": "overseas_exemption", "savingManwon": _won_to_manwon(exemption_saving_won),
-        "applicable": exemption_saving_won > 0, "transferableManwon": 0, "ineligibleReason": None,
+        "applicable": exemption_saving_won > 0, "transferableManwon": 0,
+        "ineligibleReason": exemption_reason,
     })
 
     # ⑥ Tax-loss Harvesting
     realized_loss_won = max(realized_loss_manwon, 0.0) * 10_000
     offset_won = min(realized_loss_won, overseas_gain_won)
     harvest_saving_won = offset_won * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
+    harvest_reason = None
+    if harvest_saving_won <= 0:
+        if overseas_gain_won <= 0:
+            harvest_reason = "통산할 해외주식 양도차익이 없음"
+        else:
+            harvest_reason = "확정 가능한 평가손실이 없어 통산할 손실 없음"
     cards.append({
         "key": "tax_loss", "savingManwon": _won_to_manwon(harvest_saving_won),
-        "applicable": harvest_saving_won > 0, "transferableManwon": 0, "ineligibleReason": None,
+        "applicable": harvest_saving_won > 0, "transferableManwon": 0,
+        "ineligibleReason": harvest_reason,
     })
 
     return cards

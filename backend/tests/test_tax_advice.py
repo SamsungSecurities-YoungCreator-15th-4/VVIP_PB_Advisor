@@ -1,13 +1,14 @@
 """tax_advice 단위 테스트 — 6종 카드·게이팅·우선순위 결합 검증.
 
-순수 파이썬 모듈이라 외부 의존 없이 실행됨:
-    python backend/tests/test_tax_advice.py   또는   pytest backend/tests/test_tax_advice.py
+실행(backend 디렉터리 기준, .venv 활성화 상태):
+    cd backend && python -m pytest tests/test_tax_advice.py
+    또는  cd backend && python tests/test_tax_advice.py
 """
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app", "portfolio_logic"))
-import tax_advice as T  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from app.portfolio_logic import tax_advice as T  # noqa: E402
 
 # 종합과세 구간에 드는 포트폴리오 (채권·배당·해외성장 혼합)
 PORTFOLIO = [
@@ -97,6 +98,18 @@ def test_isa_not_applicable_does_not_starve_pool():
     assert abs(combined["contributions"]["low_tax_dividend"]
                - cards["low_tax_dividend"]["savingManwon"]) <= 1
     print("✅ ISA 미적용 시 저율배당이 풀을 온전히 사용 (버그픽스 검증)")
+
+
+def test_inapplicable_cards_always_have_reason():
+    # 6종 모두 반환되고, applicable=False면 사유(ineligibleReason)가 반드시 채워져야 함
+    # (소액·젊은 고객 → 대부분 부적합)
+    cards = T.calc_tax_advice(portfolio=[{"asset_class": "domestic_equity", "weight": 1.0}],
+                              gross_return=0.05, total_assets=1.0, age=33, horizon_years=3)
+    assert len(cards) == 6
+    for c in cards:
+        if not c["applicable"]:
+            assert c["ineligibleReason"], f"{c['key']}: 부적합인데 사유 없음"
+    print("✅ 부적합 카드는 모두 사유 문구 보유 (회색 처리 + 설명용)")
 
 
 def test_none_kwargs_do_not_crash():
