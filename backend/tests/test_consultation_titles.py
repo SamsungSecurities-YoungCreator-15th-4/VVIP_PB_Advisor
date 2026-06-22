@@ -1,7 +1,12 @@
 import unittest
 from datetime import datetime
 
-from app.routers.consultations import _build_stt_titles, _to_kst_iso
+from app.routers.consultations import (
+    _build_stt_titles,
+    _get_client_by_id,
+    _parse_realtime_client_id,
+    _to_kst_iso,
+)
 
 
 class FakeResult:
@@ -38,6 +43,7 @@ class FakeQuery:
 class FakeSupabase:
     def __init__(self, result):
         self.query = FakeQuery(result)
+        self.table_name = None
 
     def table(self, name):
         self.table_name = name
@@ -88,6 +94,23 @@ class SttTitleTest(unittest.TestCase):
         created_at = _to_kst_iso("2026-06-21T22:34:39.04894+09:00")
 
         self.assertEqual(created_at, "2026-06-21T22:34:39.048940+09:00")
+
+    def test_realtime_start_payload_requires_client_id(self):
+        self.assertEqual(
+            _parse_realtime_client_id({"client_id": " client-1 "}),
+            "client-1",
+        )
+
+        with self.assertRaisesRegex(ValueError, "client_id"):
+            _parse_realtime_client_id({"customer_name": "김성삼"})
+
+    def test_get_client_by_id_rejects_invalid_uuid_before_query(self):
+        supabase = FakeSupabase(FakeResult(data=[{"id": "client-1"}]))
+
+        client = _get_client_by_id(supabase, "not-a-uuid")
+
+        self.assertIsNone(client)
+        self.assertIsNone(supabase.table_name)
 
 
 if __name__ == "__main__":

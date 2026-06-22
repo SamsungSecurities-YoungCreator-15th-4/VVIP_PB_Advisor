@@ -720,7 +720,7 @@ const PF = {
 /* ---------- donut ---------- */
 function drawDonut(el, data, label, sub){
   const cx=60,cy=60,r=44,sw=18, C=2*Math.PI*r;
-  let acc=0, ns='http://www.w3.org/2000/svg', frag='';
+  let acc=0, frag='';
   data.forEach((v,i)=>{
     const len=C*v/100;
     frag+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${RAMP[i]}" stroke-width="${sw}"
@@ -791,7 +791,7 @@ document.querySelectorAll('[data-legend]').forEach(div=>{
   const maxV=11500;
   const sc=v=> v/maxV*plot;
   const COL={total:'#0064FF', neg:'#F04452', rec:'#B8D4FF', final:'#0050D6'};
-  let cum=0, g='', prevTopY=null, prevX2=null;
+  let cum=0, g='';
 
   // baseline
   g+=`<line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="#E8EBED" stroke-width="1"/>`;
@@ -807,11 +807,6 @@ document.querySelectorAll('[data-legend]').forEach(div=>{
       top=baseY-sc(hi); bottom=baseY-sc(lo);
     }
     const h=Math.max(bottom-top,2);
-    // connector from previous bar top-level
-    if(prevX2!==null){
-      const connY = baseY - sc( (s.type==='neg'||s.type==='rec') ? cum - s.value : (s.type==='final'? s.value : cum) );
-      // draw connector at the running level before this step (= previous cumulative)
-    }
     g+=`<rect x="${x1.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}"
         rx="3" fill="${fill}" ${s.type==='rec'?'stroke="#5C9CFF" stroke-width="1"':''}/>`;
     // value sub label (above bar)
