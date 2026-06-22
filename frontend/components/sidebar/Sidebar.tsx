@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
+  Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -15,7 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { CONSULT_LOG, PAST_CONSULTATIONS } from "@/lib/mockData";
+import DataSourceBadge from "@/components/common/DataSourceBadge";
+import { PAST_CONSULTATIONS } from "@/lib/mockData";
+import { createClient, uploadSttConsultation } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
 
@@ -28,6 +31,13 @@ export default function Sidebar() {
     setIps,
     selectCustomer,
     addCustomer,
+    transcript,
+    transcriptSource,
+    sttStatus,
+    sttNote,
+    setTranscript,
+    setConsultationId,
+    setSttStatus,
   } = useDashboardStore();
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -38,6 +48,8 @@ export default function Sidebar() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newAum, setNewAum] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -67,20 +79,66 @@ export default function Sidebar() {
     setDropdownOpen((o) => !o);
   };
 
-  const handleAddCustomer = () => {
-    if (!newName.trim()) return;
+  // 고객 추가 → POST /clients(DB 저장). 성공 시 실 client_id 보유 고객으로 추가·선택.
+  // 동명이인(409)·입력오류(422)는 서버 거절로 보고 로컬 추가하지 않는다.
+  // 저장 실패(네트워크/5xx)는 데모로만 로컬 추가하고 "저장 안 됨" 배지로 명시한다.
+  const handleAddCustomer = async () => {
+    const name = newName.trim();
+    if (!name || addLoading) return;
     const aumVal = Math.max(0, parseFloat(newAum) || 0);
+
+    setAddLoading(true);
+    setAddError(null);
+    const result = await createClient(name, aumVal);
+    setAddLoading(false);
+
+    if (result.status === "conflict" || result.status === "invalid") {
+      setAddError(result.message);
+      return; // 로컬 추가하지 않음
+    }
+
+    const persisted = result.status === "live";
+    const id = `cust-${Date.now()}`;
     addCustomer({
-      id: `cust-${Date.now()}`,
-      name: newName.trim(),
+      id,
+      name,
       grade: "VVIP",
       pbCode: `PB-${Math.floor(100000 + Math.random() * 900000)}`,
       aumLabel: aumVal > 0 ? `운용자산 ${aumVal}억원` : "운용자산 미입력",
       aumEokwon: aumVal,
+      // 절세계좌·적합성 입력값은 신규 고객 등록 시 미상 — 기본값으로 시작(추후 PB 입력/DB 연동)
+      isaUsedManwon: 0,
+      pensionUsedManwon: 0,
+      realizedLossManwon: 0,
+      marginalRatePct: 38.5,
+      age: 50,
+      horizonYears: 10,
+      nearTermNeedManwon: 0,
+      nearTermNeedYears: null,
+      isaOpened: true,
+      clientId: result.data.clientId || undefined,
+      persisted,
     });
+    selectCustomer(id); // 추가한 고객을 바로 선택 → STT 업로드가 이 고객으로 진행
     setNewName("");
     setNewAum("");
     setAddModalOpen(false);
+  };
+
+  // 음성 업로드 → STT(/consultations/stt) → 전사·IPS 갱신. 실패 시 mock 폴백(배지).
+  const handleTranscribe = async () => {
+    if (!uploadedFile || sttStatus === "uploading") return;
+    setSttStatus("uploading");
+    const res = await uploadSttConsultation(customer.clientId, uploadedFile);
+    setTranscript(res.data.transcript, res.source);
+    setConsultationId(res.data.consultationId);
+    // 추출된 IPS 값만 조율기에 반영(없는 값은 기존 유지).
+    if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
+    if (res.source === "live") {
+      setSttStatus("done");
+    } else {
+      setSttStatus("error", res.note);
+    }
   };
 
   // 사이드바가 닫혔을 때: 하나의 패널임을 시각적으로 표현하는 좁은 카드 스트립
@@ -144,8 +202,16 @@ export default function Sidebar() {
                   {customer.grade}
                 </span>
               </div>
-              <div className="mt-0.5 text-[11px] font-semibold text-muted-foreground">
-                {customer.pbCode} · {customer.aumLabel}
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                <span>
+                  {customer.pbCode} · {customer.aumLabel}
+                </span>
+                {customer.persisted === false && (
+                  <DataSourceBadge
+                    source="fallback"
+                    note="DB 저장 실패 — 데모로만 추가된 고객입니다."
+                  />
+                )}
               </div>
             </div>
             <ChevronDown
@@ -187,15 +253,44 @@ export default function Sidebar() {
               </span>
             )}
           </button>
+
+          {uploadedFile && (
+            <Button
+              size="sm"
+              className="mt-2 w-full font-bold"
+              onClick={handleTranscribe}
+              disabled={sttStatus === "uploading"}
+            >
+              {sttStatus === "uploading" ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  전사·분석 중…
+                </>
+              ) : (
+                "전사 시작"
+              )}
+            </Button>
+          )}
+          {sttStatus === "done" && (
+            <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">
+              전사 완료 — 상담 내역·IPS 조율기에 반영했습니다.
+            </p>
+          )}
+          {sttStatus === "error" && (
+            <p className="mt-1.5 text-[10px] font-semibold text-amber-600">
+              {sttNote ?? "전사에 실패해 데모 데이터를 표시합니다."}
+            </p>
+          )}
         </Card>
 
         {/* 상담 내역 */}
         <Card className="gap-0 p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-[14px] font-bold">상담 내역</p>
+            <DataSourceBadge source={transcriptSource} note={sttNote} />
           </div>
           <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-0.5">
-            {CONSULT_LOG.map((m, i) => (
+            {transcript.map((m, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span
                   className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[8.5px] font-extrabold ${
@@ -350,7 +445,15 @@ export default function Sidebar() {
                   {c.name[0]}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-extrabold">{c.name}</div>
+                  <div className="flex items-center gap-1.5 text-[13px] font-extrabold">
+                    {c.name}
+                    {c.persisted === false && (
+                      <DataSourceBadge
+                        source="fallback"
+                        note="DB 저장 실패 — 데모로만 추가된 고객입니다."
+                      />
+                    )}
+                  </div>
                   <div className="text-[10px] font-semibold text-muted-foreground">
                     {c.aumLabel}
                   </div>
@@ -367,6 +470,7 @@ export default function Sidebar() {
                 type="button"
                 onClick={() => {
                   setDropdownOpen(false);
+                  setAddError(null);
                   setAddModalOpen(true);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold text-brand hover:bg-brand/5"
@@ -421,7 +525,10 @@ export default function Sidebar() {
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[15px] font-extrabold">고객 추가</h3>
               <button
-                onClick={() => setAddModalOpen(false)}
+                onClick={() => {
+                  setAddModalOpen(false);
+                  setAddError(null);
+                }}
                 className="rounded p-1 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-4" />
@@ -450,12 +557,24 @@ export default function Sidebar() {
                   placeholder="예: 20"
                 />
               </div>
+              {addError && (
+                <p className="text-[11px] font-semibold text-amber-600">
+                  {addError}
+                </p>
+              )}
               <Button
                 onClick={handleAddCustomer}
                 className="w-full font-bold"
-                disabled={!newName.trim()}
+                disabled={!newName.trim() || addLoading}
               >
-                추가하기
+                {addLoading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    저장 중…
+                  </>
+                ) : (
+                  "추가하기"
+                )}
               </Button>
             </div>
           </div>

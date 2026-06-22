@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { Lightbulb } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { fetchMacroIndicators } from "@/lib/api";
 import {
   PORTFOLIOS,
   SCENARIO_BASE,
@@ -10,19 +12,44 @@ import {
   SCENARIO_WARN,
 } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
+import {
+  BACKEND_PORTFOLIO_ID,
+  useStressedPortfolios,
+} from "@/lib/useStressedPortfolios";
 
 /** 우측 상단: 시나리오 Test — 금리·환율 슬라이더와 예상 평가손익 */
 export default function StressTestSection() {
-  const { scenario, setScenario, resetScenario } = useDashboardStore();
+  const { scenario, setScenario, liveBase, setLiveBase } = useDashboardStore();
+  const { byId, failed, aumEokwon } = useStressedPortfolios();
 
-  const rateDelta = scenario.ratePct - SCENARIO_BASE.ratePct;
-  const fxDelta = scenario.fxKrw - SCENARIO_BASE.fxKrw;
+  // 슬라이더 기준점을 실시간 현재값(기준금리·원/달러)으로 맞춘다.
+  // 최초 1회 로드 시 store가 슬라이더도 실시간 값으로 스냅한다.
+  useEffect(() => {
+    fetchMacroIndicators()
+      .then((d) =>
+        setLiveBase({
+          ratePct: d.baseRate.price,
+          fxKrw: Math.round(d.krwUsd.price),
+        }),
+      )
+      .catch(() => {
+        /* 실패 시 목 기준값 유지 */
+      });
+  }, [setLiveBase]);
+
+  const rateDelta = scenario.ratePct - liveBase.ratePct;
+  const fxDelta = scenario.fxKrw - liveBase.fxKrw;
   const isExtreme =
     Math.abs(rateDelta) >= SCENARIO_WARN.rateDeltaPct ||
     Math.abs(fxDelta) >= SCENARIO_WARN.fxDeltaKrw;
 
-  // 더미 선형 민감도로 연간 평가손익(억원)을 추정 — 백엔드 시뮬레이션으로 교체 예정
+  // 연간 예상 평가손익(억원) = (충격 후 기대수익률 − 기준 기대수익률) × 운용자산.
+  // 백엔드 실데이터를 쓰고, 연결 실패 시에만 더미 선형 민감도로 폴백한다.
   const pnlEok = (id: "current" | "a" | "b") => {
+    const live = byId[BACKEND_PORTFOLIO_ID[id]];
+    if (!failed && live) {
+      return ((live.stressed.expectedReturn ?? 0) - (live.base.expectedReturn ?? 0)) * aumEokwon;
+    }
     const s = SCENARIO_SENSITIVITY[id];
     return s.perRatePct * rateDelta + s.perFxKrw * fxDelta;
   };
@@ -42,9 +69,9 @@ export default function StressTestSection() {
         step={SCENARIO_BASE.rateStep}
         minLabel={`${SCENARIO_BASE.rateMin.toFixed(1)}%`}
         maxLabel={`${SCENARIO_BASE.rateMax.toFixed(1)}%`}
-        resetLabel={`초기화 (현재 ${SCENARIO_BASE.ratePct}%)`}
+        resetLabel={`초기화 (현재 ${liveBase.ratePct.toFixed(2)}%)`}
         onChange={(v) => setScenario({ ratePct: v })}
-        onReset={resetScenario}
+        onReset={() => setScenario({ ratePct: liveBase.ratePct })}
       />
 
       <ScenarioSlider
@@ -58,9 +85,9 @@ export default function StressTestSection() {
         step={SCENARIO_BASE.fxStep}
         minLabel={SCENARIO_BASE.fxMin.toLocaleString()}
         maxLabel={SCENARIO_BASE.fxMax.toLocaleString()}
-        resetLabel={`초기화 (현재 ${SCENARIO_BASE.fxKrw.toLocaleString()}원)`}
+        resetLabel={`초기화 (현재 ${liveBase.fxKrw.toLocaleString()}원)`}
         onChange={(v) => setScenario({ fxKrw: v })}
-        onReset={resetScenario}
+        onReset={() => setScenario({ fxKrw: liveBase.fxKrw })}
       />
 
       <div className="mt-1 rounded-xl bg-brand/5 p-3">

@@ -8,7 +8,7 @@ document_chunk)에 적재한다.
 처리 흐름
   1) backend/data/<category>/*.pdf 수집 (category = house_view | tax | macro)
   2) pypdf 로 텍스트 추출 (스캔 PDF = 추출 0자 → 경고 후 skip, OCR은 범위 밖)
-  3) tiktoken(cl100k_base) 토큰 기준 청킹 (rag/config.py CHUNK_SIZE/CHUNK_OVERLAP)
+  3) tiktoken(cl100k_base) 토큰 기준 청킹 (CHUNK_SIZE/CHUNK_OVERLAP, 환경변수로 override 가능)
   4) 청크별 Azure 임베딩(text-embedding-3-small, 1536) — retrieval.embed_query 재사용
   5) document + document_chunk upsert (dev_seed 패턴 재사용)
 
@@ -35,6 +35,7 @@ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 """
 
 import argparse
+import os
 import re
 import sys
 import traceback
@@ -47,7 +48,6 @@ from pypdf import PdfReader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.rag.config import CHUNK_OVERLAP, CHUNK_SIZE  # noqa: E402
 from app.rag.retrieval import (  # noqa: E402
     EMBEDDING_DEPLOYMENT,
     EMBEDDING_DIM,
@@ -55,6 +55,9 @@ from app.rag.retrieval import (  # noqa: E402
     get_openai_client,
     get_supabase_client,
 )
+
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "512"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
 
 # 배치 임베딩 크기. 청크당 순차 호출(2000+회)은 느려 한 번에 여러 청크를 임베딩한다.
 # Azure text-embedding-3-small 입력 한도(8191토큰/입력)와 별개로, 한 요청의 입력

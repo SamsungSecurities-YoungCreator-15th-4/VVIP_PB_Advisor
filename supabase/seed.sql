@@ -12,7 +12,7 @@
 --   name_ko   → description
 --   trigger   → (시드에 트리거 조건이 없어 미사용; 필요 시 params 에 보관)
 --   audit 컬럼 source/source_law/effective_from/to/assumptions 는
---   20260611000000_tax_rule_audit_columns 마이그레이션에서 추가됨.
+--   20260611000002_tax_rule_audit_columns 마이그레이션에서 추가됨.
 --
 -- 주의: unique(module, rule_key). 재시드 안전을 위해 ON CONFLICT DO UPDATE.
 -- =====================================================================

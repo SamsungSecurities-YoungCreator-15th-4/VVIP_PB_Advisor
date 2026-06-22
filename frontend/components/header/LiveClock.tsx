@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 
 function now(): string {
   return new Date().toLocaleTimeString("ko-KR", {
@@ -11,29 +10,27 @@ function now(): string {
   });
 }
 
+/** 헤더의 현재 시각 — 30초마다 자동 갱신되는 실시간 시계.
+ *  (데이터 '기준 시각'은 거시지표 갱신 시점에 맞춰 MacroTicker에서 표시한다.) */
 export default function LiveClock() {
   const [time, setTime] = useState<string | null>(null);
-  const refresh = useCallback(() => setTime(now()), []);
 
-  // setTimeout으로 감싸 setState를 콜백 내부에서 호출 — react-hooks/set-state-in-effect 규칙 준수
   useEffect(() => {
-    const id = setTimeout(refresh, 0);
-    return () => clearTimeout(id);
-  }, [refresh]);
+    const tick = () => setTime(now());
+    const first = setTimeout(tick, 0); // 마운트 직후 1회 (effect 본문 직접 setState 회피)
+    const id = setInterval(tick, 30_000); // 30초마다 자동 갱신
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
 
   return (
     <div className="flex items-center gap-1 pr-1 text-[11px] font-semibold text-muted-foreground">
       <b className="text-sm font-bold tabular-nums text-foreground">
         {time ?? "--:--"}
       </b>
-      <span>기준</span>
-      <button
-        onClick={refresh}
-        aria-label="현재 시각 새로고침"
-        className="ml-0.5 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <RefreshCw size={11} />
-      </button>
+      <span>현재</span>
     </div>
   );
 }
