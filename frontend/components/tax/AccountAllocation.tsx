@@ -135,19 +135,6 @@ export default function AccountAllocation({ accounts }: { accounts?: AccountSlot
         <LegendDot color="#D1D5DB" label="기준값" />
       </div>
 
-      {/* 계좌별 캡션 */}
-      <div className="flex flex-col gap-1.5">
-        {data.map((d) => (
-          <div key={d.name} className="flex items-start gap-1.5">
-            <span className="mt-0.5 shrink-0 rounded-md bg-brand/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-dark">
-              {d.tag}
-            </span>
-            <span className="text-[11px] font-semibold leading-snug text-muted-foreground">
-              {d.caption}
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
