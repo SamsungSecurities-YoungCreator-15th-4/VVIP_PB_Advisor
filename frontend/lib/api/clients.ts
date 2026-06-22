@@ -8,7 +8,8 @@
  *  - fallback : 저장 실패(네트워크/타임아웃/5xx) — 로컬에만 데모로 추가(배지로 명시)
  */
 
-import { ApiError, apiPost } from "@/lib/api";
+import { ApiError, apiGet, apiPost } from "@/lib/api";
+import { type ApiResult, fallback, live } from "./result";
 
 export interface CreatedClient {
   clientId: string; // DB UUID. fallback 시엔 빈 문자열(미저장).
@@ -16,11 +17,31 @@ export interface CreatedClient {
   aumEokwon: number;
 }
 
+export interface ListedClient {
+  clientId: string;
+  name: string;
+  aumEokwon: number;
+  isPersona: boolean;
+  createdAt: string;
+}
+
 interface ClientCreateResponseRaw {
   client_id: string;
   name: string;
   aum_eokwon: number;
   created_at: string;
+}
+
+interface ClientListItemRaw {
+  client_id: string;
+  name: string;
+  aum_eokwon: number;
+  is_persona: boolean;
+  created_at: string;
+}
+
+interface ClientListResponseRaw {
+  clients: ClientListItemRaw[];
 }
 
 export type CreateClientResult =
@@ -59,5 +80,25 @@ export async function createClient(
       data: { clientId: "", name, aumEokwon },
       note,
     };
+  }
+}
+
+export async function listClients(): Promise<ApiResult<ListedClient[]>> {
+  try {
+    const res = await apiGet<ClientListResponseRaw>("/clients");
+    return live(
+      res.clients.map((client) => ({
+        clientId: client.client_id,
+        name: client.name,
+        aumEokwon: client.aum_eokwon,
+        isPersona: client.is_persona,
+        createdAt: client.created_at,
+      })),
+    );
+  } catch {
+    return fallback(
+      [],
+      "고객 목록을 DB에서 불러오지 못해 데모 고객 목록을 표시합니다.",
+    );
   }
 }
