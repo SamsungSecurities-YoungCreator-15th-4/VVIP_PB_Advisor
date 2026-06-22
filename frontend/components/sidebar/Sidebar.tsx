@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
+import StressTestSection from "@/components/right-panel/StressTestSection";
 import { PAST_CONSULTATIONS } from "@/lib/mockData";
 import { createClient, uploadSttConsultation } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
@@ -156,7 +157,7 @@ export default function Sidebar() {
             className="text-[9px] font-bold leading-none text-muted-foreground"
             style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            고객IPS
+            고객IPS&Test
           </span>
         </button>
       </div>
@@ -169,7 +170,7 @@ export default function Sidebar() {
         {/* 패널 헤더 */}
         <div className="flex items-center justify-between px-0.5 pb-0.5">
           <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-            고객 IPS
+            고객 IPS & Stress Test
           </span>
           <button
             onClick={() => setIsOpen(false)}
@@ -309,7 +310,7 @@ export default function Sidebar() {
             <p className="text-[14px] font-bold">상담 내역</p>
             <DataSourceBadge source={transcriptSource} note={sttNote} />
           </div>
-          <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-0.5">
+          <div className="flex max-h-[150px] flex-col gap-1.5 overflow-y-auto pr-0.5">
             {transcript.map((m, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span
@@ -424,6 +425,8 @@ export default function Sidebar() {
             />
           </IpsRow>
         </Card>
+
+        <StressTestSection />
 
         <Button
           size="lg"
