@@ -114,6 +114,7 @@ export default function AccountAllocation({ accounts }: { accounts?: AccountSlot
               tick={{ fontSize: 11, fontWeight: 800, fill: "#4E5968" }}
             />
             <Tooltip
+              cursor={{ fill: "#EAF1FF" }}
               formatter={(v: unknown, name: unknown) => [
                 `${Number(v).toLocaleString()}만원`,
                 name === "reference" ? "기준값" : "사용액",
