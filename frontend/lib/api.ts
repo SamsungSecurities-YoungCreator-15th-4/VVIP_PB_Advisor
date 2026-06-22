@@ -206,5 +206,9 @@ export type { TaxInsightData } from "./api/tax";
 export { uploadSttConsultation } from "./api/stt";
 export type { SttConsultationData, IpsPatch } from "./api/stt";
 
-export { createClient } from "./api/clients";
-export type { CreatedClient, CreateClientResult } from "./api/clients";
+export { createClient, listClients } from "./api/clients";
+export type {
+  CreatedClient,
+  CreateClientResult,
+  ListedClient,
+} from "./api/clients";
