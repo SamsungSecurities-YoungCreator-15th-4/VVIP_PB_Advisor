@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Loader2,
+  Mic,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -232,27 +233,46 @@ export default function Sidebar() {
             className="hidden"
             onChange={(e) => setUploadedFile(e.target.files?.[0] ?? null)}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
-          >
-            <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
-              <Upload className="size-4 text-brand" />
-            </span>
-            <span className="block text-[13px] font-bold text-brand-dark">
-              음성 업로드
-            </span>
-            {uploadedFile ? (
-              <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
-                {uploadedFile.name}
+          <div className="flex gap-2">
+            {/* 음성 업로드 */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+            >
+              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+                <Upload className="size-4 text-brand" />
               </span>
-            ) : (
+              <span className="block text-[13px] font-bold text-brand-dark">
+                음성 업로드
+              </span>
+              {uploadedFile ? (
+                <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
+                  {uploadedFile.name}
+                </span>
+              ) : (
+                <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
+                  wav 지원
+                </span>
+              )}
+            </button>
+
+            {/* 실시간 전사 */}
+            <button
+              type="button"
+              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+            >
+              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+                <Mic className="size-4 text-brand" />
+              </span>
+              <span className="block text-[13px] font-bold text-brand-dark">
+                실시간 전사
+              </span>
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                wav 지원
+                실시간 녹음
               </span>
-            )}
-          </button>
+            </button>
+          </div>
 
           {uploadedFile && (
             <Button
