@@ -256,9 +256,10 @@ def calc_tax_advice(
     # ⑤ 해외주식 양도 250만 기본공제
     exemption_realizable_won = min(overseas_gain_won, OVERSEAS_STOCK_GAIN_DEDUCTION)
     exemption_saving_won = exemption_realizable_won * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
+    _ovs_ded_manwon = _won_to_manwon(OVERSEAS_STOCK_GAIN_DEDUCTION)
     exemption_reason = (
         None if exemption_saving_won > 0
-        else f"해외주식·ETF 양도차익이 없어 기본공제({_won_to_manwon(OVERSEAS_STOCK_GAIN_DEDUCTION)}만) 활용 대상 없음"
+        else f"해외주식·ETF 양도차익이 없어 기본공제({_ovs_ded_manwon}만) 활용 대상 없음"
     )
     cards.append({
         "key": "overseas_exemption", "savingManwon": _won_to_manwon(exemption_saving_won),
