@@ -109,9 +109,10 @@ export default function MacroTicker() {
     };
   }, []);
 
-  // 새로고침 버튼: 강제 갱신 + 쿨다운
+  // 새로고침 버튼: 클릭 시각 즉시 표시 → 강제 갱신 + 쿨다운
   const onRefresh = () => {
     if (loading || cooling) return;
+    setFetchedAt(new Date().toISOString()); // 버튼 누른 시각으로 먼저 표시
     load(true);
     setCooling(true);
     setTimeout(() => {
