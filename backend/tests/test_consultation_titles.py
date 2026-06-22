@@ -3,6 +3,7 @@ from datetime import datetime
 
 from app.routers.consultations import (
     _build_stt_titles,
+    _get_client_by_id,
     _parse_realtime_client_id,
     _to_kst_iso,
 )
@@ -42,6 +43,7 @@ class FakeQuery:
 class FakeSupabase:
     def __init__(self, result):
         self.query = FakeQuery(result)
+        self.table_name = None
 
     def table(self, name):
         self.table_name = name
@@ -101,6 +103,14 @@ class SttTitleTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "client_id"):
             _parse_realtime_client_id({"customer_name": "김성삼"})
+
+    def test_get_client_by_id_rejects_invalid_uuid_before_query(self):
+        supabase = FakeSupabase(FakeResult(data=[{"id": "client-1"}]))
+
+        client = _get_client_by_id(supabase, "not-a-uuid")
+
+        self.assertIsNone(client)
+        self.assertIsNone(supabase.table_name)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
@@ -668,6 +669,11 @@ def list_consultations(client_id: str) -> ConsultationListResponse:
 
 
 def _get_client_by_id(supabase, client_id: str) -> dict | None:
+    try:
+        uuid.UUID(client_id)
+    except (TypeError, ValueError):
+        return None
+
     result = (
         supabase.table("client")
         .select("id,name")
