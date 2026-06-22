@@ -517,14 +517,10 @@ def calc_combined_tax_saving(
     ):
         exhausted["low_tax_dividend"] = "상위 효율 전략 적용 후 공유 과세소득 풀 소진"
 
-    bond_income = sum(
-        income_by_asset.get(asset_class, 0.0)
-        for asset_class in _BOND_INCOME_ASSETS
-    )
+    # 3) 분리과세채: 남은 excess 한도 내
+    bond_income = sum(income_by_asset.get(c, 0.0) for c in _BOND_INCOME_ASSETS)
     bond_eligible = min(bond_income, rem)
-    contrib["separate_bond"] = bond_eligible * max(
-        marginal - LONG_BOND_SEPARATE_TAX_RATE, 0.0
-    )
+    contrib["separate_bond"] = bond_eligible * max(marginal - LONG_BOND_SEPARATE_TAX_RATE, 0.0)
     rem = max(rem - bond_eligible, 0.0)
     if cards["separate_bond"].get("applicable") and contrib["separate_bond"] <= 0:
         exhausted["separate_bond"] = "상위 효율 전략 적용 후 공유 과세소득 풀 소진"

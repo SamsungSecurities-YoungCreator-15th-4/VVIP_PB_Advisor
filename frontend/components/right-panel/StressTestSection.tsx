@@ -48,7 +48,7 @@ export default function StressTestSection() {
   const pnlEok = (id: "current" | "a" | "b") => {
     const live = byId[BACKEND_PORTFOLIO_ID[id]];
     if (!failed && live) {
-      return (live.stressed.expectedReturn - live.base.expectedReturn) * aumEokwon;
+      return ((live.stressed.expectedReturn ?? 0) - (live.base.expectedReturn ?? 0)) * aumEokwon;
     }
     const s = SCENARIO_SENSITIVITY[id];
     return s.perRatePct * rateDelta + s.perFxKrw * fxDelta;
