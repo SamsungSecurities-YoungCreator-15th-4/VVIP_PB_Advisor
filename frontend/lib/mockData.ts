@@ -392,8 +392,11 @@ export const TAX_ADVICE = {
       tag: "비과세 자산 이전",
       saving: "+21만원",
       products: [
-        { name: "삼성증권 ISA 중개형", desc: "비과세 200만 + 초과분 9.9% 분리과세, 주식·ETF 직접 편입 가능" },
-        { name: "미래에셋 ISA 서민형", desc: "비과세 400만 확대 적용, 연봉 5천만 이하 해당 시 우선 검토" },
+        { name: "삼성증권 ISA 계좌 소개", desc: "" },
+        { name: "삼성증권 중개형 ISA 계좌", desc: "" },
+        { name: "삼성증권 신탁형 ISA 계좌", desc: "" },
+        { name: "삼성증권 일임형 ISA 계좌", desc: "" },
+        { name: "삼성증권 일임형 ISA 모델 포트폴리오", desc: "" },
       ],
     },
     {
@@ -403,8 +406,15 @@ export const TAX_ADVICE = {
       tag: "부적합·투자기간 3년 < 연금 수령까지 22년",
       saving: "",
       products: [
-        { name: "연금저축펀드(삼성증권)", desc: "세액공제 한도 600만원, 공제율 13.2%~16.5% 적용" },
-        { name: "IRP 추가 납입", desc: "세액공제 한도 900만원(연금저축 포함), 퇴직소득세 이연 효과" },
+        { name: "삼성증권 연금저축계좌 소개", desc: "" },
+        { name: "삼성증권 IRP 계좌", desc: "" },
+        { name: "삼성증권 퇴직연금 DB형", desc: "" },
+        { name: "삼성증권 퇴직연금 DC형", desc: "" },
+        { name: "삼성증권 연금저축계좌 ETF/리츠 수수료 이벤트", desc: "" },
+        { name: "삼성증권 연금저축펀드 / TDF", desc: "" },
+        { name: "삼성증권 퇴직연금 원리금보장상품", desc: "" },
+        { name: "삼성증권 퇴직연금 펀드", desc: "" },
+        { name: "타 증권사 퇴직연금 이전 / 가져오기", desc: "" },
       ],
     },
     {
@@ -414,8 +424,10 @@ export const TAX_ADVICE = {
       tag: "분리과세 전환",
       saving: "+142만원",
       products: [
-        { name: "국고채 30년물", desc: "분리과세 선택 가능, 이자소득 종합과세 합산 제외" },
-        { name: "장기 회사채 AA등급", desc: "저쿠폰 구조로 이자소득 최소화 — 분리과세 33% 확정" },
+        { name: "개인투자용 국채 3년물", desc: "" },
+        { name: "개인투자용 국채 5년물", desc: "" },
+        { name: "개인투자용 국채 10년물", desc: "" },
+        { name: "개인투자용 국채 20년물", desc: "" },
       ],
     },
     {
@@ -425,8 +437,9 @@ export const TAX_ADVICE = {
       tag: "저율과세 편입",
       saving: "+1,419만원",
       products: [
-        { name: "TIGER 미국배당다우존스 ETF", desc: "해외 고배당 ETF — 배당소득 합산 최소화 구조" },
-        { name: "KODEX 배당성장 ETF", desc: "국내 배당성장주 — 금융소득종합과세 구간 분산에 유리" },
+        { name: "삼성증권 중개형 ISA 내 국내 고배당주", desc: "" },
+        { name: "삼성증권 중개형 ISA 내 국내상장 해외 배당 ETF", desc: "" },
+        { name: "삼성증권 퇴직연금 DC/IRP 계좌 내 배당 ETF·리츠", desc: "" },
       ],
     },
     {
@@ -436,8 +449,9 @@ export const TAX_ADVICE = {
       tag: "기본공제 활용",
       saving: "+55만원",
       products: [
-        { name: "연간 250만원 구간 매도 전략", desc: "매년 250만원 이내 양도차익 실현 — 기본공제로 비과세, 이월 불가 주의" },
-        { name: "분할 매도 스케줄 관리", desc: "연말 이전 기본공제 잔여분 활용, PB와 타이밍 협의 필요" },
+        { name: "삼성증권 해외주식", desc: "" },
+        { name: "삼성증권 글로벌 ETF 외", desc: "" },
+        { name: "삼성증권 국내상장ETF vs 해외상장 ETF 비교", desc: "" },
       ],
     },
     {
@@ -447,8 +461,9 @@ export const TAX_ADVICE = {
       tag: "평가손실 확정",
       saving: "+704만원",
       products: [
-        { name: "손실 포지션 개별 검토", desc: "해외주식 평가손실 종목 연내 매도 — 양도차익과 통산" },
-        { name: "대체 종목 즉시 매수", desc: "손실 확정 후 유사 ETF 재편입으로 포지션 유지 — 워시세일 주의" },
+        { name: "삼성증권 해외주식", desc: "" },
+        { name: "삼성증권 글로벌 ETF 외", desc: "" },
+        { name: "삼성증권 국내상장ETF vs 해외상장 ETF 비교", desc: "" },
       ],
     },
   ],

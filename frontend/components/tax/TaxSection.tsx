@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,7 @@ import TaxGauge from "@/components/tax/TaxGauge";
 import TaxWaterfall from "@/components/tax/TaxWaterfall";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
 import { PORTFOLIOS, TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
+import { PRODUCT_LINKS } from "@/lib/productLinks";
 import { useDashboardStore } from "@/lib/store";
 import {
   type ApiResult,
@@ -201,33 +202,44 @@ function AdviceCards() {
                 </div>
               </div>
 
-              {/* 콘텐츠 */}
+              {/* 콘텐츠 — 두 탭 모두 h-[108px]으로 고정, 넘치면 스크롤 */}
               {active === "제안설명" ? (
-                <>
-                  <p className="flex-1 text-[12px] font-semibold leading-snug text-muted-foreground">
+                <div className="flex h-[108px] flex-col overflow-y-auto pr-0.5">
+                  <p className="pt-1.5 text-[12px] font-semibold leading-snug text-muted-foreground">
                     {card.body}
                   </p>
-                  <p className="mt-1 text-[12px] font-bold text-muted-foreground/60">
-                    {card.tag}
-                  </p>
-                  {card.saving && (
-                    <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
-                      {card.saving}
+                  <div className="mt-auto pt-1">
+                    <p className="text-[12px] font-bold text-muted-foreground/60">
+                      {card.tag}
                     </p>
-                  )}
-                </>
+                    {card.saving && (
+                      <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
+                        {card.saving}
+                      </p>
+                    )}
+                  </div>
+                </div>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  {card.products.map((p) => (
-                    <div key={p.name} className="rounded-lg bg-brand/5 px-2 py-1.5">
-                      <p className="text-[12px] font-extrabold text-brand-dark">
-                        {p.name}
-                      </p>
-                      <p className="mt-0.5 text-[11px] font-semibold leading-snug text-muted-foreground">
-                        {p.desc}
-                      </p>
-                    </div>
-                  ))}
+                <div className="h-[108px] overflow-y-auto pr-0.5">
+                  <div className="flex flex-col gap-1.5">
+                    {card.products.map((p) => {
+                      const url = PRODUCT_LINKS[p.name] ?? "";
+                      return (
+                        <button
+                          key={p.name}
+                          type="button"
+                          disabled={!url}
+                          onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}
+                          className={`flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-1.5 text-left transition-colors ${url ? "cursor-pointer hover:bg-brand/10" : "cursor-default opacity-50"}`}
+                        >
+                          <ExternalLink className="size-3 shrink-0 text-brand" />
+                          <span className="text-[12px] font-extrabold text-brand-dark">
+                            {p.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
