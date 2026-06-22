@@ -37,6 +37,7 @@ class ConsultationSummaryResponse(BaseModel):
 
 
 class ConsultationListResponse(BaseModel):
+    customer_id: str
     customer_name: CustomerName
     consultations: list[ConsultationSummaryResponse]
 

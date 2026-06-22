@@ -1,7 +1,11 @@
 import unittest
 from datetime import datetime
 
-from app.routers.consultations import _build_stt_titles, _to_kst_iso
+from app.routers.consultations import (
+    _build_stt_titles,
+    _parse_realtime_client_id,
+    _to_kst_iso,
+)
 
 
 class FakeResult:
@@ -88,6 +92,15 @@ class SttTitleTest(unittest.TestCase):
         created_at = _to_kst_iso("2026-06-21T22:34:39.04894+09:00")
 
         self.assertEqual(created_at, "2026-06-21T22:34:39.048940+09:00")
+
+    def test_realtime_start_payload_requires_client_id(self):
+        self.assertEqual(
+            _parse_realtime_client_id({"client_id": " client-1 "}),
+            "client-1",
+        )
+
+        with self.assertRaisesRegex(ValueError, "client_id"):
+            _parse_realtime_client_id({"customer_name": "김성삼"})
 
 
 if __name__ == "__main__":
