@@ -548,6 +548,10 @@ def attach_benchmark_outputs(
 
     for key in BENCHMARK_SPECS:
         analysis_series = analysis_benchmarks.get(key)
+        analysis_meta = analysis_metadata.get(
+            key,
+            {**BENCHMARK_SPECS[key], "available": False},
+        )
         if analysis_series is None:
             beta_by_benchmark[key] = None
         else:
