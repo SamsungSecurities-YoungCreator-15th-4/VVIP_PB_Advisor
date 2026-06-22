@@ -12,7 +12,7 @@ Amounts returned to the UI are in 만원. Internal calculations stay in KRW and 
 rounded only at the response boundary.
 """
 from __future__ import annotations
-
+import math
 from typing import Any, Mapping, Optional
 
 # 단일 출처 원칙: 세율 상수는 portfolio_logic.py에서만 정의하고 여기서 import한다.
@@ -84,7 +84,7 @@ def _safe_nonnegative(value: Any) -> float:
         converted = float(value)
     except (TypeError, ValueError, OverflowError):
         return 0.0
-    if converted != converted or converted < 0:
+    if math.isnan(converted) or converted < 0:
         return 0.0
     return converted
 
