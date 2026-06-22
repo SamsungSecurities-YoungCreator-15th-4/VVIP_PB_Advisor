@@ -83,11 +83,11 @@ class ClientCreateResponse(BaseModel):
 
 
 class ClientResponse(BaseModel):
-    client_id: str
-    name: str
+    client_id: str | None
+    name: str | None
     aum_eokwon: float
     is_persona: bool
-    created_at: str
+    created_at: str | None
 
 
 class ClientListResponse(BaseModel):
@@ -204,11 +204,11 @@ def _client_response_from_row(row: dict) -> ClientResponse:
         aum_eokwon = 0.0
 
     created_at_raw = row.get("created_at")
-    created_at = _to_kst_iso(created_at_raw) if created_at_raw else ""
+    created_at = _to_kst_iso(created_at_raw) if created_at_raw else None
 
     return ClientResponse(
-        client_id=row.get("id", ""),
-        name=row.get("name", "Unknown"),
+        client_id=row.get("id") or None,
+        name=row.get("name") or None,
         aum_eokwon=aum_eokwon,
         is_persona=bool(meta.get("persona", False)),
         created_at=created_at,

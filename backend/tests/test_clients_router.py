@@ -36,10 +36,10 @@ class ClientResponseTest(unittest.TestCase):
     def test_falls_back_when_required_display_fields_are_missing(self):
         response = _client_response_from_row({"meta": {"aum_eokwon": "bad"}})
 
-        self.assertEqual(response.client_id, "")
-        self.assertEqual(response.name, "Unknown")
+        self.assertIsNone(response.client_id)
+        self.assertIsNone(response.name)
         self.assertEqual(response.aum_eokwon, 0.0)
-        self.assertEqual(response.created_at, "")
+        self.assertIsNone(response.created_at)
 
 
 if __name__ == "__main__":
