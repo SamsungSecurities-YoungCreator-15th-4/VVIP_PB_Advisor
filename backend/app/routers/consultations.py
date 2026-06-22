@@ -539,7 +539,7 @@ async def _stop_realtime_transcript_task(
     try:
         await transcript_task
     except asyncio.CancelledError:
-        pass
+        pass  # 태스크 취소는 정상 종료 경로 — 의도적으로 억제
     except Exception as exc:
         logger.warning("Realtime STT transcript sender stopped with error: %s", exc)
 

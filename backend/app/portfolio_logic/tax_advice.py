@@ -312,7 +312,6 @@ def calc_combined_tax_saving(
     bond_income = sum(income_by_asset.get(c, 0.0) for c in _BOND_INCOME_ASSETS)
     bond_elig = min(bond_income, rem)
     contrib["separate_bond"] = bond_elig * max(marginal - LONG_BOND_SEPARATE_TAX_RATE, 0.0)
-    rem = max(rem - bond_elig, 0.0)
 
     # --- 해외 양도차익: 손익통산 + 250만 공제 스택 ---
     gain = _overseas_capital_gain_won(portfolio, gross_return, total_won)
