@@ -335,13 +335,16 @@ export const TAX_EFFECT = {
     "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
   afterTaxReturn: { from: "5.5%", to: "6.1%", delta: "+0.6%p" },
   effectiveTax: { from: "1,620", to: "540만", delta: "−1,080만" },
-  // 세금 흐름 비교 (세전 기대수익 1.15억 기준, 만원)
+  // 세금 흐름 비교 (세전 기대수익 2.59억 기준, afterTaxManwon=만원)
   flow: {
-    pretaxLabel: "세전 기대수익 1.15억 기준",
+    pretaxLabel: "세전 기대수익 2.59억 기준",
     rows: [
-      { label: "일반과세", afterTax: 9900, tax: 1620 },
-      { label: "절세전략", afterTax: 10980, tax: 540 },
+      { label: "기존 자산",      afterTaxManwon: 25100, taxManwon: 795 },
+      { label: "포트폴리오 전환", afterTaxManwon: 25600, taxManwon: 363 },
+      { label: "+ 절세 제안",   afterTaxManwon: 25900, taxManwon: 0   },
     ],
+    totalLabel: "총 절세 효과 (전환 432만 + 제안 363만)",
+    totalSavingManwon: 795,
   },
   // 절세 계좌 배치 활용도
   accounts: [

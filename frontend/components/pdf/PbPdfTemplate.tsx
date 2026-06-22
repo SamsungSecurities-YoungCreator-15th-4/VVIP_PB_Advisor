@@ -1216,7 +1216,7 @@ function TaxAiPage() {
                         color: TEXT,
                       }}
                     >
-                      세후 {row.afterTax.toLocaleString()}만원
+                      세후 {row.afterTaxManwon.toLocaleString()}만원
                     </td>
                     <td
                       style={{
@@ -1227,7 +1227,7 @@ function TaxAiPage() {
                         color: UP,
                       }}
                     >
-                      {row.tax.toLocaleString()}만
+                      {row.taxManwon.toLocaleString()}만
                     </td>
                     <td
                       style={{
