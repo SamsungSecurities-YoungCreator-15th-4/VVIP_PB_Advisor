@@ -4,17 +4,22 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import AssetDonut from "@/components/portfolio/AssetDonut";
 import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
-import { DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
+import { toDisplayAllocation } from "@/lib/assetMapping";
 import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 import HelpTooltip from "@/components/common/HelpTooltip";
 
 const METRIC_HELP: Record<string, string> = {
-  기대수익률: "연간 기대 수익률입니다. 과거 수익률과 자산별 위험 프리미엄을 바탕으로 추정한 값으로, 실제 수익을 보장하지 않습니다.",
-  샤프지수: "위험 1단위당 초과 수익을 나타냅니다. 값이 클수록 위험 대비 수익이 높으며, 1.0 이상이면 우수한 수준으로 평가합니다.",
-  소르티노: "하락 위험(손실 변동성)만을 고려한 위험 조정 수익률입니다. 샤프지수보다 손실 가능성을 더 엄밀하게 반영합니다.",
-  세후수익률: "세금 효과를 반영한 실질 수익률입니다. ISA·연금 계좌 활용 등 절세 전략 적용 시 수치가 높아집니다.",
-  변동성: "포트폴리오 수익률의 표준편차로 측정한 위험 수준입니다. 값이 낮을수록 수익이 안정적입니다.",
+  기대수익률:
+    "연간 기대 수익률입니다. 과거 수익률과 자산별 위험 프리미엄을 바탕으로 추정한 값으로, 실제 수익을 보장하지 않습니다.",
+  샤프지수:
+    "위험 1단위당 초과 수익을 나타냅니다. 값이 클수록 위험 대비 수익이 높으며, 1.0 이상이면 우수한 수준으로 평가합니다.",
+  소르티노:
+    "하락 위험(손실 변동성)만을 고려한 위험 조정 수익률입니다. 샤프지수보다 손실 가능성을 더 엄밀하게 반영합니다.",
+  세후수익률:
+    "세금 효과를 반영한 실질 수익률입니다. ISA·연금 계좌 활용 등 절세 전략 적용 시 수치가 높아집니다.",
+  변동성:
+    "포트폴리오 수익률의 표준편차로 측정한 위험 수준입니다. 값이 낮을수록 수익이 안정적입니다.",
   MDD: "분석 기간 중 고점 대비 최대 하락폭(Maximum Drawdown)입니다. 최악의 시나리오에서의 손실 규모를 나타냅니다.",
 };
 
@@ -29,7 +34,7 @@ export default function PortfolioSection() {
           <h2 className="text-lg font-extrabold">포트폴리오 대시보드</h2>
           <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
             <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
-            포트폴리오 연동 완료
+            연동 완료
           </div>
         </div>
         <span className="text-[11px] font-semibold text-muted-foreground">
@@ -43,6 +48,7 @@ export default function PortfolioSection() {
             pf={pf}
             isSelected={selectedPortfolioId === pf.id}
             onSelect={() => selectPortfolio(pf.id)}
+            selectable={pf.id !== "current"}
           />
         ))}
       </div>
@@ -54,40 +60,50 @@ function PortfolioCard({
   pf,
   isSelected,
   onSelect,
+  selectable,
 }: {
   pf: Portfolio;
   isSelected: boolean;
   onSelect: () => void;
+  selectable: boolean;
 }) {
   const [view, setView] = useState<"donut" | "heatmap">("donut");
   const allocation = toDisplayAllocation(pf.weights);
   const m = pf.metrics;
 
-  // 선택된 카드에만 "선택됨" 배지 표시
-  const badgeLabel = isSelected ? "선택됨" : null;
+  const portfolioType =
+    pf.id === "a" ? "수익추구형" : pf.id === "b" ? "안정추구형" : null;
 
   return (
     <Card
-      tabIndex={0}
-      className={`gap-0 cursor-pointer p-3 transition-shadow focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand ${
-        isSelected
+      tabIndex={selectable ? 0 : undefined}
+      className={`gap-0 p-3 transition-shadow focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand ${
+        selectable ? "cursor-pointer" : "cursor-default"
+      } ${
+        isSelected && selectable
           ? "border-2 border-brand shadow-[0_6px_20px_rgba(0,100,255,0.14)]"
-          : "hover:shadow-md"
+          : selectable
+            ? "hover:shadow-md"
+            : ""
       }`}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
+      onClick={selectable ? onSelect : undefined}
+      onKeyDown={
+        selectable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
     >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[13px] font-extrabold">
           {pf.name}
-          {badgeLabel && (
-            <span className="rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-extrabold text-white">
-              {badgeLabel}
+          {portfolioType && (
+            <span className="rounded-md bg-[#DCE9FF] px-1.5 py-0.5 text-[9px] font-extrabold text-brand-dark">
+              {portfolioType}
             </span>
           )}
         </div>
@@ -102,7 +118,7 @@ function PortfolioCard({
               onClick={() => setView(v)}
               className={`rounded-md px-2 py-0.5 text-[9.5px] font-bold transition-colors ${
                 view === v
-                  ? "bg-[#DCE9FF] text-brand-dark shadow-sm"
+                  ? "bg-white text-brand-dark shadow-sm"
                   : "text-muted-foreground/70 hover:text-foreground"
               }`}
             >
@@ -114,27 +130,8 @@ function PortfolioCard({
 
       <div className="flex h-72 items-stretch gap-2.5">
         {view === "donut" ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3">
+          <div className="flex flex-1 flex-col items-center justify-center">
             <AssetDonut allocation={allocation} />
-            <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1">
-              {allocation.map((d) => (
-                <div
-                  key={d.group}
-                  className="flex items-center gap-1.5 text-[12px]"
-                >
-                  <span
-                    className="size-2 shrink-0 rounded-[3px]"
-                    style={{ backgroundColor: DISPLAY_GROUP_COLORS[d.group] }}
-                  />
-                  <span className="flex-1 font-semibold text-muted-foreground">
-                    {d.group}
-                  </span>
-                  <span className="font-extrabold tabular-nums">
-                    {d.weight}%
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
         ) : (
           <CorrelationHeatmap />
@@ -144,20 +141,22 @@ function PortfolioCard({
       <div className="mt-2.5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-muted">
         <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} />
         <Metric k="샤프지수" v={m.sharpe != null ? m.sharpe.toFixed(2) : "-"} />
-        <Metric k="소르티노" v={m.sortino != null ? m.sortino.toFixed(2) : "-"} />
+        <Metric
+          k="소르티노"
+          v={m.sortino != null ? m.sortino.toFixed(2) : "-"}
+        />
         <Metric
           k="세후수익률"
           v={`${m.afterTaxReturnPct.toFixed(1)}%`}
           sub={m.afterTaxAmountLabel}
           tone="up"
         />
-        <Metric k="변동성" v={`${m.volatilityPct}%`} sub={m.volatilityAmountLabel} />
         <Metric
-          k="MDD"
-          v={`${m.mddPct}%`}
-          sub={m.mddAmountLabel}
-          tone="down"
+          k="변동성"
+          v={`${m.volatilityPct}%`}
+          sub={m.volatilityAmountLabel}
         />
+        <Metric k="MDD" v={`${m.mddPct}%`} sub={m.mddAmountLabel} tone="down" />
       </div>
     </Card>
   );
@@ -183,7 +182,9 @@ function Metric({
       <div className="h-full bg-card px-2 py-1.5">
         <div
           className={`w-fit text-[12px] font-bold text-muted-foreground ${
-            helpMode ? "rounded border border-brand/40 bg-brand/[0.06] px-1" : ""
+            helpMode
+              ? "rounded border border-brand/40 bg-brand/[0.06] px-1"
+              : ""
           }`}
         >
           {k}
@@ -195,9 +196,7 @@ function Metric({
           {v}
         </div>
         {sub && (
-          <div
-            className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}
-          >
+          <div className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}>
             {sub}
           </div>
         )}
