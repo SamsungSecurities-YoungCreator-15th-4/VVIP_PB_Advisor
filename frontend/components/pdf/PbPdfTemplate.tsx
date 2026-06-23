@@ -1,13 +1,13 @@
 /**
- * PB용 PDF 템플릿 — A4 세로(794×1123px) 4페이지.
- * 디자인 레퍼런스: ClientPdfTemplate.tsx (확정본)
- * 구조: 표지 → 시장현황&IPS → 포트폴리오 비교 → 절세&AI 인사이트
+ * PB용 PDF 템플릿 — A4 세로(794×1123px) 5페이지.
+ * 구조: 표지 → 시장현황&IPS → 포트폴리오 비교 → 절세 최적화 → AI 인사이트
  */
 
 import {
   CUSTOMERS,
   PORTFOLIOS,
   TAX_EFFECT,
+  TAX_ADVICE,
   INSIGHT,
   MACRO_INDICATORS,
   BASE_TIME,
@@ -31,6 +31,30 @@ const customer = CUSTOMERS[0];
 const current = PORTFOLIOS.find((p) => p.id === "current")!;
 const portA = PORTFOLIOS.find((p) => p.id === "a")!;
 const portB = PORTFOLIOS.find((p) => p.id === "b")!;
+
+// 절세 계좌 배치 — 기준값(한도) 및 차트 최대값
+// 출처: 조세특례제한법 §91의18(ISA), 소득세법 §59의3(연금·IRP)
+const ACCOUNT_CHART_MAX = 4000;
+const ACCOUNT_PDF = [
+  {
+    key: "isa",
+    name: "ISA",
+    refManwon: 2000,
+    caption: "납입 한도 100% 활용 · 비과세 200만 + 초과분 9.9% 분리과세",
+  },
+  {
+    key: "pension",
+    name: "연금저축 + IRP",
+    refManwon: 900,
+    caption: "세액공제 한도 소진 · 공제율 16.5% → 환급 148만",
+  },
+  {
+    key: "general",
+    name: "일반계좌",
+    refManwon: 3000,
+    caption: "국내·해외 ETF 중심으로 금융소득종합과세 구간 회피",
+  },
+];
 
 const ASSET_GROUPS = [
   { label: "국내주식", color: "#003FA8" },
@@ -189,6 +213,47 @@ function SectionBar() {
   );
 }
 
+function PageHeader({
+  pageNum,
+  title,
+  subtitle,
+}: {
+  pageNum: string;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div
+      style={{
+        background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
+        padding: "19px 40px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
+          {pageNum} {title}
+        </div>
+        <div
+          style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}
+        >
+          {subtitle}
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
+          {customer.name} · {customer.grade}
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+          {customer.pbCode} · {getToday()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AssetBar({
   label,
   pct,
@@ -253,7 +318,6 @@ function CoverPage() {
         overflow: "hidden",
       }}
     >
-      {/* 상단 그라디언트 배너 */}
       <div
         style={{
           position: "absolute",
@@ -265,8 +329,6 @@ function CoverPage() {
             "linear-gradient(135deg, #003FA8 0%, #0050D6 55%, #2C7BFF 100%)",
         }}
       />
-
-      {/* 물결 곡선 장식 */}
       <div
         style={{
           position: "absolute",
@@ -278,10 +340,7 @@ function CoverPage() {
           borderRadius: "50% 50% 0 0 / 60px 60px 0 0",
         }}
       />
-
-      {/* 배너 내용 */}
       <div style={{ position: "relative", padding: "44px 52px 0" }}>
-        {/* 로고 + CONFIDENTIAL 배지 */}
         <div
           style={{
             display: "flex",
@@ -344,8 +403,6 @@ function CoverPage() {
             PB 내부용 · CONFIDENTIAL
           </span>
         </div>
-
-        {/* 부제 */}
         <div
           style={{
             fontSize: 11,
@@ -357,8 +414,6 @@ function CoverPage() {
         >
           VVIP PB ADVISOR · PORTFOLIO ADVISORY
         </div>
-
-        {/* 메인 타이틀 */}
         <div
           style={{
             fontSize: 44,
@@ -383,9 +438,7 @@ function CoverPage() {
         </div>
       </div>
 
-      {/* 흰색 영역 콘텐츠 */}
       <div style={{ position: "relative", padding: "60px 52px 0" }}>
-        {/* 구분선 */}
         <div
           style={{
             width: 40,
@@ -395,8 +448,6 @@ function CoverPage() {
             marginBottom: 28,
           }}
         />
-
-        {/* 고객 카드 */}
         <div
           style={{
             background: BRAND_LIGHT,
@@ -431,8 +482,6 @@ function CoverPage() {
             {customer.pbCode} · {customer.grade} 등급 · {customer.aumLabel}
           </div>
         </div>
-
-        {/* 요약 스탯 행 */}
         <div
           style={{
             display: "grid",
@@ -461,7 +510,6 @@ function CoverPage() {
         </div>
       </div>
 
-      {/* 면책 고지 */}
       <div
         style={{
           position: "absolute",
@@ -500,42 +548,13 @@ function MarketIpsPage() {
         overflow: "hidden",
       }}
     >
-      {/* 페이지 헤더 바 */}
-      <div
-        style={{
-          background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "19px 40px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
-            ① 시장 현황 &amp; 고객 IPS 요약
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.75)",
-              marginTop: 2,
-            }}
-          >
-            Market Overview &amp; Investment Policy Statement
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {customer.name} · {customer.grade}
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {customer.pbCode} · {getToday()}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        pageNum="①"
+        title="시장 현황 &amp; 고객 IPS 요약"
+        subtitle="Market Overview &amp; Investment Policy Statement"
+      />
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
-        {/* 섹션 1: 주요 시장 지표 */}
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
@@ -584,7 +603,6 @@ function MarketIpsPage() {
           ))}
         </div>
 
-        {/* 섹션 2: IPS 표 */}
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
@@ -662,7 +680,7 @@ function MarketIpsPage() {
         </table>
       </div>
 
-      <PageFooter page={2} total={4} />
+      <PageFooter page={2} total={6} />
     </div>
   );
 }
@@ -759,42 +777,13 @@ function PortfolioPage() {
         overflow: "hidden",
       }}
     >
-      {/* 페이지 헤더 바 */}
-      <div
-        style={{
-          background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "19px 40px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
-            ② 포트폴리오 비교 분석 (현재 vs A vs B)
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.75)",
-              marginTop: 2,
-            }}
-          >
-            5년 백테스트 기준 · 절세 최적화 포함
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {customer.name} · {customer.grade}
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {customer.pbCode} · {getToday()}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        pageNum="②"
+        title="포트폴리오 비교 분석 (현재 vs A vs B)"
+        subtitle="5년 백테스트 기준 · 절세 최적화 포함"
+      />
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
-        {/* 섹션 1: 자산 배분 비교 */}
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
@@ -854,7 +843,6 @@ function PortfolioPage() {
           ))}
         </div>
 
-        {/* 섹션 2: 성과 지표 비교 */}
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
@@ -942,7 +930,6 @@ function PortfolioPage() {
           </tbody>
         </table>
 
-        {/* 섹션 3: 시나리오 분석 */}
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
@@ -1035,13 +1022,317 @@ function PortfolioPage() {
         </table>
       </div>
 
-      <PageFooter page={3} total={4} />
+      <PageFooter page={3} total={6} />
     </div>
   );
 }
 
-// ── 페이지 4: 절세 & AI 인사이트 ─────────────────────────────────
-function TaxAiPage() {
+// ── 페이지 4: 절세 최적화 전략 ──────────────────────────────────
+function TaxPage() {
+  // 계좌별 사용액 계산 (AccountAllocation 동일 로직)
+  const accountRows = ACCOUNT_PDF.map((acct) => {
+    const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
+    const used =
+      accData?.used != null ? accData.used : Math.round(acct.refManwon * 0.45);
+    return { ...acct, used };
+  });
+
+  return (
+    <div
+      data-pdf-page=""
+      style={{
+        width: W,
+        height: H,
+        fontFamily: "Pretendard, Apple SD Gothic Neo, sans-serif",
+        background: "white",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <PageHeader
+        pageNum="③"
+        title="절세 최적화 전략"
+        subtitle="세금 효과 시뮬레이터 · 절세 계좌 배치도 · 절세 제안"
+      />
+
+      <div style={{ padding: "20px 40px 80px", wordBreak: "keep-all" }}>
+        {/* 연간 절세 효과 하이라이트 */}
+        <div
+          style={{
+            background: `linear-gradient(135deg, ${BRAND_DARK} 0%, ${BRAND} 60%, #2C7BFF 100%)`,
+            borderRadius: 12,
+            padding: "16px 24px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
+              연간 절세 효과 (포트폴리오 A 기준 · {customer.aumLabel})
+            </div>
+            <div style={{ color: "white", fontSize: 34, fontWeight: 900, lineHeight: 1 }}>
+              + {TAX_EFFECT.annualSavingManwon.toLocaleString()}만원
+            </div>
+          </div>
+          <div style={{ textAlign: "right", maxWidth: 260 }}>
+            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, lineHeight: 1.7 }}>
+              {TAX_EFFECT.subNote}
+            </div>
+          </div>
+        </div>
+
+        {/* 섹션 1: 절세 전략 비교 */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+          <SectionBar />
+          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
+            절세 전략 비교 ({TAX_EFFECT.flow.pretaxLabel})
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+          {/* 세금 효과 비교 테이블 */}
+          <div style={{ flex: 1.1, border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ background: BG_ALT, padding: "6px 12px", fontSize: 11, fontWeight: 800, color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
+              세금 효과 비교
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                  {["구분", "세후 수익", "절세액", "비고"].map((h) => (
+                    <th key={h} style={{ padding: "5px 8px", fontSize: 10, fontWeight: 700, color: MUTED, textAlign: "center" }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {TAX_EFFECT.flow.rows.map((row, i) => (
+                  <tr key={row.label} style={{ borderBottom: `1px solid ${BORDER}`, background: i === 1 ? BRAND_LIGHT : "white" }}>
+                    <td style={{ padding: "7px 8px", fontSize: 11, fontWeight: 700, color: i === 1 ? BRAND : TEXT }}>{row.label}</td>
+                    <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center", color: TEXT }}>세후 {row.afterTaxManwon.toLocaleString()}만원</td>
+                    <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center", fontWeight: 700, color: UP }}>{row.taxManwon.toLocaleString()}만</td>
+                    <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center", color: MUTED }}>{i === 0 ? "기준" : "ISA+IRP"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ padding: "7px 12px", background: BG_ALT, borderTop: `1px solid ${BORDER}` }}>
+              <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.7 }}>
+                ✓ 세후 수익률 {TAX_EFFECT.afterTaxReturn.from} → {TAX_EFFECT.afterTaxReturn.to} ({TAX_EFFECT.afterTaxReturn.delta})<br />
+                ✓ 실효세 절감 {TAX_EFFECT.effectiveTax.from} → {TAX_EFFECT.effectiveTax.to} ({TAX_EFFECT.effectiveTax.delta})
+              </div>
+            </div>
+          </div>
+
+          {/* 절세 계좌 배치 최적화 — 대시보드 동일 레이아웃 */}
+          <div style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ background: BG_ALT, padding: "6px 12px", fontSize: 11, fontWeight: 800, color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
+              절세 계좌 배치 최적화
+            </div>
+            <div style={{ padding: "12px 14px 10px" }}>
+              {/* Y축 + 바 영역 */}
+              <div style={{ display: "flex", gap: 0 }}>
+                {/* Y축 레이블 */}
+                <div style={{ width: 68, flexShrink: 0 }}>
+                  {accountRows.map((acct, idx) => (
+                    <div
+                      key={acct.name}
+                      style={{
+                        height: 30,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        paddingRight: 8,
+                        marginBottom: idx < accountRows.length - 1 ? 14 : 0,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: "#4E5968",
+                        textAlign: "right" as const,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {acct.name}
+                    </div>
+                  ))}
+                </div>
+                {/* 바 영역 */}
+                <div style={{ flex: 1 }}>
+                  {accountRows.map((acct, idx) => {
+                    const refPct = (acct.refManwon / ACCOUNT_CHART_MAX) * 100;
+                    const usedPct = (acct.used / ACCOUNT_CHART_MAX) * 100;
+                    return (
+                      <div key={acct.name} style={{ marginBottom: idx < accountRows.length - 1 ? 14 : 0 }}>
+                        {/* 기준값 바 (회색, 위) + 값 */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                          <div style={{ flex: 1, height: 13, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${refPct}%`, height: "100%", background: "#D1D5DB", borderRadius: 4 }} />
+                          </div>
+                          <span style={{ width: 42, fontSize: 9, fontWeight: 600, color: MUTED, textAlign: "right" as const, flexShrink: 0 }}>
+                            {acct.refManwon.toLocaleString()}만
+                          </span>
+                        </div>
+                        {/* 사용액 바 (파란색, 아래) + 값 */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <div style={{ flex: 1, height: 13, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${usedPct}%`, height: "100%", background: BRAND, borderRadius: 4 }} />
+                          </div>
+                          <span style={{ width: 42, fontSize: 9, fontWeight: 800, color: BRAND, textAlign: "right" as const, flexShrink: 0 }}>
+                            {acct.used.toLocaleString()}만
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* X축 틱 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    {["0", "1천만", "2천만", "3천만", "4천만"].map((t) => (
+                      <span key={t} style={{ fontSize: 8.5, color: "#B0B8C1", fontWeight: 600 }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* 범례 (하단) */}
+              <div style={{ display: "flex", gap: 14, marginTop: 10 }}>
+                {[{ color: BRAND, label: "사용액" }, { color: "#D1D5DB", label: "기준값" }].map((l) => (
+                  <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ width: 10, height: 10, background: l.color, borderRadius: 2 }} />
+                    <span style={{ fontSize: 9.5, color: MUTED, fontWeight: 700 }}>{l.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 섹션 2: 절세 제안 6개 카드 (전략 요약만 — 상품은 하단 표 참조) */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+          <SectionBar />
+          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
+            절세 제안 (총 {TAX_ADVICE.cards.length}개)
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+          {TAX_ADVICE.cards.map((card) => (
+            <div
+              key={card.title}
+              style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", background: "white" }}
+            >
+              {/* 헤더: 아이콘 + 제목만 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <div
+                  style={{
+                    width: 20, height: 20, borderRadius: 5,
+                    background: BRAND_LIGHT, display: "flex", alignItems: "center",
+                    justifyContent: "center", fontSize: 10, fontWeight: 900, color: BRAND_DARK, flexShrink: 0,
+                  }}
+                >
+                  {card.icon}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 800, color: TEXT }}>{card.title}</span>
+              </div>
+              {/* 본문 */}
+              <p style={{ fontSize: 11, color: MUTED, lineHeight: 1.65, margin: "0 0 6px 0" }}>{card.body}</p>
+              {/* 태그 */}
+              <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 5 }}>{card.tag}</div>
+              {/* 절세액 — 태그 아래 */}
+              {card.saving && (
+                <span style={{ fontSize: 13, fontWeight: 900, color: UP }}>{card.saving}</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* 총 절세 효과 요약 바 */}
+        <div
+          style={{
+            background: BRAND, borderRadius: 7, padding: "7px 14px",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, color: "white" }}>{TAX_ADVICE.totalLabel}</span>
+          <span style={{ fontSize: 11, fontWeight: 900, color: "white" }}>{TAX_ADVICE.totalSaving}</span>
+        </div>
+      </div>
+
+      <PageFooter page={4} total={6} />
+    </div>
+  );
+}
+
+// ── 페이지 5: 절세 제안 추천 상품 ──────────────────────────────
+function TaxProductsPage() {
+  return (
+    <div
+      data-pdf-page=""
+      style={{
+        width: W,
+        height: H,
+        fontFamily: "Pretendard, Apple SD Gothic Neo, sans-serif",
+        background: "white",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <PageHeader
+        pageNum="③-2"
+        title="전략별 추천 상품"
+        subtitle="절세 제안 · 삼성증권 상품 연계 목록"
+      />
+
+      <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+          <SectionBar />
+          <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>전략별 추천 상품 목록</div>
+        </div>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: 176 }} />
+            <col />
+          </colgroup>
+          <thead>
+            <tr style={{ background: BRAND }}>
+              <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: "white" }}>전략</th>
+              <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: "white" }}>추천 상품 목록</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TAX_ADVICE.cards.map((card, i) => (
+              <tr key={card.title} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 === 0 ? "white" : BG_ALT }}>
+                <td style={{ padding: "13px 14px", verticalAlign: "top" as const }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div
+                      style={{
+                        width: 22, height: 22, borderRadius: 5, background: BRAND_LIGHT,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, fontWeight: 900, color: BRAND_DARK, flexShrink: 0,
+                      }}
+                    >
+                      {card.icon}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>{card.title}</span>
+                  </div>
+                </td>
+                <td style={{ padding: "13px 14px", fontSize: 12, color: TEXT, lineHeight: 1.85, whiteSpace: "pre-line" as const }}>
+                  {card.products.map((p) => p.name).join("\n")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+      </div>
+
+      <PageFooter page={5} total={6} />
+    </div>
+  );
+}
+
+// ── 페이지 6: AI 인사이트 ────────────────────────────────────────
+function AiPage() {
   const aiParas = INSIGHT.defaultAnswer.split("\n\n");
 
   return (
@@ -1056,297 +1347,19 @@ function TaxAiPage() {
         overflow: "hidden",
       }}
     >
-      {/* 페이지 헤더 바 */}
-      <div
-        style={{
-          background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
-          padding: "19px 40px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
-            ③ 절세 최적화 전략 &amp; AI 인사이트
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.75)",
-              marginTop: 2,
-            }}
-          >
-            세금 효과 시뮬레이터 · 절세 계좌 배치도 · AI 분석
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {customer.name} · {customer.grade}
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {customer.pbCode} · {getToday()}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        pageNum="④"
+        title="AI 인사이트"
+        subtitle="RAG 기반 포트폴리오 분석 · 시장 환경 대응 제안"
+      />
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
-        {/* 연간 절세 효과 하이라이트 */}
-        <div
-          style={{
-            background: `linear-gradient(135deg, ${BRAND_DARK} 0%, ${BRAND} 60%, #2C7BFF 100%)`,
-            borderRadius: 14,
-            padding: "24px 28px",
-            marginBottom: 40,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                color: "rgba(255,255,255,0.7)",
-                fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 6,
-              }}
-            >
-              연간 절세 효과 (포트폴리오 A 기준 · {customer.aumLabel})
-            </div>
-            <div
-              style={{
-                color: "white",
-                fontSize: 44,
-                fontWeight: 900,
-                lineHeight: 1,
-              }}
-            >
-              + {TAX_EFFECT.annualSavingManwon.toLocaleString()}만원
-            </div>
-          </div>
-          <div style={{ textAlign: "right", maxWidth: 280 }}>
-            <div
-              style={{
-                color: "rgba(255,255,255,0.65)",
-                fontSize: 11,
-                lineHeight: 1.7,
-              }}
-            >
-              {TAX_EFFECT.subNote}
-            </div>
-          </div>
-        </div>
-
-        {/* 섹션 1: 절세 전략 비교 */}
+        {/* AI 인사이트 */}
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
           <SectionBar />
-          <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
-            절세 전략 비교 ({TAX_EFFECT.flow.pretaxLabel})
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 14, marginBottom: 40 }}>
-          {/* 세금 효과 비교 테이블 */}
-          <div
-            style={{
-              flex: 1.1,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 10,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                background: BG_ALT,
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 800,
-                color: TEXT,
-                borderBottom: `1px solid ${BORDER}`,
-              }}
-            >
-              세금 효과 비교
-            </div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
-                  {["구분", "세후 수익", "절세액", "비고"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "7px 10px",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: MUTED,
-                        textAlign: "center",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {TAX_EFFECT.flow.rows.map((row, i) => (
-                  <tr
-                    key={row.label}
-                    style={{
-                      borderBottom: `1px solid ${BORDER}`,
-                      background: i === 1 ? BRAND_LIGHT : "white",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "9px 10px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: i === 1 ? BRAND : TEXT,
-                      }}
-                    >
-                      {row.label}
-                    </td>
-                    <td
-                      style={{
-                        padding: "9px 10px",
-                        fontSize: 11,
-                        textAlign: "center",
-                        color: TEXT,
-                      }}
-                    >
-                      세후 {row.afterTax.toLocaleString()}만원
-                    </td>
-                    <td
-                      style={{
-                        padding: "9px 10px",
-                        fontSize: 11,
-                        textAlign: "center",
-                        fontWeight: 700,
-                        color: UP,
-                      }}
-                    >
-                      {row.tax.toLocaleString()}만
-                    </td>
-                    <td
-                      style={{
-                        padding: "9px 10px",
-                        fontSize: 11,
-                        textAlign: "center",
-                        color: MUTED,
-                      }}
-                    >
-                      {i === 0 ? "기준" : "ISA+IRP"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div
-              style={{
-                padding: "9px 12px",
-                background: BG_ALT,
-                borderTop: `1px solid ${BORDER}`,
-              }}
-            >
-              <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.7 }}>
-                ✓ 세후 수익률 {TAX_EFFECT.afterTaxReturn.from} →{" "}
-                {TAX_EFFECT.afterTaxReturn.to} (
-                {TAX_EFFECT.afterTaxReturn.delta})<br />✓ 실효세 절감{" "}
-                {TAX_EFFECT.effectiveTax.from} → {TAX_EFFECT.effectiveTax.to} (
-                {TAX_EFFECT.effectiveTax.delta})
-              </div>
-            </div>
-          </div>
-
-          {/* 절세 계좌 배치 */}
-          <div
-            style={{
-              flex: 1,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 10,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                background: BG_ALT,
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 800,
-                color: TEXT,
-                borderBottom: `1px solid ${BORDER}`,
-              }}
-            >
-              절세 계좌 배치 최적화
-            </div>
-            <div
-              style={{
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              {TAX_EFFECT.accounts.map((acc) => (
-                <div key={acc.name}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 3,
-                    }}
-                  >
-                    <span
-                      style={{ fontSize: 12, fontWeight: 800, color: TEXT }}
-                    >
-                      {acc.name}
-                    </span>
-                    {acc.used != null && (
-                      <span
-                        style={{ fontSize: 11, fontWeight: 700, color: BRAND }}
-                      >
-                        {acc.used.toLocaleString()}만원
-                      </span>
-                    )}
-                  </div>
-                  {acc.used != null && acc.limit != null && (
-                    <div
-                      style={{
-                        height: 5,
-                        background: "#F3F4F6",
-                        borderRadius: 3,
-                        overflow: "hidden",
-                        marginBottom: 4,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${(acc.used / acc.limit) * 100}%`,
-                          height: "100%",
-                          background: BRAND,
-                          borderRadius: 3,
-                        }}
-                      />
-                    </div>
-                  )}
-                  <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
-                    {acc.caption}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 섹션 2: AI 인사이트 */}
-        <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
-        >
-          <SectionBar />
-          <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>
             AI 인사이트
           </div>
         </div>
@@ -1355,11 +1368,11 @@ function TaxAiPage() {
           {[
             {
               title: "금리 상승 대응 인사이트",
-              body: aiParas[0] ? aiParas[0].slice(0, 130) + "…" : "",
+              body: aiParas[0] ? aiParas[0].slice(0, 200) + "…" : "",
             },
             {
               title: "포트폴리오 최적화 제안",
-              body: aiParas[1] ? aiParas[1].slice(0, 130) + "…" : "",
+              body: aiParas[1] ? aiParas[1].slice(0, 200) + "…" : "",
             },
           ].map((card) => (
             <div
@@ -1389,7 +1402,32 @@ function TaxAiPage() {
           ))}
         </div>
 
-        {/* 섹션 3: 출처 / 인용 목록 */}
+        {aiParas[2] && (
+          <div
+            style={{
+              border: `1px solid ${BRAND_MID}`,
+              borderRadius: 10,
+              padding: "14px 16px",
+              background: BRAND_LIGHT,
+              marginBottom: 40,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                color: BRAND,
+                marginBottom: 7,
+              }}
+            >
+              리스크 관리 제안
+            </div>
+            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.75 }}>
+              {aiParas[2].slice(0, 200)}…
+            </div>
+          </div>
+        )}
+
         <div
           style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
         >
@@ -1423,7 +1461,7 @@ function TaxAiPage() {
         </div>
       </div>
 
-      <PageFooter page={4} total={4} />
+      <PageFooter page={6} total={6} />
     </div>
   );
 }
@@ -1435,7 +1473,9 @@ export default function PbPdfTemplate() {
       <CoverPage />
       <MarketIpsPage />
       <PortfolioPage />
-      <TaxAiPage />
+      <TaxPage />
+      <TaxProductsPage />
+      <AiPage />
     </div>
   );
 }
