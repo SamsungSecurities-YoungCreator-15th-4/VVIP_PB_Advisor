@@ -5582,6 +5582,10 @@ KOREAN_MONEY_UNITS = {
     "천": 1_000,
 }
 
+# 금액·연도 파싱 정규식의 ReDoS 방어 상한. 정상 IPS·상담 텍스트는 이보다 훨씬 짧다.
+# 비정상적으로 긴 입력은 잘라 정규식의 위치 재스캔(O(N^2))을 상수 시간으로 묶는다.
+_MAX_TEXT_PARSE_LEN = 2000
+
 
 def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     """숫자, dict, '3억', '2,000만 원' 같은 문자열에서 원화 금액/숫자를 추출한다.
@@ -5617,10 +5621,10 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     if not text_value:
         return default
 
-    normalized = text_value.replace(",", "")
+    normalized = text_value.replace(",", "")[:_MAX_TEXT_PARSE_LEN]
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", normalized):
+    for number_text, unit in re.findall(r"([0-9]++(?:\.[0-9]++)?)\s*+([억만천])", normalized):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
 
@@ -5723,8 +5727,8 @@ def calculate_account_age_years_from_start_year(start_year: Optional[int]) -> fl
 
 def parse_relative_years_from_text(text: str) -> Optional[float]:
     match = re.search(
-        r"([0-9]+(?:\.[0-9]+)?)\s*년\s*(?:후|뒤|내|안|이내)",
-        text,
+        r"([0-9]++(?:\.[0-9]++)?)\s*+년\s*+(?:후|뒤|내|안|이내)",
+        text[:_MAX_TEXT_PARSE_LEN],
     )
     if match:
         return safe_float(match.group(1), 0.0)
@@ -5740,19 +5744,19 @@ def parse_amount_near_keywords(text: str, keywords: List[str]) -> float:
 
 
 def parse_explicit_money_amount_krw(value: Any) -> float:
-    text_value = stringify_unique_value(value).replace(",", "").strip()
+    text_value = stringify_unique_value(value).replace(",", "").strip()[:_MAX_TEXT_PARSE_LEN]
     if not text_value:
         return 0.0
 
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", text_value):
+    for number_text, unit in re.findall(r"([0-9]++(?:\.[0-9]++)?)\s*+([억만천])", text_value):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
     if matched_unit:
         return float(total)
 
-    won_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*원", text_value)
+    won_match = re.search(r"([0-9]++(?:\.[0-9]++)?)\s*+원", text_value)
     if won_match:
         return safe_float(won_match.group(1), 0.0)
 
@@ -5770,7 +5774,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
         return 0.0
 
     current_year_match = re.search(
-        r"(?:올해|금년|당해).{0,40}([0-9]+(?:\.[0-9]+)?\s*[억만천]?)\s*(?:원)?\s*(?:납입|입금)",
+        r"(?:올해|금년|당해).{0,40}([0-9]++(?:\.[0-9]++)?\s*+[억만천]?)\s*+(?:원)?\s*+(?:납입|입금)",
         window,
     )
     if current_year_match:
