@@ -122,7 +122,7 @@ export default function AccountAllocation({ accounts }: { accounts?: AccountSlot
                     <p style={{ fontWeight: 700, marginBottom: 4 }}>{label}</p>
                     {payload.map((entry) => (
                       <p key={String(entry.dataKey)} style={{ color: entry.dataKey === "reference" ? "#4E5968" : String(entry.color) }}>
-                        {entry.dataKey === "reference" ? "기준값" : "사용액"} : {Number(entry.value).toLocaleString()}만원
+                        {entry.dataKey === "reference" ? "기준값" : "사용액"} : {Number(entry.value ?? 0).toLocaleString()}만원
                       </p>
                     ))}
                   </div>

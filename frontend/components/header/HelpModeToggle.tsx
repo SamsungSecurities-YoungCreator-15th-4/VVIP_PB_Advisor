@@ -7,7 +7,7 @@ export default function HelpModeToggle() {
   const { helpMode, toggleHelpMode } = useDashboardStore();
 
   return (
-    <label className="group relative flex cursor-pointer items-center gap-1.5">
+    <div className="group relative flex cursor-pointer items-center gap-1.5">
       <CircleHelp className={`size-3.5 ${helpMode ? "text-brand" : "text-muted-foreground"}`} />
       <span className={`text-[11px] font-bold ${helpMode ? "text-brand" : "text-muted-foreground"}`}>
         가이드
@@ -38,6 +38,6 @@ export default function HelpModeToggle() {
           }`}
         />
       </button>
-    </label>
+    </div>
   );
 }
