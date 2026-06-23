@@ -17,10 +17,10 @@ export interface MacroIndicator {
 }
 
 export const MACRO_INDICATORS: MacroIndicator[] = [
-  { label: "미국 기준금리", value: "3.50%", change: "0.25", direction: "down" },
-  { label: "미 10Y", value: "4.38%", change: "0.05", direction: "down" },
-  { label: "원/달러", value: "1,220", change: "20", direction: "down" },
-  { label: "미국 CPI", value: "3.2%", change: "0.25", direction: "down" },
+  { label: "미국 기준금리", value: "3.50%", change: "0.25%p", direction: "down" },
+  { label: "미 10Y", value: "4.38%", change: "0.05%p", direction: "down" },
+  { label: "미국 CPI", value: "3.2%", change: "0.25%p", direction: "down" },
+  { label: "원/달러", value: "1,220", change: "20원", direction: "down" },
   { label: "KOSPI", value: "2,790", change: "31", direction: "up" },
   { label: "S&P500", value: "5,640", change: "18", direction: "up" },
 ];

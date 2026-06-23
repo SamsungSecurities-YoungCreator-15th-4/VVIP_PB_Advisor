@@ -34,22 +34,50 @@ function toRows(d: MacroIndicators): Row[] {
     value: item.price === 0 ? "—" : value,
     change,
     direction: item.change >= 0 ? "up" : "down",
-    note: item.isStatic ? "발표 기준" : item.isFallback ? "지연 시세" : undefined,
+    note: item.isStatic
+      ? "발표 기준"
+      : item.isFallback
+        ? "지연 시세"
+        : undefined,
   });
 
   return [
-    mk("미국 기준금리", d.baseRate, `${d.baseRate.price.toFixed(2)}%`,
-      `${sign(d.baseRate.change)}${d.baseRate.change.toFixed(2)}%p`),
-    mk("미 10Y", d.treasuryYield, `${d.treasuryYield.price.toFixed(2)}%`,
-      `${sign(d.treasuryYield.change)}${d.treasuryYield.change.toFixed(2)}%p`),
-    mk("원/달러", d.krwUsd, num(d.krwUsd.price),
-      `${sign(d.krwUsd.change)}${num(Math.round(d.krwUsd.change))}원`),
-    mk("미국 CPI", d.cpi, `${d.cpi.price.toFixed(1)}%`,
-      `${sign(d.cpi.change)}${d.cpi.change.toFixed(2)}%p`),
-    mk("KOSPI", d.kospi, num(d.kospi.price),
-      `${sign(d.kospi.change)}${d.kospi.change.toFixed(2)}`),
-    mk("S&P 500", d.sp500, num(d.sp500.price),
-      `${sign(d.sp500.change)}${d.sp500.change.toFixed(2)}`),
+    mk(
+      "미국 기준금리",
+      d.baseRate,
+      `${d.baseRate.price.toFixed(2)}%`,
+      `${sign(d.baseRate.change)}${d.baseRate.change.toFixed(2)}%p`,
+    ),
+    mk(
+      "미 10Y",
+      d.treasuryYield,
+      `${d.treasuryYield.price.toFixed(2)}%`,
+      `${sign(d.treasuryYield.change)}${d.treasuryYield.change.toFixed(2)}%p`,
+    ),
+    mk(
+      "미국 CPI",
+      d.cpi,
+      `${d.cpi.price.toFixed(1)}%`,
+      `${sign(d.cpi.change)}${d.cpi.change.toFixed(2)}%p`,
+    ),
+    mk(
+      "원/달러",
+      d.krwUsd,
+      num(d.krwUsd.price),
+      `${sign(d.krwUsd.change)}${num(Math.round(d.krwUsd.change))}원`,
+    ),
+    mk(
+      "KOSPI",
+      d.kospi,
+      num(d.kospi.price),
+      `${sign(d.kospi.change)}${d.kospi.change.toFixed(2)}`,
+    ),
+    mk(
+      "S&P 500",
+      d.sp500,
+      num(d.sp500.price),
+      `${sign(d.sp500.change)}${d.sp500.change.toFixed(2)}`,
+    ),
   ];
 }
 
@@ -133,7 +161,7 @@ export default function MacroTicker() {
           disabled={loading || cooling}
           aria-label="거시지표 새로고침"
           title={cooling ? "잠시 후 다시 시도" : "지표 강제 새로고침"}
-          className="ml-0.5 rounded p-0.5 transition-colors hover:text-foreground disabled:opacity-40"
+          className="ml-0.5 rounded p-0.5 text-foreground transition-colors hover:text-foreground disabled:opacity-40"
         >
           <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
         </button>
