@@ -366,7 +366,7 @@ export default function Sidebar() {
             {transcript.map((m, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span
-                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[8.5px] font-extrabold ${
+                  className={`mt-0.5 inline-flex w-7 shrink-0 items-center justify-center rounded-md py-0.5 text-[8.5px] font-extrabold ${
                     m.speaker === "고객"
                       ? "bg-[#DCE9FF] text-brand-dark"
                       : "bg-[#ADB5BD] text-white"
@@ -390,7 +390,7 @@ export default function Sidebar() {
             onClick={() => setHistoryOpen(true)}
           >
             <RotateCcw />
-            지난 기록 대화 불러오기
+            지난 상담기록 불러오기
           </Button>
         </Card>
 
