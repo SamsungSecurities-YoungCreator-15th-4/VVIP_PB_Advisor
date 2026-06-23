@@ -202,16 +202,13 @@ export default function TaxGauge() {
       <div className="flex gap-2">
         <div
           className={`flex flex-1 items-center justify-between rounded-lg border px-3 py-2 ${
-            !isOver ? "border-brand/20 bg-brand/5" : "border-transparent bg-muted/50"
+            !isOver
+              ? "border-brand/20 bg-brand/5"
+              : "border-transparent bg-muted/50"
           }`}
         >
           <span className="text-[13px] font-bold text-muted-foreground">
             분리과세 시
-            {!isOver && (
-              <span className="ml-1.5 text-[11px] font-semibold text-brand">
-                (현 상태)
-              </span>
-            )}
           </span>
           <span className="text-[15px] font-extrabold tabular-nums text-down">
             {separateRateLabel}
@@ -219,16 +216,13 @@ export default function TaxGauge() {
         </div>
         <div
           className={`flex flex-1 items-center justify-between rounded-lg border px-3 py-2 ${
-            isOver ? "border-brand/20 bg-brand/5" : "border-transparent bg-muted/50"
+            isOver
+              ? "border-brand/20 bg-brand/5"
+              : "border-transparent bg-muted/50"
           }`}
         >
           <span className="text-[13px] font-bold text-muted-foreground">
             종합과세 시
-            {isOver && (
-              <span className="ml-1.5 text-[11px] font-semibold text-brand">
-                (현 상태)
-              </span>
-            )}
           </span>
           <span className="text-[15px] font-extrabold tabular-nums text-down">
             {comprehensiveRateLabel}

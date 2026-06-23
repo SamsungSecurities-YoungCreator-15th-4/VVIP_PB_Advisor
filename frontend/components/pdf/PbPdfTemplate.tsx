@@ -350,7 +350,7 @@ function CoverPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: 32,
+            marginBottom: 50,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -409,22 +409,12 @@ function CoverPage() {
         </div>
         <div
           style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "rgba(255,255,255,0.65)",
-            letterSpacing: 2.5,
-            marginBottom: 14,
-          }}
-        >
-          VVIP PB ADVISOR · PORTFOLIO ADVISORY
-        </div>
-        <div
-          style={{
             fontSize: 44,
             fontWeight: 900,
             color: "white",
             lineHeight: 1.2,
             marginBottom: 8,
+            marginTop: 60,
           }}
         >
           포트폴리오
@@ -438,27 +428,19 @@ function CoverPage() {
             fontWeight: 400,
           }}
         >
-          PB 상담 보조 자료 · Portfolio Analysis Report
+          PB 상담 보조 자료
         </div>
       </div>
 
-      <div style={{ position: "relative", padding: "60px 52px 0" }}>
-        <div
-          style={{
-            width: 40,
-            height: 3,
-            background: BRAND,
-            borderRadius: 2,
-            marginBottom: 28,
-          }}
-        />
+      <div style={{ position: "relative", padding: "72px 52px 0" }}>
         <div
           style={{
             background: BRAND_LIGHT,
             border: `1px solid ${BRAND_MID}`,
             borderRadius: 14,
             padding: "24px 28px",
-            marginBottom: 32,
+            marginBottom: 60,
+            marginTop: 56,
           }}
         >
           <div
@@ -486,24 +468,33 @@ function CoverPage() {
             {customer.pbCode} · {customer.grade} 등급 · {customer.aumLabel}
           </div>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr 1fr",
-            gap: 16,
-          }}
-        >
+        <div style={{ display: "flex" }}>
           {[
             { label: "REPORT DATE", value: today },
             { label: "BASE TIME", value: `${BASE_TIME} 기준` },
-            { label: "RECOMMENDED", value: "포트폴리오 A" },
+            { label: "SELECTED", value: "포트폴리오 A" },
             {
               label: "TAX SAVING",
               value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원/년`,
             },
-          ].map((item) => (
-            <div key={item.label}>
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>
+          ].map((item, i) => (
+            <div
+              key={item.label}
+              style={{
+                flex: 1,
+                paddingLeft: i > 0 ? 20 : 0,
+                borderLeft: i > 0 ? `1px solid ${BORDER}` : "none",
+                marginLeft: i > 0 ? 20 : 0,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  color: MUTED,
+                  letterSpacing: 0.8,
+                  marginBottom: 5,
+                }}
+              >
                 {item.label}
               </div>
               <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>
@@ -526,7 +517,7 @@ function CoverPage() {
           padding: "14px 18px",
         }}
       >
-        <p style={{ fontSize: 10, color: MUTED, lineHeight: 1.7, margin: 0 }}>
+        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, margin: 0 }}>
           본 자료는 PB 상담 보조를 위한 내부 기밀 자료입니다. 본 보고서의 분석
           내용, 포트폴리오 제안 및 시뮬레이션 결과는 시장 데이터와 AI 분석을
           기반으로 작성되었으며, 최종 투자 판단은 고객의 투자 목적·위험
