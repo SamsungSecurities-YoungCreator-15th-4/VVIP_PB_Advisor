@@ -17,7 +17,12 @@ export interface MacroIndicator {
 }
 
 export const MACRO_INDICATORS: MacroIndicator[] = [
-  { label: "미국 기준금리", value: "3.50%", change: "0.25%p", direction: "down" },
+  {
+    label: "미국 기준금리",
+    value: "3.50%",
+    change: "0.25%p",
+    direction: "down",
+  },
   { label: "미 10Y", value: "4.38%", change: "0.05%p", direction: "down" },
   { label: "미국 CPI", value: "3.2%", change: "0.25%p", direction: "down" },
   { label: "원/달러", value: "1,220", change: "20원", direction: "down" },
@@ -308,12 +313,60 @@ export const PORTFOLIOS: Portfolio[] = [
 // ── 백테스트 (최근 5년, 100 기준 지수화 더미) ──────────────────
 // 벤치마크(kospi·sp500·msciAcwi)는 실제 시장 흐름의 근사치 — 실 API 연동 전 UI 시안용.
 export const BACKTEST_SERIES = [
-  { year: "2021", current: 100, a: 100, b: 100, kospi: 100, sp500: 100, msciAcwi: 100 },
-  { year: "2022", current: 96,  a: 103, b: 92,  kospi: 76,  sp500: 81,  msciAcwi: 80  },
-  { year: "2023", current: 108, a: 116, b: 118, kospi: 90,  sp500: 104, msciAcwi: 100 },
-  { year: "2024", current: 118, a: 131, b: 128, kospi: 97,  sp500: 134, msciAcwi: 123 },
-  { year: "2025", current: 128, a: 150, b: 156, kospi: 101, sp500: 165, msciAcwi: 148 },
-  { year: "2026", current: 140, a: 176, b: 200, kospi: 108, sp500: 190, msciAcwi: 168 },
+  {
+    year: "2021",
+    current: 100,
+    a: 100,
+    b: 100,
+    kospi: 100,
+    sp500: 100,
+    msciAcwi: 100,
+  },
+  {
+    year: "2022",
+    current: 96,
+    a: 103,
+    b: 92,
+    kospi: 76,
+    sp500: 81,
+    msciAcwi: 80,
+  },
+  {
+    year: "2023",
+    current: 108,
+    a: 116,
+    b: 118,
+    kospi: 90,
+    sp500: 104,
+    msciAcwi: 100,
+  },
+  {
+    year: "2024",
+    current: 118,
+    a: 131,
+    b: 128,
+    kospi: 97,
+    sp500: 134,
+    msciAcwi: 123,
+  },
+  {
+    year: "2025",
+    current: 128,
+    a: 150,
+    b: 156,
+    kospi: 101,
+    sp500: 165,
+    msciAcwi: 148,
+  },
+  {
+    year: "2026",
+    current: 140,
+    a: 176,
+    b: 200,
+    kospi: 108,
+    sp500: 190,
+    msciAcwi: 168,
+  },
 ];
 
 // ── 상관관계 히트맵 (6분류 기준 더미 행렬, 대칭) ────────────────
@@ -334,14 +387,14 @@ export const TAX_EFFECT = {
   subNote:
     "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
   afterTaxReturn: { from: "5.5%", to: "6.1%", delta: "+0.6%p" },
-  effectiveTax: { from: "1,620", to: "540만", delta: "−1,080만" },
+  effectiveTax: { from: "1,620", to: "540만", delta: "-66.7%" },
   // 세금 흐름 비교 (세전 기대수익 2.59억 기준, afterTaxManwon=만원)
   flow: {
     pretaxLabel: "세전 기대수익 2.59억 기준",
     rows: [
-      { label: "기존 자산",      afterTaxManwon: 25100, taxManwon: 795 },
+      { label: "현재", afterTaxManwon: 25100, taxManwon: 795 },
       { label: "포트폴리오 전환", afterTaxManwon: 25600, taxManwon: 363 },
-      { label: "+ 절세 제안",   afterTaxManwon: 25900, taxManwon: 0   },
+      { label: "+ 절세 제안", afterTaxManwon: 25900, taxManwon: 0 },
     ],
     totalLabel: "총 절세 효과 (전환 432만 + 제안 363만)",
     totalSavingManwon: 795,
@@ -467,7 +520,7 @@ export const TAX_ADVICE = {
       ],
     },
   ],
-  totalLabel: "알고리즘 제안 적용 시 예상 추가 절감",
+  totalLabel: "절세 제안 적용 시 예상 추가 절감",
   totalSaving: "+2,341만원",
 };
 

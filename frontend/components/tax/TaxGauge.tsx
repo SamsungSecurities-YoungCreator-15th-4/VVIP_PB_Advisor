@@ -41,7 +41,9 @@ export default function TaxGauge() {
       return;
     }
     const parsed = parseInt(inputVal, 10);
-    const clamped = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), otherIncomeMax);
+    const clamped = isNaN(parsed)
+      ? 0
+      : Math.min(Math.max(parsed, 0), otherIncomeMax);
     setOtherIncome(clamped);
     setInputVal(String(clamped));
   };
@@ -60,7 +62,7 @@ export default function TaxGauge() {
       <div className="flex items-stretch gap-2.5">
         <div className="flex-1 rounded-xl border p-3">
           <p className="text-[12px] font-bold text-muted-foreground">
-            고객 기타 금융소득 입력 (연 이자·배당)
+            고객 기타 금융소득 입력
           </p>
           <div className="mt-1 flex items-baseline gap-1">
             <input
@@ -71,7 +73,9 @@ export default function TaxGauge() {
               onBlur={handleInputBlur}
               className="w-32 rounded-md border border-border bg-transparent px-2 py-0.5 text-lg font-extrabold tabular-nums outline-none focus:border-brand"
             />
-            <span className="text-[12px] font-bold text-muted-foreground">만원</span>
+            <span className="text-[12px] font-bold text-muted-foreground">
+              만원
+            </span>
           </div>
           <Slider
             value={[otherIncome]}
@@ -85,7 +89,6 @@ export default function TaxGauge() {
         <div className="w-[130px] rounded-xl border bg-brand/5 p-3">
           <p className="text-[12px] font-bold text-muted-foreground">
             포트폴리오 A<br />
-            예상 이자·배당
           </p>
           <p className="mt-1 text-sm font-extrabold tabular-nums text-brand-dark">
             +{fmt(portfolioDividendManwon)}
@@ -146,10 +149,9 @@ export default function TaxGauge() {
               기준선 <b className="text-up">초과</b> — 금융소득종합과세 대상
             </p>
             <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted-foreground">
-              초과분 <b>{fmt(total - thresholdManwon)}만원</b>은 다른
-              종합소득과 합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이
-              적용됩니다. <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을
-              권장합니다.
+              초과분 <b>{fmt(total - thresholdManwon)}만원</b>은 다른 종합소득과
+              합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이 적용됩니다.{" "}
+              <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을 권장합니다.
             </p>
           </div>
         </div>

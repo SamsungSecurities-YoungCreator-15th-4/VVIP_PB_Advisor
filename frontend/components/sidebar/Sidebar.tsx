@@ -8,7 +8,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
-  Sparkles,
   Upload,
   UserPlus,
   X,
@@ -484,7 +483,6 @@ export default function Sidebar() {
           size="lg"
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
-          <Sparkles />
           분석하기
         </Button>
       </aside>

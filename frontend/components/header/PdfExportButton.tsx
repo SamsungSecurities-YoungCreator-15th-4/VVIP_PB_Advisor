@@ -14,8 +14,13 @@ import {
 import PdfPreviewModal from "@/components/pdf/PdfPreviewModal";
 
 // SSR 비활성화 — new Date() hydration mismatch 방지
-const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), { ssr: false });
-const ClientPdfTemplate = dynamic(() => import("@/components/pdf/ClientPdfTemplate"), { ssr: false });
+const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), {
+  ssr: false,
+});
+const ClientPdfTemplate = dynamic(
+  () => import("@/components/pdf/ClientPdfTemplate"),
+  { ssr: false },
+);
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -42,7 +47,11 @@ export default function PdfExportButton() {
       const { domToCanvas } = await import("modern-screenshot");
       const { default: jsPDF } = await import("jspdf");
 
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
 
       // data-pdf-page 속성이 있는 요소를 페이지 단위로 캡처
       const pages = container.querySelectorAll<HTMLElement>("[data-pdf-page]");
@@ -70,7 +79,13 @@ export default function PdfExportButton() {
       {/* ── off-screen 템플릿 컨테이너 (dynamic ssr:false — hydration mismatch 방지) ── */}
       <div
         aria-hidden="true"
-        style={{ position: "fixed", left: -9999, top: 0, pointerEvents: "none", zIndex: -1 }}
+        style={{
+          position: "fixed",
+          left: -9999,
+          top: 0,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
       >
         <div ref={pbRef}>
           <PbPdfTemplate />
@@ -97,12 +112,10 @@ export default function PdfExportButton() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => handleExport("pb")}>
-            <FileDown className="mr-1.5 size-3" />
-            PB용 추출
+            PB용
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => handleExport("client")}>
-            <FileDown className="mr-1.5 size-3" />
-            고객용 추출
+            고객용
           </DropdownMenuItem>
 
           {isDev && (
@@ -134,6 +147,12 @@ export default function PdfExportButton() {
   );
 }
 
-function DevPreviewModal({ type, onClose }: { type: PdfType; onClose: () => void }) {
+function DevPreviewModal({
+  type,
+  onClose,
+}: {
+  type: PdfType;
+  onClose: () => void;
+}) {
   return <PdfPreviewModal type={type} onClose={onClose} />;
 }

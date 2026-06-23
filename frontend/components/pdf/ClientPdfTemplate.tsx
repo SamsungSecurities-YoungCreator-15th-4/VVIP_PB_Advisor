@@ -23,9 +23,24 @@ const portA = PORTFOLIOS.find((p) => p.id === "a")!;
 // 출처: 조세특례제한법 §91의18(ISA), 소득세법 §59의3(연금·IRP)
 const ACCOUNT_CHART_MAX = 4000;
 const ACCOUNT_PDF = [
-  { key: "isa", name: "ISA", refManwon: 2000, caption: "납입 한도 100% 활용 · 비과세 200만 + 초과분 9.9% 분리과세" },
-  { key: "pension", name: "연금저축 + IRP", refManwon: 900, caption: "세액공제 한도 소진 · 공제율 16.5% → 환급 148만" },
-  { key: "general", name: "일반계좌", refManwon: 3000, caption: "국내·해외 ETF 중심으로 금융소득종합과세 구간 회피" },
+  {
+    key: "isa",
+    name: "ISA",
+    refManwon: 2000,
+    caption: "납입 한도 100% 활용 · 비과세 200만 + 초과분 9.9% 분리과세",
+  },
+  {
+    key: "pension",
+    name: "연금저축 + IRP",
+    refManwon: 900,
+    caption: "세액공제 한도 소진 · 공제율 16.5% → 환급 148만",
+  },
+  {
+    key: "general",
+    name: "일반계좌",
+    refManwon: 3000,
+    caption: "국내·해외 ETF 중심으로 금융소득종합과세 구간 회피",
+  },
 ];
 
 const BRAND = "#0050D6";
@@ -206,15 +221,6 @@ function CoverPage() {
           투자 포트폴리오
           <br />
           분석 보고서
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            color: "rgba(255,255,255,0.65)",
-            fontWeight: 400,
-          }}
-        >
-          My Portfolio Analysis &amp; Tax Optimization Report
         </div>
       </div>
 
@@ -498,17 +504,41 @@ function MarketIpsPage() {
                 style={{
                   flex: 1,
                   padding: "12px 10px",
-                  borderRight: idx < CLIENT_MACROS.length - 1 ? `1px solid ${BORDER}` : "none",
+                  borderRight:
+                    idx < CLIENT_MACROS.length - 1
+                      ? `1px solid ${BORDER}`
+                      : "none",
                   background: "white",
                 }}
               >
-                <div style={{ fontSize: 10, color: MUTED, fontWeight: 600, marginBottom: 5 }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: MUTED,
+                    fontWeight: 600,
+                    marginBottom: 5,
+                  }}
+                >
                   {desc?.name ?? m.label}
                 </div>
-                <div style={{ fontSize: 17, fontWeight: 900, color: TEXT, lineHeight: 1.1, marginBottom: 5 }}>
+                <div
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 900,
+                    color: TEXT,
+                    lineHeight: 1.1,
+                    marginBottom: 5,
+                  }}
+                >
                   {m.value}
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: isUp ? UP : BRAND }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: isUp ? UP : BRAND,
+                  }}
+                >
                   {isUp ? "▲" : "▼"} {m.change}
                   {m.label === "원/달러" ? "원 " : "%p "}
                   {desc?.dir}
@@ -621,8 +651,8 @@ function MarketIpsPage() {
             고객님은 <strong>금융소득 종합과세 대상</strong>이시므로, 절세
             계좌(ISA, 연금저축, IRP)를 적극 활용하는 것이 중요합니다. 또한 자녀
             전세자금 3억원은 별도로 유동성이 높은 상품으로 운용하고, 나머지는
-            장기 포트폴리오로 구성하는 <strong>&lsquo;투 트랙&rsquo;</strong> 전략을
-            권장합니다.
+            장기 포트폴리오로 구성하는 <strong>&lsquo;투 트랙&rsquo;</strong>{" "}
+            전략을 권장합니다.
           </p>
         </div>
       </div>
@@ -1095,87 +1125,267 @@ function PortfolioPage() {
 function TaxPage() {
   const accountRows = ACCOUNT_PDF.map((acct) => {
     const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
-    const used = accData?.used != null ? accData.used : Math.round(acct.refManwon * 0.45);
+    const used =
+      accData?.used != null ? accData.used : Math.round(acct.refManwon * 0.45);
     return { ...acct, used };
   });
 
   return (
     <div
       data-pdf-page=""
-      style={{ width: 794, height: 1123, fontFamily: "Pretendard, Apple SD Gothic Neo, sans-serif", background: "white", position: "relative", overflow: "hidden" }}
+      style={{
+        width: 794,
+        height: 1123,
+        fontFamily: "Pretendard, Apple SD Gothic Neo, sans-serif",
+        background: "white",
+        position: "relative",
+        overflow: "hidden",
+      }}
     >
-      <div style={{ background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`, padding: "19px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div
+        style={{
+          background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
+          padding: "19px 40px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>③ 절세 최적화 전략</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>세금 효과 시뮬레이터 · 절세 계좌 배치도 · 절세 제안</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
+            ③ 절세 최적화 전략
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "rgba(255,255,255,0.75)",
+              marginTop: 2,
+            }}
+          >
+            세금 효과 시뮬레이터 · 절세 계좌 배치도 · 절세 제안
+          </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>{C.name} 고객님</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{getTodayShort()} 기준</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
+            {C.name} 고객님
+          </div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+            {getTodayShort()} 기준
+          </div>
         </div>
       </div>
 
       <div style={{ padding: "20px 40px 80px", wordBreak: "keep-all" }}>
         {/* 연간 절세 효과 하이라이트 */}
-        <div style={{ background: `linear-gradient(135deg, ${BRAND_DARK} 0%, ${BRAND} 60%, #2C7BFF 100%)`, borderRadius: 12, padding: "16px 24px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div
+          style={{
+            background: `linear-gradient(135deg, ${BRAND_DARK} 0%, ${BRAND} 60%, #2C7BFF 100%)`,
+            borderRadius: 12,
+            padding: "16px 24px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
           <div>
-            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
+            <div
+              style={{
+                color: "rgba(255,255,255,0.7)",
+                fontSize: 11,
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
               연간 절세 효과 (포트폴리오 A 기준 · {C.aumLabel})
             </div>
-            <div style={{ color: "white", fontSize: 34, fontWeight: 900, lineHeight: 1 }}>
+            <div
+              style={{
+                color: "white",
+                fontSize: 34,
+                fontWeight: 900,
+                lineHeight: 1,
+              }}
+            >
               + {TAX_EFFECT.annualSavingManwon.toLocaleString()}만원
             </div>
           </div>
           <div style={{ textAlign: "right", maxWidth: 260 }}>
-            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, lineHeight: 1.7 }}>{TAX_EFFECT.subNote}</div>
+            <div
+              style={{
+                color: "rgba(255,255,255,0.65)",
+                fontSize: 11,
+                lineHeight: 1.7,
+              }}
+            >
+              {TAX_EFFECT.subNote}
+            </div>
           </div>
         </div>
 
         {/* 섹션 1: 절세 전략 비교 */}
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+        <div
+          style={{ display: "flex", alignItems: "center", marginBottom: 12 }}
+        >
           <SectionBar />
-          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>절세 전략 비교 ({TAX_EFFECT.flow.pretaxLabel})</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
+            절세 전략 비교 ({TAX_EFFECT.flow.pretaxLabel})
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
           {/* 세금 효과 비교 테이블 */}
-          <div style={{ flex: 1.1, border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ background: "#FAFAFA", padding: "6px 12px", fontSize: 11, fontWeight: 800, color: TEXT, borderBottom: `1px solid ${BORDER}` }}>세금 효과 비교</div>
+          <div
+            style={{
+              flex: 1.1,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 10,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                background: "#FAFAFA",
+                padding: "6px 12px",
+                fontSize: 11,
+                fontWeight: 800,
+                color: TEXT,
+                borderBottom: `1px solid ${BORDER}`,
+              }}
+            >
+              세금 효과 비교
+            </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                   {["구분", "세후 수익", "절세액", "비고"].map((h) => (
-                    <th key={h} style={{ padding: "5px 8px", fontSize: 10, fontWeight: 700, color: MUTED, textAlign: "center" as const }}>{h}</th>
+                    <th
+                      key={h}
+                      style={{
+                        padding: "5px 8px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: MUTED,
+                        textAlign: "center" as const,
+                      }}
+                    >
+                      {h}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {TAX_EFFECT.flow.rows.map((row, i) => (
-                  <tr key={row.label} style={{ borderBottom: `1px solid ${BORDER}`, background: i === 1 ? BRAND_LIGHT : "white" }}>
-                    <td style={{ padding: "7px 8px", fontSize: 11, fontWeight: 700, color: i === 1 ? BRAND : TEXT }}>{row.label}</td>
-                    <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center" as const, color: TEXT }}>세후 {row.afterTaxManwon.toLocaleString()}만원</td>
-                    <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center" as const, fontWeight: 700, color: UP }}>{row.taxManwon.toLocaleString()}만</td>
-                    <td style={{ padding: "7px 8px", fontSize: 10, textAlign: "center" as const, color: MUTED }}>{i === 0 ? "기준" : "ISA+IRP"}</td>
+                  <tr
+                    key={row.label}
+                    style={{
+                      borderBottom: `1px solid ${BORDER}`,
+                      background: i === 1 ? BRAND_LIGHT : "white",
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "7px 8px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: i === 1 ? BRAND : TEXT,
+                      }}
+                    >
+                      {row.label}
+                    </td>
+                    <td
+                      style={{
+                        padding: "7px 8px",
+                        fontSize: 10,
+                        textAlign: "center" as const,
+                        color: TEXT,
+                      }}
+                    >
+                      세후 {row.afterTaxManwon.toLocaleString()}만원
+                    </td>
+                    <td
+                      style={{
+                        padding: "7px 8px",
+                        fontSize: 10,
+                        textAlign: "center" as const,
+                        fontWeight: 700,
+                        color: UP,
+                      }}
+                    >
+                      {row.taxManwon.toLocaleString()}만
+                    </td>
+                    <td
+                      style={{
+                        padding: "7px 8px",
+                        fontSize: 10,
+                        textAlign: "center" as const,
+                        color: MUTED,
+                      }}
+                    >
+                      {i === 0 ? "기준" : "ISA+IRP"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div style={{ padding: "7px 12px", background: "#FAFAFA", borderTop: `1px solid ${BORDER}` }}>
+            <div
+              style={{
+                padding: "7px 12px",
+                background: "#FAFAFA",
+                borderTop: `1px solid ${BORDER}`,
+              }}
+            >
               <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.7 }}>
-                ✓ 세후 수익률 {TAX_EFFECT.afterTaxReturn.from} → {TAX_EFFECT.afterTaxReturn.to} ({TAX_EFFECT.afterTaxReturn.delta})<br />
-                ✓ 실효세 절감 {TAX_EFFECT.effectiveTax.from} → {TAX_EFFECT.effectiveTax.to} ({TAX_EFFECT.effectiveTax.delta})
+                ✓ 세후 수익률 {TAX_EFFECT.afterTaxReturn.from} →{" "}
+                {TAX_EFFECT.afterTaxReturn.to} (
+                {TAX_EFFECT.afterTaxReturn.delta})<br />✓ 실효세 절감{" "}
+                {TAX_EFFECT.effectiveTax.from} → {TAX_EFFECT.effectiveTax.to} (
+                {TAX_EFFECT.effectiveTax.delta})
               </div>
             </div>
           </div>
 
           {/* 절세 계좌 배치 최적화 — 다중 바 */}
-          <div style={{ flex: 1, border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ background: "#FAFAFA", padding: "6px 12px", fontSize: 11, fontWeight: 800, color: TEXT, borderBottom: `1px solid ${BORDER}` }}>절세 계좌 배치 최적화</div>
+          <div
+            style={{
+              flex: 1,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 10,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                background: "#FAFAFA",
+                padding: "6px 12px",
+                fontSize: 11,
+                fontWeight: 800,
+                color: TEXT,
+                borderBottom: `1px solid ${BORDER}`,
+              }}
+            >
+              절세 계좌 배치 최적화
+            </div>
             <div style={{ padding: "12px 14px 10px" }}>
               <div style={{ display: "flex", gap: 0 }}>
                 <div style={{ width: 68, flexShrink: 0 }}>
                   {accountRows.map((acct, idx) => (
-                    <div key={acct.name} style={{ height: 30, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, marginBottom: idx < accountRows.length - 1 ? 14 : 0, fontSize: 10, fontWeight: 800, color: "#4E5968", textAlign: "right" as const, lineHeight: 1.2 }}>
+                    <div
+                      key={acct.name}
+                      style={{
+                        height: 30,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        paddingRight: 8,
+                        marginBottom: idx < accountRows.length - 1 ? 14 : 0,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: "#4E5968",
+                        textAlign: "right" as const,
+                        lineHeight: 1.2,
+                      }}
+                    >
                       {acct.name}
                     </div>
                   ))}
@@ -1185,34 +1395,136 @@ function TaxPage() {
                     const refPct = (acct.refManwon / ACCOUNT_CHART_MAX) * 100;
                     const usedPct = (acct.used / ACCOUNT_CHART_MAX) * 100;
                     return (
-                      <div key={acct.name} style={{ marginBottom: idx < accountRows.length - 1 ? 14 : 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
-                          <div style={{ flex: 1, height: 13, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ width: `${refPct}%`, height: "100%", background: "#D1D5DB", borderRadius: 4 }} />
+                      <div
+                        key={acct.name}
+                        style={{
+                          marginBottom: idx < accountRows.length - 1 ? 14 : 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                            marginBottom: 4,
+                          }}
+                        >
+                          <div
+                            style={{
+                              flex: 1,
+                              height: 13,
+                              background: "#F3F4F6",
+                              borderRadius: 4,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${refPct}%`,
+                                height: "100%",
+                                background: "#D1D5DB",
+                                borderRadius: 4,
+                              }}
+                            />
                           </div>
-                          <span style={{ width: 42, fontSize: 9, fontWeight: 600, color: MUTED, textAlign: "right" as const, flexShrink: 0 }}>{acct.refManwon.toLocaleString()}만</span>
+                          <span
+                            style={{
+                              width: 42,
+                              fontSize: 9,
+                              fontWeight: 600,
+                              color: MUTED,
+                              textAlign: "right" as const,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {acct.refManwon.toLocaleString()}만
+                          </span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <div style={{ flex: 1, height: 13, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ width: `${usedPct}%`, height: "100%", background: BRAND, borderRadius: 4 }} />
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          <div
+                            style={{
+                              flex: 1,
+                              height: 13,
+                              background: "#F3F4F6",
+                              borderRadius: 4,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${usedPct}%`,
+                                height: "100%",
+                                background: BRAND,
+                                borderRadius: 4,
+                              }}
+                            />
                           </div>
-                          <span style={{ width: 42, fontSize: 9, fontWeight: 800, color: BRAND, textAlign: "right" as const, flexShrink: 0 }}>{acct.used.toLocaleString()}만</span>
+                          <span
+                            style={{
+                              width: 42,
+                              fontSize: 9,
+                              fontWeight: 800,
+                              color: BRAND,
+                              textAlign: "right" as const,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {acct.used.toLocaleString()}만
+                          </span>
                         </div>
                       </div>
                     );
                   })}
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginTop: 6,
+                    }}
+                  >
                     {["0", "1천만", "2천만", "3천만", "4천만"].map((t) => (
-                      <span key={t} style={{ fontSize: 8.5, color: "#B0B8C1", fontWeight: 600 }}>{t}</span>
+                      <span
+                        key={t}
+                        style={{
+                          fontSize: 8.5,
+                          color: "#B0B8C1",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {t}
+                      </span>
                     ))}
                   </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 14, marginTop: 10 }}>
-                {[{ color: BRAND, label: "사용액" }, { color: "#D1D5DB", label: "기준값" }].map((l) => (
-                  <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 10, height: 10, background: l.color, borderRadius: 2 }} />
-                    <span style={{ fontSize: 9.5, color: MUTED, fontWeight: 700 }}>{l.label}</span>
+                {[
+                  { color: BRAND, label: "사용액" },
+                  { color: "#D1D5DB", label: "기준값" },
+                ].map((l) => (
+                  <div
+                    key={l.label}
+                    style={{ display: "flex", alignItems: "center", gap: 5 }}
+                  >
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        background: l.color,
+                        borderRadius: 2,
+                      }}
+                    />
+                    <span
+                      style={{ fontSize: 9.5, color: MUTED, fontWeight: 700 }}
+                    >
+                      {l.label}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1221,33 +1533,101 @@ function TaxPage() {
         </div>
 
         {/* 섹션 2: 절세 제안 6개 카드 */}
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+        <div
+          style={{ display: "flex", alignItems: "center", marginBottom: 12 }}
+        >
           <SectionBar />
-          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>절세 제안 (총 {TAX_ADVICE.cards.length}개)</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
+            절세 제안 (총 {TAX_ADVICE.cards.length}개)
+          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
           {TAX_ADVICE.cards.map((card) => (
-            <div key={card.title} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: "12px 14px", background: "white" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <div style={{ width: 20, height: 20, borderRadius: 5, background: BRAND_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, color: BRAND_DARK, flexShrink: 0 }}>
+            <div
+              key={card.title}
+              style={{
+                border: `1px solid ${BORDER}`,
+                borderRadius: 10,
+                padding: "12px 14px",
+                background: "white",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                }}
+              >
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 5,
+                    background: BRAND_LIGHT,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 10,
+                    fontWeight: 900,
+                    color: BRAND_DARK,
+                    flexShrink: 0,
+                  }}
+                >
                   {card.icon}
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 800, color: TEXT }}>{card.title}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: TEXT }}>
+                  {card.title}
+                </span>
               </div>
-              <p style={{ fontSize: 11, color: MUTED, lineHeight: 1.65, margin: "0 0 6px 0" }}>{card.body}</p>
-              <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 5 }}>{card.tag}</div>
+              <p
+                style={{
+                  fontSize: 11,
+                  color: MUTED,
+                  lineHeight: 1.65,
+                  margin: "0 0 6px 0",
+                }}
+              >
+                {card.body}
+              </p>
+              <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 5 }}>
+                {card.tag}
+              </div>
               {card.saving && (
-                <span style={{ fontSize: 13, fontWeight: 900, color: UP }}>{card.saving}</span>
+                <span style={{ fontSize: 13, fontWeight: 900, color: UP }}>
+                  {card.saving}
+                </span>
               )}
             </div>
           ))}
         </div>
 
         {/* 총 절세 효과 요약 바 */}
-        <div style={{ background: BRAND, borderRadius: 7, padding: "7px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: "white" }}>{TAX_ADVICE.totalLabel}</span>
-          <span style={{ fontSize: 11, fontWeight: 900, color: "white" }}>{TAX_ADVICE.totalSaving}</span>
+        <div
+          style={{
+            background: BRAND,
+            borderRadius: 7,
+            padding: "7px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, color: "white" }}>
+            {TAX_ADVICE.totalLabel}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 900, color: "white" }}>
+            {TAX_ADVICE.totalSaving}
+          </span>
         </div>
       </div>
 
@@ -1262,48 +1642,146 @@ function TaxProductsPage() {
   return (
     <div
       data-pdf-page=""
-      style={{ width: 794, height: 1123, fontFamily: "Pretendard, Apple SD Gothic Neo, sans-serif", background: "white", position: "relative", overflow: "hidden" }}
+      style={{
+        width: 794,
+        height: 1123,
+        fontFamily: "Pretendard, Apple SD Gothic Neo, sans-serif",
+        background: "white",
+        position: "relative",
+        overflow: "hidden",
+      }}
     >
-      <div style={{ background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`, padding: "19px 40px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div
+        style={{
+          background: `linear-gradient(90deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
+          padding: "19px 40px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>③-2 전략별 추천 상품</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>절세 제안 · 삼성증권 상품 연계 목록</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
+            ③-2 전략별 추천 상품
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "rgba(255,255,255,0.75)",
+              marginTop: 2,
+            }}
+          >
+            절세 제안 · 삼성증권 상품 연계 목록
+          </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>{C.name} 고객님</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{getTodayShort()} 기준</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
+            {C.name} 고객님
+          </div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+            {getTodayShort()} 기준
+          </div>
         </div>
       </div>
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <div
+          style={{ display: "flex", alignItems: "center", marginBottom: 16 }}
+        >
           <SectionBar />
-          <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>전략별 추천 상품 목록</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>
+            전략별 추천 상품 목록
+          </div>
         </div>
 
-        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" as const }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            tableLayout: "fixed" as const,
+          }}
+        >
           <colgroup>
             <col style={{ width: 176 }} />
             <col />
           </colgroup>
           <thead>
             <tr style={{ background: BRAND }}>
-              <th style={{ padding: "10px 14px", textAlign: "left" as const, fontSize: 13, fontWeight: 700, color: "white" }}>전략</th>
-              <th style={{ padding: "10px 14px", textAlign: "left" as const, fontSize: 13, fontWeight: 700, color: "white" }}>추천 상품 목록</th>
+              <th
+                style={{
+                  padding: "10px 14px",
+                  textAlign: "left" as const,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "white",
+                }}
+              >
+                전략
+              </th>
+              <th
+                style={{
+                  padding: "10px 14px",
+                  textAlign: "left" as const,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "white",
+                }}
+              >
+                추천 상품 목록
+              </th>
             </tr>
           </thead>
           <tbody>
             {TAX_ADVICE.cards.map((card, i) => (
-              <tr key={card.title} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 === 0 ? "white" : "#FAFAFA" }}>
-                <td style={{ padding: "13px 14px", verticalAlign: "top" as const }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 5, background: BRAND_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: BRAND_DARK, flexShrink: 0 }}>
+              <tr
+                key={card.title}
+                style={{
+                  borderBottom: `1px solid ${BORDER}`,
+                  background: i % 2 === 0 ? "white" : "#FAFAFA",
+                }}
+              >
+                <td
+                  style={{
+                    padding: "13px 14px",
+                    verticalAlign: "top" as const,
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <div
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 5,
+                        background: BRAND_LIGHT,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 900,
+                        color: BRAND_DARK,
+                        flexShrink: 0,
+                      }}
+                    >
                       {card.icon}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>{card.title}</span>
+                    <span
+                      style={{ fontSize: 13, fontWeight: 800, color: TEXT }}
+                    >
+                      {card.title}
+                    </span>
                   </div>
                 </td>
-                <td style={{ padding: "13px 14px", fontSize: 12, color: TEXT, lineHeight: 1.85, whiteSpace: "pre-line" as const }}>
+                <td
+                  style={{
+                    padding: "13px 14px",
+                    fontSize: 12,
+                    color: TEXT,
+                    lineHeight: 1.85,
+                    whiteSpace: "pre-line" as const,
+                  }}
+                >
                   {card.products.map((p) => p.name).join("\n")}
                 </td>
               </tr>

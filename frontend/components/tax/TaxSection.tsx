@@ -18,7 +18,7 @@ export default function TaxSection() {
   const portfolio = PORTFOLIOS.find((p) => p.id === selectedPortfolioId);
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
-  const baseLabel = `기준 : ${portfolio?.name ?? "포트폴리오 A"} · ${customer?.aumEokwon ?? 0}억`;
+  const baseLabel = `${portfolio?.name ?? "포트폴리오 A"}`;
 
   return (
     <Tabs defaultValue="effect">
@@ -28,7 +28,10 @@ export default function TaxSection() {
           <TabsTrigger value="effect" className="px-2.5 text-[12px] font-bold">
             절세 효과
           </TabsTrigger>
-          <TabsTrigger value="threshold" className="px-2.5 text-[12px] font-bold">
+          <TabsTrigger
+            value="threshold"
+            className="px-2.5 text-[12px] font-bold"
+          >
             종합과세 임계선
           </TabsTrigger>
           <TabsTrigger value="advice" className="px-2.5 text-[12px] font-bold">
@@ -43,10 +46,6 @@ export default function TaxSection() {
           <div className="flex items-center gap-4 rounded-xl border border-brand/20 bg-brand/5 px-3.5 py-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 text-[12px] font-extrabold">
-                <span className="flex size-5 items-center justify-center rounded-md bg-brand text-[13px] font-extrabold text-white">
-                  $
-                </span>
-                절세 최적화 효과
                 <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[12px] font-bold text-muted-foreground">
                   {baseLabel}
                 </span>
@@ -75,10 +74,9 @@ export default function TaxSection() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <TaxWaterfall />
+            <TaxWaterfall portfolioName={baseLabel} />
             <AccountAllocation />
           </div>
-
         </TabsContent>
 
         {/* 탭 2: 종합과세 임계선 */}
@@ -106,13 +104,13 @@ function AdviceCards() {
         {TAX_ADVICE.cards.map((card) => {
           const active = tabs[card.title] ?? "제안설명";
           return (
-            <div key={card.title} className="flex flex-col rounded-xl border p-2.5">
-              {/* 헤더: 아이콘 + 제목 + 세그먼트 */}
+            <div
+              key={card.title}
+              className="flex flex-col rounded-xl border p-2.5"
+            >
+              {/* 헤더: 제목 + 세그먼트 */}
               <div className="mb-1.5 flex items-center gap-1.5">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-brand/10 text-[12px] font-extrabold text-brand-dark">
-                  {card.icon}
-                </span>
-                <span className="flex-1 text-[12px] font-extrabold leading-tight">
+                <span className="flex-1 text-[13px] font-extrabold leading-tight">
                   {card.title}
                 </span>
                 <div className="flex shrink-0 rounded-md bg-muted p-0.5">
@@ -120,7 +118,9 @@ function AdviceCards() {
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setTabs((prev) => ({ ...prev, [card.title]: t }))}
+                      onClick={() =>
+                        setTabs((prev) => ({ ...prev, [card.title]: t }))
+                      }
                       className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
                         active === t
                           ? "bg-white text-brand-dark shadow-sm"
@@ -136,7 +136,7 @@ function AdviceCards() {
               {/* 콘텐츠 — 두 탭 모두 h-[108px]으로 고정, 넘치면 스크롤 */}
               {active === "제안설명" ? (
                 <div className="flex h-[108px] flex-col overflow-y-auto pr-0.5">
-                  <p className="pt-1.5 text-[12px] font-semibold leading-snug text-muted-foreground">
+                  <p className="pt-1.5 text-[13px] font-semibold leading-snug text-muted-foreground">
                     {card.body}
                   </p>
                   <div className="mt-auto pt-1">
@@ -160,7 +160,10 @@ function AdviceCards() {
                           key={p.name}
                           type="button"
                           disabled={!url}
-                          onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}
+                          onClick={() =>
+                            url &&
+                            window.open(url, "_blank", "noopener,noreferrer")
+                          }
                           className={`flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-1.5 text-left transition-colors ${url ? "cursor-pointer hover:bg-brand/10" : "cursor-default opacity-50"}`}
                         >
                           <ExternalLink className="size-3 shrink-0 text-brand" />
@@ -177,11 +180,11 @@ function AdviceCards() {
           );
         })}
       </div>
-      <div className="mt-2 flex items-center justify-between rounded-xl bg-brand px-3 py-2">
-        <span className="text-[12px] font-bold text-white">
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-brand/10 px-3 py-2">
+        <span className="text-[12px] font-bold text-brand-dark">
           {TAX_ADVICE.totalLabel}
         </span>
-        <span className="text-[12px] font-extrabold tabular-nums text-white">
+        <span className="text-[12px] font-extrabold tabular-nums text-brand-dark">
           {TAX_ADVICE.totalSaving}
         </span>
       </div>
