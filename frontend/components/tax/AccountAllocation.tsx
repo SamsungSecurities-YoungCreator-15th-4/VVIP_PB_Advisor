@@ -115,11 +115,19 @@ export default function AccountAllocation({ accounts }: { accounts?: AccountSlot
             />
             <Tooltip
               cursor={{ fill: "#EAF1FF" }}
-              formatter={(v: unknown, name: unknown) => [
-                `${Number(v).toLocaleString()}만원`,
-                name === "reference" ? "기준값" : "사용액",
-              ]}
-              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+                    <p style={{ fontWeight: 700, marginBottom: 4 }}>{label}</p>
+                    {payload.map((entry) => (
+                      <p key={String(entry.dataKey)} style={{ color: entry.dataKey === "reference" ? "#4E5968" : String(entry.color) }}>
+                        {entry.dataKey === "reference" ? "기준값" : "사용액"} : {Number(entry.value).toLocaleString()}만원
+                      </p>
+                    ))}
+                  </div>
+                );
+              }}
             />
             {/* 기준값 — 회색 */}
             <Bar dataKey="reference" name="기준값" fill="#D1D5DB" radius={4} barSize={10} isAnimationActive={false} />
