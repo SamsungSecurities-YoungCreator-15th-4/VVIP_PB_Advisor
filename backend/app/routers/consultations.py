@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import (
     APIRouter,
+    Depends,
     File,
     Form,
     HTTPException,
@@ -22,6 +23,7 @@ from fastapi import (
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
+from app.core.auth import get_current_pb_id
 from app.db.supabase import get_supabase
 from app.schemas.consultations import (
     ConsultationListResponse,
@@ -58,9 +60,10 @@ STT_TEST_PAGE = Path(__file__).resolve().parents[1] / "stt" / "realtime_test.htm
 def create_stt_consultation(
     client_id: Annotated[str, Form()],
     audio_file: Annotated[UploadFile, File()],
+    pb_id: str = Depends(get_current_pb_id),
 ) -> ConsultationResponse:
     supabase = get_supabase()
-    client = _get_client_by_id(supabase, client_id)
+    client = _get_client_by_id(supabase, client_id, pb_id=pb_id)
     if not client:
         raise _client_not_found(client_id)
 
@@ -550,9 +553,12 @@ async def _stop_realtime_transcriber(
 
 
 @router.get("/initial-ips", response_model=InitialIpsResponse)
-def get_initial_ips(client_id: str) -> InitialIpsResponse:
+def get_initial_ips(
+    client_id: str,
+    pb_id: str = Depends(get_current_pb_id),
+) -> InitialIpsResponse:
     supabase = get_supabase()
-    client = _get_client_by_id(supabase, client_id)
+    client = _get_client_by_id(supabase, client_id, pb_id=pb_id)
     if not client:
         raise _client_not_found(client_id)
 
@@ -595,6 +601,7 @@ def get_consultation_detail(
     client_id: str,
     consultation_id: Annotated[str | None, Query()] = None,
     transcript_title: Annotated[str | None, Query()] = None,
+    pb_id: str = Depends(get_current_pb_id),
 ) -> ConsultationResponse:
     if not consultation_id and not transcript_title:
         raise HTTPException(
@@ -603,7 +610,7 @@ def get_consultation_detail(
         )
 
     supabase = get_supabase()
-    client = _get_client_by_id(supabase, client_id)
+    client = _get_client_by_id(supabase, client_id, pb_id=pb_id)
     if not client:
         raise _client_not_found(client_id)
 
@@ -635,9 +642,12 @@ def get_consultation_detail(
 
 
 @router.get("", response_model=ConsultationListResponse)
-def list_consultations(client_id: str) -> ConsultationListResponse:
+def list_consultations(
+    client_id: str,
+    pb_id: str = Depends(get_current_pb_id),
+) -> ConsultationListResponse:
     supabase = get_supabase()
-    client = _get_client_by_id(supabase, client_id)
+    client = _get_client_by_id(supabase, client_id, pb_id=pb_id)
     if not client:
         raise _client_not_found(client_id)
 
@@ -669,19 +679,21 @@ def list_consultations(client_id: str) -> ConsultationListResponse:
     )
 
 
-def _get_client_by_id(supabase, client_id: str) -> dict | None:
+def _get_client_by_id(supabase, client_id: str, *, pb_id: str | None = None) -> dict | None:
+    """client_id 로 고객을 조회한다.
+
+    pb_id 가 제공되면 담당 PB 일치 여부도 함께 확인한다(2차 방어선).
+    WebSocket 경로처럼 pb_id 없이 호출되는 경우엔 None 을 전달하면 된다.
+    """
     try:
         uuid.UUID(client_id)
     except (TypeError, ValueError):
         return None
 
-    result = (
-        supabase.table("client")
-        .select("id,name")
-        .eq("id", client_id)
-        .limit(1)
-        .execute()
-    )
+    query = supabase.table("client").select("id,name").eq("id", client_id)
+    if pb_id is not None:
+        query = query.eq("pb_id", pb_id)
+    result = query.limit(1).execute()
     return _first_row(result.data)
 
 

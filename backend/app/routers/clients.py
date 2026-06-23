@@ -1,4 +1,7 @@
-"""GET/POST /clients — 고객(client) 조회·생성.
+"""clients 라우터 — PB 인증 기반 고객 관리.
+
+- POST /clients : 신규 고객 등록 (인증된 PB 에 자동 배정)
+- GET  /clients : 본인 담당 고객 목록 조회 (타 PB 고객 노출 방지)
 
 고객 SSOT 는 DB(client 테이블)다. STT 는 프론트가 넘긴 client_id(DB client.id)를
 검증해 상담을 저장한다. 고객명은 표시값일 뿐 조회 키로 쓰지 않는다. 동명이인은
@@ -13,9 +16,10 @@ import math
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.auth import get_current_pb_id
 from app.db.supabase import get_supabase
 from app.services.ips import build_ips_snapshot_payload
 
@@ -82,47 +86,72 @@ class ClientCreateResponse(BaseModel):
     created_at: str
 
 
-class ClientResponse(BaseModel):
-    client_id: str | None
-    name: str | None
-    aum_eokwon: float
+class ClientListItem(BaseModel):
+    client_id: str
+    name: str
+    aum_eokwon: float | None
     is_persona: bool
-    created_at: str | None
+    created_at: str
 
 
 class ClientListResponse(BaseModel):
-    clients: list[ClientResponse]
+    pb_id: str
+    clients: list[ClientListItem]
 
 
 @router.get("", response_model=ClientListResponse)
-def list_clients() -> ClientListResponse:
-    """프론트 고객 선택 목록용 DB client 목록.
-
-    프론트는 이 응답의 client_id 를 STT 업로드·실시간 전사 시작 payload에 그대로
-    사용한다. meta.aum_eokwon 이 없는 기존 seed 페르소나는 0으로 내려 UI 기본값에
-    폴백할 수 있게 한다.
-    """
+def list_clients(pb_id: str = Depends(get_current_pb_id)) -> ClientListResponse:
+    """인증된 PB 의 담당 고객 목록을 반환한다. 타 PB 고객은 포함되지 않는다."""
     supabase = get_supabase()
     try:
-        result = (
-            supabase.table("client")
-            .select("id,name,meta,created_at")
-            .order("created_at", desc=False)
-            .execute()
-        )
-        clients = [_client_response_from_row(row) for row in (result.data or [])]
+        rows = _list_clients_for_pb(supabase, pb_id)
     except Exception as exc:
         logger.exception("client list failed")
         raise HTTPException(
             status_code=500,
             detail="고객 목록 조회 중 오류가 발생했습니다.",
         ) from exc
+    items = [_to_list_item(r) for r in rows]
+    return ClientListResponse(pb_id=pb_id, clients=items)
 
-    return ClientListResponse(clients=clients)
+
+def _list_clients_for_pb(supabase, pb_id: str) -> list[dict]:
+    """pb_id 로 필터링한 고객 목록 반환. 백엔드 2차 방어선."""
+    result = (
+        supabase.table("client")
+        .select("id,name,meta,created_at")
+        .eq("pb_id", pb_id)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return result.data or []
+
+
+def _to_list_item(row: dict) -> ClientListItem:
+    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    raw_aum = (meta or {}).get("aum_eokwon")
+    try:
+        aum_eokwon: float | None = float(raw_aum) if raw_aum is not None else None
+    except (TypeError, ValueError):
+        aum_eokwon = None
+
+    created_at_raw = row.get("created_at")
+    created_at = _to_kst_iso(created_at_raw) if created_at_raw else ""
+
+    return ClientListItem(
+        client_id=row.get("id", ""),
+        name=row.get("name", "Unknown"),
+        aum_eokwon=aum_eokwon,
+        is_persona=bool((meta or {}).get("persona", False)),
+        created_at=created_at,
+    )
 
 
 @router.post("", response_model=ClientCreateResponse, status_code=status.HTTP_201_CREATED)
-def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
+def create_client(
+    request: ClientCreateRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> ClientCreateResponse:
     supabase = get_supabase()
 
     try:
@@ -133,6 +162,8 @@ def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
                     "name": request.name,
                     # AUM 전용 컬럼이 없어 meta 에 보관. persona=False 로 페르소나 3명과 구분.
                     "meta": {"aum_eokwon": request.aum_eokwon, "persona": False},
+                    # 인증된 PB 에 자동 배정 (RLS 1차 방어선 + 백엔드 2차 방어선).
+                    "pb_id": pb_id,
                 }
             )
             .execute()
@@ -193,26 +224,6 @@ def _rollback_client(supabase, client_id: str) -> None:
         supabase.table("client").delete().eq("id", client_id).execute()
     except Exception:
         logger.exception("client rollback delete failed (client_id=%s)", client_id)
-
-
-def _client_response_from_row(row: dict) -> ClientResponse:
-    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
-    raw_aum = meta.get("aum_eokwon", 0)
-    try:
-        aum_eokwon = float(raw_aum)
-    except (TypeError, ValueError):
-        aum_eokwon = 0.0
-
-    created_at_raw = row.get("created_at")
-    created_at = _to_kst_iso(created_at_raw) if created_at_raw else None
-
-    return ClientResponse(
-        client_id=row.get("id") or None,
-        name=row.get("name") or None,
-        aum_eokwon=aum_eokwon,
-        is_persona=bool(meta.get("persona", False)),
-        created_at=created_at,
-    )
 
 
 def _to_kst_iso(created_at: str) -> str:
