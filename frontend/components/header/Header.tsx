@@ -1,5 +1,6 @@
 import LiveClock from "@/components/header/LiveClock";
 import MacroTicker from "@/components/header/MacroTicker";
+import HelpModeToggle from "@/components/header/HelpModeToggle";
 import PdfExportButton from "@/components/header/PdfExportButton";
 
 /** 상단 헤더: 로고 · 거시지표 6개 · PDF 추출 */
@@ -33,6 +34,8 @@ export default function Header() {
 
       {/* 모바일에서 버튼을 오른쪽으로 밀기 */}
       <div className="flex-1 md:hidden" />
+
+      <HelpModeToggle />
 
       {/* PDF 버튼 — 클릭 시 PB용/고객용 선택 드롭다운 */}
       <PdfExportButton />
