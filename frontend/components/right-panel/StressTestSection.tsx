@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { Lightbulb } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { fetchMacroIndicators } from "@/lib/api";
@@ -17,10 +17,19 @@ import {
   useStressedPortfolios,
 } from "@/lib/useStressedPortfolios";
 
+// 출처: 2008 글로벌 금융위기 — Fed 기준금리 0~0.25%(2008.12), KRW/USD 고점 1,570원(2009.03)
+// 출처: 2022 러우전쟁 — Fed 기준금리 4.5%(2022.12), KRW/USD 1,440원(2022.09)
+const SCENARIO_PRESETS = [
+  { key: "crisis" as const, label: "금융위기", ratePct: 0.25, fxKrw: 1570 },
+  { key: "war" as const, label: "러우전쟁", ratePct: 4.5, fxKrw: 1440 },
+] as const;
+type PresetKey = "current" | (typeof SCENARIO_PRESETS)[number]["key"];
+
 /** 우측 상단: 시나리오 Test — 금리·환율 슬라이더와 예상 평가손익 */
 export default function StressTestSection() {
   const { scenario, setScenario, liveBase, setLiveBase } = useDashboardStore();
   const { byId, failed, aumEokwon } = useStressedPortfolios();
+  const [preset, setPreset] = useState<PresetKey | null>("current");
 
   // 슬라이더 기준점을 실시간 현재값(기준금리·원/달러)으로 맞춘다.
   // 최초 1회 로드 시 store가 슬라이더도 실시간 값으로 스냅한다.
@@ -60,7 +69,51 @@ export default function StressTestSection() {
 
   return (
     <Card className="gap-0 p-3.5">
-      <p className="mb-3 text-[14px] font-bold">Stress Test</p>
+      {/* 헤더: 제목 + 극단 시나리오 경고 배지 */}
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[14px] font-bold">Stress Test</p>
+        {isExtreme && (
+          <div className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">
+            <AlertTriangle className="size-3" />
+            변동성 주의
+          </div>
+        )}
+      </div>
+
+      {/* 시나리오 프리셋 세그먼트 컨트롤 */}
+      <div className="mb-3.5 flex rounded-lg bg-muted p-0.5">
+        <button
+          type="button"
+          onClick={() => {
+            setPreset("current");
+            setScenario({ ratePct: liveBase.ratePct, fxKrw: liveBase.fxKrw });
+          }}
+          className={`flex-1 rounded-md py-1 text-[11px] font-bold transition-colors ${
+            preset === "current"
+              ? "bg-white text-brand-dark shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          현재
+        </button>
+        {SCENARIO_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => {
+              setPreset(p.key);
+              setScenario({ ratePct: p.ratePct, fxKrw: p.fxKrw });
+            }}
+            className={`flex-1 rounded-md py-1 text-[11px] font-bold transition-colors ${
+              preset === p.key
+                ? "bg-white text-brand-dark shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
       <ScenarioSlider
         label="금리"
@@ -73,9 +126,9 @@ export default function StressTestSection() {
         step={SCENARIO_BASE.rateStep}
         minLabel={`${SCENARIO_BASE.rateMin.toFixed(1)}%`}
         maxLabel={`${SCENARIO_BASE.rateMax.toFixed(1)}%`}
-        resetLabel={`초기화 (현재 ${liveBase.ratePct.toFixed(2)}%)`}
-        onChange={(v) => setScenario({ ratePct: v })}
-        onReset={() => setScenario({ ratePct: liveBase.ratePct })}
+        resetLabel="초기화"
+        onChange={(v) => { setPreset(null); setScenario({ ratePct: v }); }}
+        onReset={() => { setPreset(null); setScenario({ ratePct: liveBase.ratePct }); }}
       />
 
       <ScenarioSlider
@@ -89,9 +142,9 @@ export default function StressTestSection() {
         step={SCENARIO_BASE.fxStep}
         minLabel={SCENARIO_BASE.fxMin.toLocaleString()}
         maxLabel={SCENARIO_BASE.fxMax.toLocaleString()}
-        resetLabel={`초기화 (현재 ${liveBase.fxKrw.toLocaleString()}원)`}
-        onChange={(v) => setScenario({ fxKrw: v })}
-        onReset={() => setScenario({ fxKrw: liveBase.fxKrw })}
+        resetLabel="초기화"
+        onChange={(v) => { setPreset(null); setScenario({ fxKrw: v }); }}
+        onReset={() => { setPreset(null); setScenario({ fxKrw: liveBase.fxKrw }); }}
       />
 
       <div className="mt-1 rounded-xl bg-brand/5 p-3">
@@ -120,16 +173,6 @@ export default function StressTestSection() {
           );
         })}
       </div>
-
-      {/* 기준 시나리오를 크게 벗어나면 경고 (조건부 렌더) */}
-      {isExtreme && (
-        <div className="mt-2 flex items-start gap-2 rounded-xl bg-muted p-3">
-          <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <p className="text-[12px] font-semibold leading-snug text-muted-foreground">
-            {SCENARIO_WARN.message}
-          </p>
-        </div>
-      )}
     </Card>
   );
 }
