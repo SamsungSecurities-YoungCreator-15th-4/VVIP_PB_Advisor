@@ -245,9 +245,8 @@ TAX_RULE_TABLE.update(
     }
 )
 
-# 추천 B 선별 기준
-# 검증된 사실: 상관계수가 낮을수록 분산효과가 커질 수 있음.
-# 프로젝트용 가정: 추천 A와 B가 너무 비슷하지 않도록 0.95 이하를 기준으로 둠.
+# 하위호환용 상관계수 기준값.
+# 포트폴리오 A/B 선정에는 사용하지 않고 화면 참고값 계산만 유지한다.
 SECOND_PORTFOLIO_MAX_CORRELATION = 0.95
 
 
@@ -487,13 +486,12 @@ SELECTION_RISK_CONTROLS = {
 }
 
 SELECTION_RANKING_BASIS = [
-    "suitability_filter",
-    "historical_var_95_filter",
-    "risk_contribution_filter",
-    "after_tax_return_desc",
-    "expected_return_desc",
-    "historical_var_95_asc",
-    "risk_contribution_max_share_asc",
+    "common_suitability_filter",
+    "common_liquidity_filter",
+    "common_historical_var_95_filter",
+    "common_risk_contribution_filter",
+    "portfolio_a_after_tax_return_desc",
+    "portfolio_b_target_return_then_risk_contribution_asc",
 ]
 
 
@@ -514,6 +512,8 @@ class IPSRequest(BaseModel):
     unique_profile: Dict[str, Any] = Field(default_factory=dict)
     age: Optional[int] = Field(None, ge=0, le=120)
     client_context: Dict[str, Any] = Field(default_factory=dict)
+    # RRTTLLU.Return은 퍼센트 단위다. 예: 8.0 -> 내부 비교값 0.08
+    target_after_tax_return: Optional[float] = Field(None, gt=0.0, le=1.0)
 
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(..., ge=1, le=50)
@@ -638,6 +638,8 @@ class PortfolioRequest(BaseModel):
     unique_profile: Dict[str, Any] = Field(default_factory=dict)
     age: Optional[int] = Field(None, ge=0, le=120)
     client_context: Dict[str, Any] = Field(default_factory=dict)
+    # RRTTLLU.Return은 퍼센트 단위다. 예: 8.0 -> 내부 비교값 0.08
+    target_after_tax_return: Optional[float] = Field(None, gt=0.0, le=1.0)
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(10, ge=1, le=50)
     tax_sensitivity: Literal["low", "medium", "high"] = Field("medium")
@@ -812,6 +814,43 @@ def safe_float(value: Any, default: float = 0.0) -> float:
 def safe_round(value: Any, digits: int = 6) -> float:
     return round(safe_float(value), digits)
 
+
+def normalize_target_after_tax_return(
+    value: Any,
+    *,
+    percent_input: bool,
+) -> Optional[float]:
+    """IPS/RRTTLLU 목표수익률을 내부 소수 단위로 정규화한다.
+
+    RRTTLLU.Return과 상담 IPS Return은 퍼센트 단위다.
+    예: 8, 8.0, "8%", {"value": 8.0} -> 0.08
+    """
+    if isinstance(value, dict):
+        for key in ("value", "Return", "return_target", "target"):
+            if key in value:
+                value = value.get(key)
+                break
+
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, str):
+        match = re.search(r"-?[0-9]+(?:\.[0-9]+)?", value.replace(",", ""))
+        if match is None:
+            raise ValueError("RRTTLLU.Return을 목표 세후수익률 숫자로 해석할 수 없습니다.")
+        number = safe_float(match.group(0), default=np.nan)
+    else:
+        number = safe_float(value, default=np.nan)
+
+    if not np.isfinite(number):
+        raise ValueError("RRTTLLU.Return을 목표 세후수익률 숫자로 해석할 수 없습니다.")
+
+    normalized = number / 100.0 if percent_input else number
+    if normalized <= 0.0 or normalized > 1.0:
+        raise ValueError("RRTTLLU.Return은 0보다 크고 100 이하인 퍼센트 값이어야 합니다.")
+
+    return float(normalized)
+
 def get_benchmark_config(benchmark_key: str) -> Dict[str, Any]:
     config = BENCHMARK_CONFIGS.get(benchmark_key)
     if config is None:
@@ -887,6 +926,17 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
         unique_profile=ips.unique_profile,
         age=ips.age,
         client_context=ips.client_context,
+        target_after_tax_return=(
+            ips.target_after_tax_return
+            if ips.target_after_tax_return is not None
+            else normalize_target_after_tax_return(
+                scenario.rrttllu.get(
+                    "Return",
+                    scenario.rrttllu.get("return_target"),
+                ),
+                percent_input=True,
+            )
+        ),
         risk_profile=ips.risk_profile,
         investment_horizon_years=ips.investment_horizon_years,
         tax_sensitivity=ips.tax_sensitivity,
@@ -2959,39 +3009,130 @@ def apply_unique_constraint(
 
 
 def build_selection_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
-    risk_control = metrics.get("selection_risk_control", {})
-    risk_control_passed = bool(risk_control.get("passed", False))
-    var_loss = safe_float(metrics.get("historical_var_95_daily_loss"))
-    rc_max = safe_float(metrics.get("risk_contribution_max_share"))
-
+    """포트폴리오 A 순위: 공통 필터 통과 후보 중 세후수익률 최대."""
     return (
-        1 if risk_control_passed else 0,
         safe_float(metrics.get("after_tax_return")),
         safe_float(metrics.get("expected_return")),
         safe_float(metrics.get("sharpe_ratio")),
-        -var_loss,
-        -rc_max,
+        -safe_float(metrics.get("historical_var_95_daily_loss")),
+        -safe_float(metrics.get("risk_contribution_max_share")),
         safe_float(metrics.get("mdd")),
     )
 
 
-def build_selection_summary(metrics: Dict[str, Any]) -> Dict[str, Any]:
+def build_portfolio_b_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
+    """목표 달성 후보 중 위험기여도 집중도를 가장 먼저 최소화한다."""
+    return (
+        safe_float(metrics.get("risk_contribution_max_share")),
+        safe_float(metrics.get("historical_var_95_daily_loss")),
+        safe_float(metrics.get("volatility")),
+        -safe_float(metrics.get("after_tax_return")),
+        -safe_float(metrics.get("sharpe_ratio")),
+    )
+
+
+def build_portfolio_b_fallback_rank_tuple(
+    metrics: Dict[str, Any],
+    target_after_tax_return: float,
+) -> Tuple[Any, ...]:
+    """목표 달성 후보가 없으면 목표 부족 폭을 먼저 최소화한다."""
+    after_tax_return = safe_float(metrics.get("after_tax_return"))
+    target_shortfall = max(target_after_tax_return - after_tax_return, 0.0)
+    return (
+        target_shortfall,
+        safe_float(metrics.get("risk_contribution_max_share")),
+        safe_float(metrics.get("historical_var_95_daily_loss")),
+        safe_float(metrics.get("volatility")),
+        -after_tax_return,
+    )
+
+
+def build_selection_summary(
+    metrics: Dict[str, Any],
+    portfolio_type: str = "current",
+    target_after_tax_return: Optional[float] = None,
+) -> Dict[str, Any]:
+    after_tax_return = safe_float(metrics.get("after_tax_return"))
+    risk_control = metrics.get("selection_risk_control", {})
+    checks = risk_control.get("checks", {})
+
+    common_filters = {
+        "suitability": True,
+        "liquidity": True,
+        "historical_var_95": bool(checks.get("historical_var_95", False)),
+        "risk_contribution": bool(checks.get("risk_contribution", False)),
+    }
+
+    if portfolio_type == "A":
+        return {
+            "portfolio_type": "A",
+            "strategy_type": "return_seeking",
+            "ranking_basis": [
+                "after_tax_return_desc",
+                "expected_return_desc",
+                "sharpe_ratio_desc",
+                "historical_var_95_asc",
+                "risk_contribution_max_share_asc",
+            ],
+            "common_filters": common_filters,
+            "risk_control": risk_control,
+            "primary_objective": "after_tax_return_desc",
+            "achieved_after_tax_return": safe_round(after_tax_return, 6),
+            "note": (
+                "고객 적합성·유동성·VaR·위험기여도 제한을 모두 통과한 후보 중 "
+                "예상 세후수익률이 가장 높은 포트폴리오입니다."
+            ),
+        }
+
+    if portfolio_type == "B":
+        target = safe_float(target_after_tax_return)
+        target_shortfall = max(target - after_tax_return, 0.0)
+        target_met = after_tax_return >= target
+        return {
+            "portfolio_type": "B",
+            "strategy_type": "target_return_risk_minimizing",
+            "ranking_basis": (
+                [
+                    "target_after_tax_return_filter",
+                    "risk_contribution_max_share_asc",
+                    "historical_var_95_asc",
+                    "volatility_asc",
+                    "after_tax_return_desc",
+                ]
+                if target_met
+                else [
+                    "target_shortfall_asc",
+                    "risk_contribution_max_share_asc",
+                    "historical_var_95_asc",
+                    "volatility_asc",
+                    "after_tax_return_desc",
+                ]
+            ),
+            "common_filters": common_filters,
+            "risk_control": risk_control,
+            "primary_objective": (
+                "risk_contribution_max_share_asc"
+                if target_met
+                else "target_shortfall_asc"
+            ),
+            "target_after_tax_return": safe_round(target, 6),
+            "achieved_after_tax_return": safe_round(after_tax_return, 6),
+            "target_met": target_met,
+            "target_shortfall": safe_round(target_shortfall, 6),
+            "note": (
+                "IPS 목표 세후수익률을 충족한 후보 중 위험기여도 집중도가 "
+                "가장 낮은 포트폴리오입니다."
+                if target_met
+                else "IPS 목표 세후수익률 달성 후보가 없어 목표 부족 폭이 가장 작고 "
+                "위험기여도 집중도가 낮은 대체 포트폴리오를 선택했습니다."
+            ),
+        }
+
     return {
-        "ranking_basis": SELECTION_RANKING_BASIS,
-        "risk_control": metrics.get("selection_risk_control", {}),
-        "primary_objective": "after_tax_return_desc",
-        "tie_breakers": [
-            "expected_return_desc",
-            "sharpe_ratio_desc",
-            "historical_var_95_asc",
-            "risk_contribution_max_share_asc",
-            "mdd_desc",
-        ],
-        "note": (
-            "8th는 임의 scoring weight 합산식을 쓰지 않고, "
-            "적합성·VaR·ERC 필터를 통과한 후보를 "
-            "세후수익률 중심의 우선순위로 정렬한다."
-        ),
+        "portfolio_type": portfolio_type,
+        "ranking_basis": [],
+        "risk_control": risk_control,
+        "note": "현재 포트폴리오는 추천 후보 선정 대상이 아닙니다.",
     }
 
 
@@ -3034,13 +3175,30 @@ def find_recommended_portfolios(
     request: PortfolioRequest,
     cov_matrix: Optional[pd.DataFrame] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    rng = np.random.default_rng(request.random_seed)
+    """공통 하드필터 후 A는 세후수익률 최대, B는 목표수익률 달성 후 위험 최소."""
+    target_after_tax_return = safe_float(
+        request.target_after_tax_return,
+        default=np.nan,
+    )
+    if not np.isfinite(target_after_tax_return) or target_after_tax_return <= 0:
+        raise ValueError(
+            "포트폴리오 B 선정에 필요한 RRTTLLU.Return 목표 세후수익률이 없습니다."
+        )
 
-    candidates = []
+    rng = np.random.default_rng(request.random_seed)
+    candidates: List[Dict[str, Any]] = []
     generated_count = request.num_simulations
     guideline_pass_count = 0
     suitable_count = 0
+    liquidity_pass_count = 0
     risk_control_pass_count = 0
+    common_filter_pass_count = 0
+    rejection_counts = {
+        "suitability": 0,
+        "liquidity": 0,
+        "historical_var_95": 0,
+        "risk_contribution": 0,
+    }
 
     raw_available_assets = [
         asset for asset in ASSET_TICKERS.keys() if asset in returns.columns
@@ -3058,14 +3216,12 @@ def find_recommended_portfolios(
 
     for _ in range(request.num_simulations):
         base_weights = generate_random_weights(assets=available_assets, rng=rng)
-
         final_weights = apply_unique_constraint(
             base_weights=base_weights,
             total_asset=request.total_asset,
             unique_need_amount=request.unique_need_amount,
             unique_asset=request.unique_asset,
         )
-
         metrics = calculate_metrics(
             weights=final_weights,
             returns=returns,
@@ -3077,79 +3233,154 @@ def find_recommended_portfolios(
         if metrics["risk_level"] is not None:
             guideline_pass_count += 1
 
-        if not is_suitable_for_client(metrics, request.risk_profile):
-            continue
+        suitability_passed = is_suitable_for_client(metrics, request.risk_profile)
+        guideline_detail = evaluate_guideline_detail(metrics, request.risk_profile)
+        liquidity_passed = bool(
+            guideline_detail.get("hard_checks", {}).get("liquidity_coverage", False)
+        )
+        risk_control = metrics.get("selection_risk_control", {})
+        risk_checks = risk_control.get("checks", {})
+        var_passed = bool(risk_checks.get("historical_var_95", False))
+        risk_contribution_passed = bool(
+            risk_checks.get("risk_contribution", False)
+        )
 
-        suitable_count += 1
-        if metrics["selection_risk_control"]["passed"]:
+        if suitability_passed:
+            suitable_count += 1
+        else:
+            rejection_counts["suitability"] += 1
+
+        if liquidity_passed:
+            liquidity_pass_count += 1
+        else:
+            rejection_counts["liquidity"] += 1
+
+        if var_passed:
+            pass
+        else:
+            rejection_counts["historical_var_95"] += 1
+
+        if risk_contribution_passed:
+            pass
+        else:
+            rejection_counts["risk_contribution"] += 1
+
+        if risk_control.get("passed", False):
             risk_control_pass_count += 1
 
-        selection_rank = build_selection_rank_tuple(metrics)
+        common_filter_passed = all(
+            (
+                suitability_passed,
+                liquidity_passed,
+                var_passed,
+                risk_contribution_passed,
+            )
+        )
+        if not common_filter_passed:
+            continue
 
+        common_filter_pass_count += 1
         candidates.append(
             {
                 "weights": final_weights,
                 "metrics": metrics,
-                "selection_rank": selection_rank,
-                "selection_summary": build_selection_summary(metrics),
+                "selection_rank": build_selection_rank_tuple(metrics),
             }
         )
 
-    if len(candidates) == 0:
+    if not candidates:
         raise RuntimeError(
-            "기준표와 고객 위험성향 기준을 통과한 포트폴리오가 없습니다. "
-            "num_simulations를 늘리거나 기준표를 재검토해야 합니다."
+            "고객 적합성·유동성·VaR·위험기여도 제한을 모두 통과한 "
+            "포트폴리오가 없습니다. num_simulations 또는 위험 기준을 검토해야 합니다."
         )
 
-    candidates = sorted(candidates, key=lambda x: x["selection_rank"], reverse=True)
+    candidates = sorted(
+        candidates,
+        key=lambda candidate: candidate["selection_rank"],
+        reverse=True,
+    )
 
+    # 포트폴리오 A: 공통 필터 통과 후보 중 세후수익률 최대.
     recommendation_1 = candidates[0]
-    recommendation_2 = None
+    recommendation_1["selection_summary"] = build_selection_summary(
+        recommendation_1["metrics"],
+        portfolio_type="A",
+        target_after_tax_return=target_after_tax_return,
+    )
+
+    # 포트폴리오 B: A와 다른 후보를 우선 사용한다.
+    portfolio_b_pool = candidates[1:]
+    if not portfolio_b_pool:
+        portfolio_b_pool = [dict(recommendation_1)]
+
+    target_met_candidates = [
+        candidate
+        for candidate in portfolio_b_pool
+        if safe_float(candidate["metrics"].get("after_tax_return"))
+        >= target_after_tax_return
+    ]
+
+    if target_met_candidates:
+        recommendation_2 = min(
+            target_met_candidates,
+            key=lambda candidate: build_portfolio_b_rank_tuple(candidate["metrics"]),
+        )
+        portfolio_b_selection_mode = "target_met_risk_minimization"
+    else:
+        recommendation_2 = min(
+            portfolio_b_pool,
+            key=lambda candidate: build_portfolio_b_fallback_rank_tuple(
+                candidate["metrics"],
+                target_after_tax_return,
+            ),
+        )
+        portfolio_b_selection_mode = "target_shortfall_fallback"
+
+    recommendation_2["selection_summary"] = build_selection_summary(
+        recommendation_2["metrics"],
+        portfolio_type="B",
+        target_after_tax_return=target_after_tax_return,
+    )
+
+    # A/B 상관계수는 선정 조건이 아니라 화면 참고값으로만 제공한다.
     recommendation_1_series = calculate_portfolio_return_series(
         recommendation_1["weights"],
         returns,
     )
-
-    for candidate in candidates[1:]:
-        corr = calculate_portfolio_return_correlation(
-            recommendation_1["weights"],
-            candidate["weights"],
-            returns,
-            series_a=recommendation_1_series,
-        )
-
-        if corr <= SECOND_PORTFOLIO_MAX_CORRELATION:
-            candidate["correlation_with_recommended_1"] = corr
-            recommendation_2 = candidate
-            break
-
-    if recommendation_2 is None:
-        recommendation_2 = candidates[1] if len(candidates) > 1 else candidates[0]
-        recommendation_2["correlation_with_recommended_1"] = calculate_portfolio_return_correlation(
+    recommendation_2["correlation_with_recommended_1"] = (
+        calculate_portfolio_return_correlation(
             recommendation_1["weights"],
             recommendation_2["weights"],
             returns,
             series_a=recommendation_1_series,
         )
+    )
 
     search_summary = {
         "generated_portfolios": generated_count,
         "guideline_pass_portfolios": guideline_pass_count,
         "suitable_portfolios": suitable_count,
+        "liquidity_pass_portfolios": liquidity_pass_count,
         "risk_control_pass_portfolios": risk_control_pass_count,
-        "filtered_out_portfolios": generated_count - suitable_count,
-        "selection_method": "suitability_filter_var_erc_after_tax_ranking",
+        "common_filter_pass_portfolios": common_filter_pass_count,
+        "filtered_out_portfolios": generated_count - common_filter_pass_count,
+        "rejection_counts": rejection_counts,
+        "selection_method": 'portfolio_a_max_after_tax_return_portfolio_b_target_risk_minimization',
+        "portfolio_a_selection_mode": "max_after_tax_return",
+        "portfolio_b_selection_mode": portfolio_b_selection_mode,
+        "target_after_tax_return": safe_round(target_after_tax_return, 6),
         "random_seed": request.random_seed,
         "eligible_assets": available_assets,
-        "excluded_by_horizon": [
-            "separate_tax_bond"
-        ]
-        if "separate_tax_bond" in raw_available_assets
-        and "separate_tax_bond" not in available_assets
-        else [],
+        "excluded_by_horizon": (
+            ["separate_tax_bond"]
+            if "separate_tax_bond" in raw_available_assets
+            and "separate_tax_bond" not in available_assets
+            else []
+        ),
     }
 
     return [recommendation_1, recommendation_2], search_summary
+
 
 # ============================================================
 # 11. 응답 생성
@@ -3348,7 +3579,9 @@ def get_guideline_definition() -> Dict[str, Any]:
             "risk_profile_thresholds": "안정형/균형형/공격형별 변동성, MDD, 자산군 비중 한도는 프로젝트용 수치화 기준",
             "selection_risk_controls": SELECTION_RISK_CONTROLS,
             "selection_ranking_basis": SELECTION_RANKING_BASIS,
-            "second_portfolio_max_correlation": SECOND_PORTFOLIO_MAX_CORRELATION,
+            "portfolio_b_target_source": "RRTTLLU.Return",
+            "portfolio_b_objective": "target_return_then_risk_contribution_minimization",
+            "portfolio_a_b_correlation_usage": "display_only",
             "benchmark_policy": BENCHMARK_POLICY_VERSION,
             "benchmark_policy_note": (
                 "KOSPI, S&P 500, MSCI ACWI 3종을 비교용으로 제공. "
@@ -3555,6 +3788,140 @@ TAX_STRATEGY_META = {
 }
 
 
+def build_tax_strategy_reason(
+    strategy_key: str,
+    raw_reason: Any,
+    card: Dict[str, Any],
+    contribution: float,
+) -> Dict[str, Any]:
+    """내부 부적합 사유를 화면에서 바로 이해할 수 있는 문구로 바꾼다."""
+    raw_text = (
+        str(raw_reason).strip()
+        if raw_reason is not None and str(raw_reason).strip()
+        else None
+    )
+
+    if contribution > 0:
+        return {"reason": None, "reason_code": None, "raw_reason": raw_text}
+
+    if raw_text and "상위 효율 전략 적용 후" in raw_text:
+        return {
+            "reason": (
+                "중복 적용 가능한 과세소득이 앞선 절세 전략에서 모두 사용되어 "
+                "이 전략의 추가 절감액은 0원입니다."
+            ),
+            "reason_code": "shared_tax_base_exhausted",
+            "raw_reason": raw_text,
+        }
+
+    if strategy_key == "isa":
+        if raw_text and "신규 개설 불가" in raw_text:
+            reason = "ISA 신규 개설 적격성 조건을 충족하지 못해 이번 절세안에서 제외했습니다."
+            code = "isa_new_account_ineligible"
+        elif raw_text and "투자기간" in raw_text:
+            reason = (
+                f"{raw_text}. 고객의 투자기간보다 ISA 잔여 의무보유기간이 길어 "
+                "단기 유동성 제약이 발생할 수 있습니다."
+            )
+            code = "isa_lockup_exceeds_horizon"
+        elif raw_text and "적격성·잔여한도" in raw_text:
+            reason = (
+                "ISA 계좌 사용 요건을 충족하지 못했거나 사용 가능한 "
+                "잔여 납입한도가 없어 적용하지 않았습니다."
+            )
+            code = "isa_ineligible_or_no_capacity"
+        else:
+            reason = (
+                "ISA로 이전할 적격 자산 또는 사용 가능한 납입한도가 없어 "
+                "예상 절감액이 없습니다."
+            )
+            code = "isa_no_transferable_amount"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "pension_credit":
+        if raw_text and "투자기간" in raw_text:
+            reason = (
+                f"{raw_text}. 연금 수령 가능 시점 전에 자금이 필요할 수 있어 "
+                "IRP 배치 대상에서 제외했습니다."
+            )
+            code = "pension_lockup_exceeds_horizon"
+        elif raw_text and "산출세액" in raw_text:
+            reason = (
+                "예상 산출세액이 세액공제액보다 작아 IRP 납입액 전부에 대한 "
+                "공제 효과를 적용할 수 없습니다."
+            )
+            code = "insufficient_tax_liability"
+        else:
+            reason = (
+                "IRP 사용 요건을 충족하지 못했거나 당해 연도 세액공제 한도를 "
+                "이미 모두 사용했습니다."
+            )
+            code = "pension_ineligible_or_no_capacity"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "separate_bond":
+        if raw_text and "한계세율" in raw_text:
+            reason = (
+                "고객 한계세율이 분리과세 가정세율보다 높지 않아 "
+                "분리과세 채권의 추가 절세 효과가 없습니다."
+            )
+            code = "marginal_rate_not_high_enough"
+        elif raw_text and "초과분 없음" in raw_text:
+            reason = (
+                "예상 금융소득이 종합과세 기준을 초과하지 않아 "
+                "분리과세 전환으로 줄일 추가 세금이 없습니다."
+            )
+            code = "no_comprehensive_tax_excess"
+        else:
+            reason = (
+                "현재 포트폴리오에서 분리과세 전환 대상이 되는 "
+                "채권 이자소득이 계산되지 않았습니다."
+            )
+            code = "no_eligible_bond_income"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "low_tax_dividend":
+        if raw_text and "초과분 없음" in raw_text:
+            reason = (
+                "예상 금융소득이 종합과세 기준을 초과하지 않아 "
+                "배당소득 조정에 따른 추가 절세 효과가 없습니다."
+            )
+            code = "no_comprehensive_tax_excess"
+        else:
+            reason = (
+                "현재 포트폴리오에 절세 대상으로 계산할 "
+                "배당주·리츠의 예상 배당소득이 없습니다."
+            )
+            code = "no_eligible_dividend_income"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "overseas_exemption":
+        return {
+            "reason": (
+                "해외주식의 예상 가격차익이 없거나 기본공제를 적용할 "
+                "양도차익이 없어 절세액이 계산되지 않았습니다."
+            ),
+            "reason_code": "no_overseas_capital_gain",
+            "raw_reason": raw_text,
+        }
+
+    if strategy_key == "tax_loss":
+        return {
+            "reason": (
+                "상계할 해외주식 양도차익 또는 확정 가능한 해외주식 손실이 없어 "
+                "Tax-loss Harvesting 효과가 없습니다."
+            ),
+            "reason_code": "no_offsettable_gain_or_loss",
+            "raw_reason": raw_text,
+        }
+
+    return {
+        "reason": raw_text or "현재 입력 조건에서는 예상 절세 효과가 없습니다.",
+        "reason_code": "not_applicable",
+        "raw_reason": raw_text,
+    }
+
+
 def build_six_tax_strategy_cards(
     portfolio_response: Dict[str, Any],
     request: PortfolioRequest,
@@ -3614,10 +3981,16 @@ def build_six_tax_strategy_cards(
     for key, meta in TAX_STRATEGY_META.items():
         card = standalone_map.get(key, {})
         contribution = safe_float(contribution_won.get(key))
-        reason = (
+        raw_reason = (
             combined.get("ineligible", {}).get(key)
             or combined.get("exhausted", {}).get(key)
             or card.get("ineligibleReason")
+        )
+        reason_payload = build_tax_strategy_reason(
+            strategy_key=key,
+            raw_reason=raw_reason,
+            card=card,
+            contribution=contribution,
         )
         cards.append(
             {
@@ -3634,7 +4007,9 @@ def build_six_tax_strategy_cards(
                 "transferable_amount": safe_round(
                     safe_float(card.get("transferableManwon")) * 10_000, 0
                 ),
-                "reason": reason,
+                "reason": reason_payload["reason"],
+                "reason_code": reason_payload["reason_code"],
+                "raw_reason": reason_payload["raw_reason"],
             }
         )
 
@@ -3933,6 +4308,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "unique_profile": request.unique_profile,
             "age": request.age,
             "client_context": request.client_context,
+            "target_after_tax_return": request.target_after_tax_return,
             "analysis_scope": request.client_context.get(
                 "calculation_scope",
                 "개인 투자포트폴리오 계산",
@@ -4021,7 +4397,12 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             ),
             "optimization_basis": "Mean-Variance 기반: 실제 가격 데이터의 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",
             "risk_classification": "변동성, MDD, 유동성 커버리지, 자산구성비중을 hard filter로 사용.",
-            "selection_logic": "임의 점수 가중치 없이 적합성, VaR, ERC 통과 후보를 세후수익률 중심으로 정렬.",
+            "selection_logic": (
+                "고객 적합성·유동성·95% Historical VaR·위험기여도 집중도 제한을 "
+                "모두 통과한 후보만 추천 대상으로 사용합니다. 포트폴리오 A는 세후수익률 "
+                "최대, 포트폴리오 B는 IPS 목표 세후수익률 달성 후 위험집중도 최소를 "
+                "목적으로 선정합니다."
+            ),
             "duration_logic": "듀레이션은 채권형 자산에만 적용하고 ETF proxy 기준 수치를 사용.",
             "suitability_filter": "포트폴리오 위험등급이 고객 위험성향 이하인 경우만 추천.",
             "liquidity_metric": "현금+일반채/저쿠폰채/분리과세채 금액에서 ISA 의무기간 잠김 금액을 제외한 값 / 단기 필요금액.",
@@ -4031,8 +4412,10 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
                 "가격차익은 간이 분리하여 중복 과세를 피함."
             ),
             "second_portfolio_logic": (
-                "포트폴리오 B는 포트폴리오 A와 수익률 상관계수 "
-                f"{SECOND_PORTFOLIO_MAX_CORRELATION} 이하인 후보 중 우선순위가 높은 후보."
+                "포트폴리오 B는 RRTTLLU.Return을 목표 세후수익률로 사용합니다. "
+                "목표를 충족한 후보 중 위험기여도 최대 집중도가 가장 낮은 후보를 선택하고, "
+                "목표 달성 후보가 없으면 목표 부족 폭이 가장 작은 후보를 선택합니다. "
+                "포트폴리오 A와의 상관계수는 선정 조건이 아니라 화면 참고값으로만 제공합니다."
             ),
             "stress_test_logic": "금리 충격은 채권형 자산에만 -듀레이션×금리변화를 적용.",
             "var_erc_logic": "95% historical VaR와 공분산 기반 위험기여도 집중도를 리스크 관리에 반영.",
@@ -4935,6 +5318,10 @@ def normalize_analysis_request_payload(
             "unique_profile": unique_profile,
             "age": extract_optional_age(payload),
             "client_context": unique_profile.get("client_context", {}),
+            "target_after_tax_return": normalize_target_after_tax_return(
+                flat_ips.get("Return"),
+                percent_input=True,
+            ),
             "risk_profile": normalize_risk_profile_value(flat_ips.get("Risk")),
             "investment_horizon_years": investment_horizon,
             "tax_sensitivity": normalize_tax_sensitivity_value(flat_ips.get("Tax")),
