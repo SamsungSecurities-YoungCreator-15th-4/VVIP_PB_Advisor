@@ -170,13 +170,6 @@ export default function InsightSection() {
         </div>
       </div>
 
-      {/* IPS 반영하기 버튼 — 항상 최하단 */}
-      <Button
-        size="lg"
-        className="mt-3 w-full shrink-0 rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
-      >
-        IPS 반영하기
-      </Button>
     </Card>
   );
 }

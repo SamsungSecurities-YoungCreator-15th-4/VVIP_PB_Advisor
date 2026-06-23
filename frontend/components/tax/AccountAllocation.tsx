@@ -44,7 +44,8 @@ function buildFromSlots(slots: AccountSlot[]) {
       const key = s.key;
       const meta = ACCOUNT_META[key] ?? { name: key };
       const ref = REFERENCE_MAN[key] ?? s.limitManwon ?? 1000;
-      const used = s.usedManwon !== null ? s.usedManwon : Math.round(ref * 0.45);
+      const used =
+        s.usedManwon !== null ? s.usedManwon : Math.round(ref * 0.45);
       return { name: meta.name, used, reference: ref };
     });
 }
@@ -53,7 +54,11 @@ const xFmt = (v: number) =>
   v === 0 ? "0" : v >= 1000 ? `${v / 1000}천만` : `${v}만`;
 
 /** ② 절세 계좌 배치 활용도 — 포트폴리오 구성 세그먼트 바 + ISA / 연금저축+IRP 바 차트 */
-export default function AccountAllocation({ accounts }: { accounts?: AccountSlot[] }) {
+export default function AccountAllocation({
+  accounts,
+}: {
+  accounts?: AccountSlot[];
+}) {
   const { selectedPortfolioId } = useDashboardStore();
   const portfolio =
     PORTFOLIOS.find((p) => p.id === selectedPortfolioId) ?? PORTFOLIOS[1];
@@ -69,9 +74,6 @@ export default function AccountAllocation({ accounts }: { accounts?: AccountSlot
   return (
     <div>
       <p className="mb-2 flex items-center gap-1.5 text-[12px] font-extrabold">
-        <span className="flex size-4 items-center justify-center rounded-full bg-brand/10 text-[10px] text-brand-dark">
-          2
-        </span>
         절세 계좌 배치 활용도
       </p>
 
@@ -200,7 +202,10 @@ export default function AccountAllocation({ accounts }: { accounts?: AccountSlot
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
-      <span className="size-2 rounded-[3px]" style={{ backgroundColor: color }} />
+      <span
+        className="size-2 rounded-[3px]"
+        style={{ backgroundColor: color }}
+      />
       {label}
     </span>
   );

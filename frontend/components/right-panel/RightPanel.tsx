@@ -1,6 +1,7 @@
 "use client";
 
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import InsightSection from "@/components/right-panel/InsightSection";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
 
@@ -36,6 +37,13 @@ export default function RightPanel() {
       </div>
 
       <InsightSection />
+
+      <Button
+        size="lg"
+        className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
+      >
+        IPS 반영하기
+      </Button>
     </div>
   );
 }

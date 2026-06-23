@@ -18,9 +18,12 @@ const TAX_COLORS = ["#F04452", "#F4A8AE", "transparent"];
  * ① 세금 흐름 비교 — 기존 자산 / 포트폴리오 전환 / + 절세 제안을
  * 가로 누적 바로 비교한다. afterTaxManwon·taxManwon 기준.
  */
-export default function TaxWaterfall({ portfolioName }: { portfolioName?: string }) {
-  const { rows, pretaxLabel, totalLabel, totalSavingManwon } =
-    TAX_EFFECT.flow;
+export default function TaxWaterfall({
+  portfolioName,
+}: {
+  portfolioName?: string;
+}) {
+  const { rows, pretaxLabel, totalLabel, totalSavingManwon } = TAX_EFFECT.flow;
 
   const data = rows.map((r, i) => ({
     name: i === 1 && portfolioName ? portfolioName : r.label,
@@ -31,12 +34,9 @@ export default function TaxWaterfall({ portfolioName }: { portfolioName?: string
   return (
     <div>
       <p className="mb-2 flex items-center gap-1.5 text-[12px] font-extrabold">
-        <span className="flex size-4 items-center justify-center rounded-full bg-brand/10 text-[10px] text-brand-dark">
-          1
-        </span>
         세금 흐름 비교
         <span className="text-[12px] font-semibold text-muted-foreground">
-          · {pretaxLabel}
+          {pretaxLabel}
         </span>
       </p>
       <div className="h-30">
@@ -107,7 +107,10 @@ export default function TaxWaterfall({ portfolioName }: { portfolioName?: string
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
-      <span className="size-2 rounded-[3px]" style={{ backgroundColor: color }} />
+      <span
+        className="size-2 rounded-[3px]"
+        style={{ backgroundColor: color }}
+      />
       {label}
     </span>
   );
