@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -36,55 +37,47 @@ VOL_STRESS_CAP = 1.6
 # PR #65 재현성 원칙: 모든 RNG 경로는 동일한 기본 시드를 사용한다.
 DEFAULT_RANDOM_SEED = 42
 
-# 모든 포트폴리오에 동일하게 적용하는 글로벌 주식시장 벤치마크.
-# 공식 MSCI 지수 원시계열이 아니라 iShares MSCI ACWI ETF(ACWI)의 가격수익률을
-# MSCI ACWI 시장수익률의 대용치로 사용한다. 추천 자산군에는 포함하지 않는다.
-BENCHMARK_POLICY_VERSION = "fixed-msci-acwi-etf-proxy-v1"
-BENCHMARK_SERIES_KEY = "_benchmark_msci_acwi"
-BENCHMARK_TICKER = "ACWI"
-BENCHMARK_LABEL = "MSCI ACWI (ACWI ETF proxy)"
+# 벤치마크는 추천 자산군이 아니라 최종 결과 비교용 데이터다.
+# PB는 KOSPI, S&P 500, MSCI ACWI 중 하나를 표시 기준으로 선택할 수 있다.
+BenchmarkKey = Literal["kospi", "sp500", "msci_acwi"]
 
-# PB가 선택 가능한 벤치마크 3종.
-# kospi·sp500은 ASSET_TICKERS에 이미 포함된 시리즈를 재사용하므로 추가 다운로드 없음.
-# acwi만 ASSET_TICKERS 외부 티커를 추가 다운로드한다.
-BenchmarkChoice = Literal["kospi", "sp500", "acwi"]
+DEFAULT_BENCHMARK_KEY: BenchmarkKey = "msci_acwi"
+BENCHMARK_POLICY_VERSION = "pb-selectable-display-only-v1"
 
-AVAILABLE_BENCHMARKS: Dict[str, Dict[str, Any]] = {
+BENCHMARK_CONFIGS: Dict[str, Dict[str, Any]] = {
     "kospi": {
-        "series_key": "domestic_equity",
-        "needs_extra_ticker": False,
+        "series_key": "_benchmark_kospi",
         "ticker": "^KS11",
-        "label": "KOSPI (^KS11)",
-        "policy": "asset-column-kospi-proxy-v1",
-        "proxy_note": "domestic_equity 자산군(^KS11)의 일간 수익률을 코스피 벤치마크로 사용합니다.",
-        "mode": "kospi_proxy",
+        "label": "KOSPI",
+        "official_index_series": True,
+        "proxy_note": None,
     },
     "sp500": {
-        "series_key": "overseas_blue_chip",
-        "needs_extra_ticker": False,
-        "ticker": "SPY",
-        "label": "S&P 500 (SPY ETF proxy)",
-        "policy": "asset-column-sp500-spy-proxy-v1",
-        "proxy_note": "overseas_blue_chip 자산군(SPY)의 일간 수익률을 S&P 500 벤치마크로 사용합니다.",  # noqa: E501
-        "mode": "sp500_proxy",
+        "series_key": "_benchmark_sp500",
+        "ticker": "^GSPC",
+        "label": "S&P 500",
+        "official_index_series": True,
+        "proxy_note": None,
     },
-    "acwi": {
-        "series_key": BENCHMARK_SERIES_KEY,
-        "needs_extra_ticker": True,
-        "ticker": BENCHMARK_TICKER,
-        "label": BENCHMARK_LABEL,
-        "policy": BENCHMARK_POLICY_VERSION,
+    "msci_acwi": {
+        "series_key": "_benchmark_msci_acwi",
+        "ticker": "ACWI",
+        "label": "MSCI ACWI (ACWI ETF proxy)",
+        "official_index_series": False,
         "proxy_note": (
-            "iShares MSCI ACWI ETF(ACWI)의 가격수익률을 글로벌 주식시장 "
-            "벤치마크 대용치로 사용합니다."
+            "공식 MSCI 지수 원시계열이 아니라 iShares MSCI ACWI ETF(ACWI)의 "
+            "가격수익률을 글로벌 시장 대용치로 사용합니다."
         ),
-        "mode": "msci_acwi_proxy",
     },
+}
+
+BENCHMARK_SERIES_KEYS = {
+    config["series_key"] for config in BENCHMARK_CONFIGS.values()
 }
 PENSION_RECEIVE_AGE = 55
 
 # 기준 금리와 시나리오 금리는 분리한다.
-# 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.  # noqa: E501
+# 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.
 # 프로젝트용 가정: 기준 무위험이자율은 미국 기준 3.5%를 기본값으로 사용한다.
 DEFAULT_RISK_FREE_RATE = 0.035
 DEFAULT_CASH_RETURN = 0.025
@@ -252,9 +245,8 @@ TAX_RULE_TABLE.update(
     }
 )
 
-# 추천 B 선별 기준
-# 검증된 사실: 상관계수가 낮을수록 분산효과가 커질 수 있음.
-# 프로젝트용 가정: 추천 A와 B가 너무 비슷하지 않도록 0.95 이하를 기준으로 둠.
+# 하위호환용 상관계수 기준값.
+# 포트폴리오 A/B 선정에는 사용하지 않고 화면 참고값 계산만 유지한다.
 SECOND_PORTFOLIO_MAX_CORRELATION = 0.95
 
 
@@ -415,7 +407,7 @@ RISK_LEVEL_NAME = {
 # 2. 기준표 및 리스크 관리 기준
 # ============================================================
 # 검증된 사실:
-# - 투자위험 판단에는 변동성, 최대 손실 가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등이 고려될 수 있음.  # noqa: E501
+# - 투자위험 판단에는 변동성, 최대 손실 가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등이 고려될 수 있음.
 # - 투자자 성향보다 높은 위험도의 상품 권유는 제한됨.
 # - 금융소득 2,000만 원, ISA 3년, 해외주식 양도차익 250만 원 공제 등은 세법/제도상 기본 기준.
 #
@@ -494,13 +486,12 @@ SELECTION_RISK_CONTROLS = {
 }
 
 SELECTION_RANKING_BASIS = [
-    "suitability_filter",
-    "historical_var_95_filter",
-    "risk_contribution_filter",
-    "after_tax_return_desc",
-    "expected_return_desc",
-    "historical_var_95_asc",
-    "risk_contribution_max_share_asc",
+    "common_suitability_filter",
+    "common_liquidity_filter",
+    "common_historical_var_95_filter",
+    "common_risk_contribution_filter",
+    "portfolio_a_after_tax_return_desc",
+    "portfolio_b_target_return_then_risk_contribution_asc",
 ]
 
 
@@ -521,6 +512,8 @@ class IPSRequest(BaseModel):
     unique_profile: Dict[str, Any] = Field(default_factory=dict)
     age: Optional[int] = Field(None, ge=0, le=120)
     client_context: Dict[str, Any] = Field(default_factory=dict)
+    # RRTTLLU.Return은 퍼센트 단위다. 예: 8.0 -> 내부 비교값 0.08
+    target_after_tax_return: Optional[float] = Field(None, gt=0.0, le=1.0)
 
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(..., ge=1, le=50)
@@ -532,6 +525,7 @@ class IPSRequest(BaseModel):
     risk_free_rate: float = Field(DEFAULT_RISK_FREE_RATE)
     cash_return: float = Field(DEFAULT_CASH_RETURN)
     period: str = Field("5y")
+    benchmark_key: BenchmarkKey = Field(DEFAULT_BENCHMARK_KEY)
 
     num_simulations: int = Field(5000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
@@ -644,6 +638,8 @@ class PortfolioRequest(BaseModel):
     unique_profile: Dict[str, Any] = Field(default_factory=dict)
     age: Optional[int] = Field(None, ge=0, le=120)
     client_context: Dict[str, Any] = Field(default_factory=dict)
+    # RRTTLLU.Return은 퍼센트 단위다. 예: 8.0 -> 내부 비교값 0.08
+    target_after_tax_return: Optional[float] = Field(None, gt=0.0, le=1.0)
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(10, ge=1, le=50)
     tax_sensitivity: Literal["low", "medium", "high"] = Field("medium")
@@ -653,6 +649,7 @@ class PortfolioRequest(BaseModel):
     risk_free_rate: float = Field(DEFAULT_RISK_FREE_RATE)
     cash_return: float = Field(DEFAULT_CASH_RETURN)
     period: str = Field("5y")
+    benchmark_key: BenchmarkKey = Field(DEFAULT_BENCHMARK_KEY)
     num_simulations: int = Field(5000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
     random_seed: int = Field(DEFAULT_RANDOM_SEED, ge=0)
@@ -709,8 +706,6 @@ class PortfolioRequest(BaseModel):
     )
     irp_years_until_access: float = Field(0.0, ge=0, le=80)
 
-    benchmark: BenchmarkChoice = Field("acwi", description="벤치마크 선택: kospi·sp500·acwi")
-
 
 # ============================================================
 # 4. 기본 유틸
@@ -757,7 +752,7 @@ def canonicalize_asset_return_map(
 def validate_unique_asset(unique_asset: str) -> str:
     canonical = canonicalize_asset_key(unique_asset)
     if canonical not in UNIQUE_ASSETS:
-        raise ValueError(f"unique_asset은 {UNIQUE_ASSETS} 중 하나여야 합니다. 입력값: {unique_asset}")  # noqa: E501
+        raise ValueError(f"unique_asset은 {UNIQUE_ASSETS} 중 하나여야 합니다. 입력값: {unique_asset}")
     return canonical
 
 
@@ -820,6 +815,82 @@ def safe_round(value: Any, digits: int = 6) -> float:
     return round(safe_float(value), digits)
 
 
+def normalize_target_after_tax_return(
+    value: Any,
+    *,
+    percent_input: bool,
+) -> Optional[float]:
+    """IPS/RRTTLLU 목표수익률을 내부 소수 단위로 정규화한다.
+
+    RRTTLLU.Return과 상담 IPS Return은 퍼센트 단위다.
+    예: 8, 8.0, "8%", {"value": 8.0} -> 0.08
+    """
+    if isinstance(value, dict):
+        for key in ("value", "Return", "return_target", "target"):
+            if key in value:
+                value = value.get(key)
+                break
+
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, str):
+        match = re.search(r"-?[0-9]+(?:\.[0-9]+)?", value.replace(",", ""))
+        if match is None:
+            raise ValueError("RRTTLLU.Return을 목표 세후수익률 숫자로 해석할 수 없습니다.")
+        number = safe_float(match.group(0), default=np.nan)
+    else:
+        number = safe_float(value, default=np.nan)
+
+    if not np.isfinite(number):
+        raise ValueError("RRTTLLU.Return을 목표 세후수익률 숫자로 해석할 수 없습니다.")
+
+    normalized = number / 100.0 if percent_input else number
+    if normalized <= 0.0 or normalized > 1.0:
+        raise ValueError("RRTTLLU.Return은 0보다 크고 100 이하인 퍼센트 값이어야 합니다.")
+
+    return float(normalized)
+
+def get_benchmark_config(benchmark_key: str) -> Dict[str, Any]:
+    config = BENCHMARK_CONFIGS.get(benchmark_key)
+    if config is None:
+        raise ValueError(
+            f"benchmark_key는 {list(BENCHMARK_CONFIGS.keys())} 중 하나여야 합니다. "
+            f"입력값: {benchmark_key}"
+        )
+    return config
+
+
+def get_benchmark_catalog() -> Dict[str, Any]:
+    return {
+        "policy": BENCHMARK_POLICY_VERSION,
+        "default_key": DEFAULT_BENCHMARK_KEY,
+        "selection_scope": ["beta", "backtest_chart"],
+        "affects_portfolio_recommendation": False,
+        "options": {
+            key: {
+                "key": key,
+                "ticker": config["ticker"],
+                "label": config["label"],
+                "official_index_series": config["official_index_series"],
+                "proxy_note": config["proxy_note"],
+            }
+            for key, config in BENCHMARK_CONFIGS.items()
+        },
+    }
+
+
+def attach_benchmark_returns(
+    investable_returns: pd.DataFrame,
+    benchmark_returns: pd.DataFrame,
+) -> pd.DataFrame:
+    combined = investable_returns.copy()
+    for column in benchmark_returns.columns:
+        combined[column] = benchmark_returns[column].reindex(combined.index)
+    combined.attrs.update(investable_returns.attrs)
+    return combined
+
+
 def save_session_request(session_id: str, payload: Dict[str, Any]) -> None:
     SESSION_REQUEST_STORE[session_id] = payload
     while len(SESSION_REQUEST_STORE) > MAX_SESSION_REQUEST_STORE_SIZE:
@@ -855,6 +926,17 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
         unique_profile=ips.unique_profile,
         age=ips.age,
         client_context=ips.client_context,
+        target_after_tax_return=(
+            ips.target_after_tax_return
+            if ips.target_after_tax_return is not None
+            else normalize_target_after_tax_return(
+                scenario.rrttllu.get(
+                    "Return",
+                    scenario.rrttllu.get("return_target"),
+                ),
+                percent_input=True,
+            )
+        ),
         risk_profile=ips.risk_profile,
         investment_horizon_years=ips.investment_horizon_years,
         tax_sensitivity=ips.tax_sensitivity,
@@ -865,6 +947,7 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
         risk_free_rate=ips.risk_free_rate,
         cash_return=ips.cash_return,
         period=ips.period,
+        benchmark_key=ips.benchmark_key,
         num_simulations=ips.num_simulations,
         expected_return_haircut=ips.expected_return_haircut,
         random_seed=ips.random_seed,
@@ -912,26 +995,160 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
 # ============================================================
 
 
-def download_price_data(
-    period: str,
-    cash_return: float,
-    benchmark_choice: BenchmarkChoice = "acwi",
-) -> pd.DataFrame:
-    """추천·지표 계산용 실제 가격 데이터.
+def _empty_benchmark_snapshot(reason: str) -> Dict[str, Any]:
+    return {
+        "policy": BENCHMARK_POLICY_VERSION,
+        "default_key": DEFAULT_BENCHMARK_KEY,
+        "affects_portfolio_recommendation": False,
+        "options": {
+            key: {
+                "key": key,
+                "ticker": config["ticker"],
+                "label": config["label"],
+                "official_index_series": config["official_index_series"],
+                "proxy_note": config["proxy_note"],
+                "available": False,
+                "reason": reason,
+                "data_start": None,
+                "data_end": None,
+                "observations": 0,
+            }
+            for key, config in BENCHMARK_CONFIGS.items()
+        },
+    }
 
-    이 함수는 신규 상장 자산의 과거 구간을 현금으로 채우지 않는다.
-    모든 자산이 실제 가격을 가진 공통 구간만 사용해 기대수익률, 공분산,
-    변동성, MDD, VaR, 추천 포트폴리오를 계산한다.
+
+def download_benchmark_returns(
+    period: str,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """비교용 벤치마크 수익률을 투자자산 데이터와 별도로 조회한다.
+
+    이 함수의 결과는 베타와 비교 차트에만 사용한다.
+    추천 후보 생성, 기대수익률, 공분산, VaR, ERC, 순위에는 전달하지 않는다.
     """
-    bm_config = AVAILABLE_BENCHMARKS.get(benchmark_choice, AVAILABLE_BENCHMARKS["acwi"])
-    tickers = {asset: ticker for asset, ticker in ASSET_TICKERS.items() if ticker != "CASH"}
-    if bm_config["needs_extra_ticker"]:
-        download_tickers = list(dict.fromkeys([*tickers.values(), bm_config["ticker"]]))
+    tickers = [config["ticker"] for config in BENCHMARK_CONFIGS.values()]
+
+    try:
+        raw = yf.download(
+            tickers,
+            period=period,
+            auto_adjust=True,
+            progress=False,
+            group_by="column",
+            threads=True,
+        )
+    except Exception:
+        logger.warning("벤치마크 시세 조회 실패", exc_info=True)
+        return pd.DataFrame(), _empty_benchmark_snapshot("download_failed")
+
+    if raw.empty:
+        return pd.DataFrame(), _empty_benchmark_snapshot("download_empty")
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        if "Close" not in raw.columns.get_level_values(0):
+            return pd.DataFrame(), _empty_benchmark_snapshot("close_price_missing")
+        close = raw["Close"].copy()
     else:
-        download_tickers = list(dict.fromkeys(tickers.values()))
+        if "Close" not in raw.columns:
+            return pd.DataFrame(), _empty_benchmark_snapshot("close_price_missing")
+        close = raw[["Close"]].copy()
+        if len(tickers) == 1:
+            close.columns = tickers
+
+    if isinstance(close, pd.Series):
+        close = close.to_frame(name=tickers[0])
+
+    close = close.dropna(how="all").sort_index()
+
+    series_map: Dict[str, pd.Series] = {}
+    option_meta: Dict[str, Any] = {}
+
+    for key, config in BENCHMARK_CONFIGS.items():
+        ticker = config["ticker"]
+        base_meta = {
+            "key": key,
+            "ticker": ticker,
+            "label": config["label"],
+            "official_index_series": config["official_index_series"],
+            "proxy_note": config["proxy_note"],
+        }
+
+        if ticker not in close.columns:
+            option_meta[key] = {
+                **base_meta,
+                "available": False,
+                "reason": "benchmark_data_missing",
+                "data_start": None,
+                "data_end": None,
+                "observations": 0,
+            }
+            continue
+
+        price_series = (
+            close[ticker]
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
+        benchmark_return = (
+            price_series
+            .pct_change(fill_method=None)
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
+
+        if benchmark_return.empty:
+            option_meta[key] = {
+                **base_meta,
+                "available": False,
+                "reason": "benchmark_data_empty",
+                "data_start": None,
+                "data_end": None,
+                "observations": 0,
+            }
+            continue
+
+        series_key = config["series_key"]
+        benchmark_return.name = series_key
+        series_map[series_key] = benchmark_return
+
+        option_meta[key] = {
+            **base_meta,
+            "series_key": series_key,
+            "available": True,
+            "reason": None,
+            "data_start": benchmark_return.index[0].strftime("%Y-%m-%d"),
+            "data_end": benchmark_return.index[-1].strftime("%Y-%m-%d"),
+            "observations": int(len(benchmark_return)),
+        }
+
+    benchmark_frame = (
+        pd.concat(series_map.values(), axis=1)
+        if series_map
+        else pd.DataFrame()
+    )
+
+    snapshot = {
+        "policy": BENCHMARK_POLICY_VERSION,
+        "default_key": DEFAULT_BENCHMARK_KEY,
+        "affects_portfolio_recommendation": False,
+        "options": option_meta,
+    }
+    return benchmark_frame, snapshot
+
+def download_price_data(period: str, cash_return: float) -> pd.DataFrame:
+    """추천·지표 계산용 투자자산 가격 데이터.
+
+    벤치마크는 이 함수에서 조회하지 않는다. 따라서 벤치마크의 결측치,
+    상장 이력, 데이터 시작일은 추천 포트폴리오에 영향을 주지 않는다.
+    """
+    tickers = {
+        asset: ticker
+        for asset, ticker in ASSET_TICKERS.items()
+        if ticker != "CASH"
+    }
 
     raw = yf.download(
-        download_tickers,
+        list(tickers.values()),
         period=period,
         auto_adjust=True,
         progress=False,
@@ -950,15 +1167,15 @@ def download_price_data(
         prices = raw[["Close"]].copy()
 
     reverse_map = {ticker: asset for asset, ticker in tickers.items()}
-    if bm_config["needs_extra_ticker"]:
-        reverse_map[bm_config["ticker"]] = bm_config["series_key"]
     prices = prices.rename(columns=reverse_map)
     prices = prices.dropna(how="all").sort_index()
 
     available_assets = [
         asset
         for asset in ASSET_TICKERS.keys()
-        if asset != "cash" and asset in prices.columns and prices[asset].notna().any()
+        if asset != "cash"
+        and asset in prices.columns
+        and prices[asset].notna().any()
     ]
     excluded_assets = [
         asset
@@ -969,44 +1186,48 @@ def download_price_data(
     if excluded_assets:
         raise RuntimeError(
             "확정 자산군 중 가격 데이터를 가져오지 못한 자산이 있습니다. "
-            f"excluded_assets={excluded_assets}. 티커, 상장일, yfinance 다운로드 상태를 확인해 주세요."  # noqa: E501
+            f"excluded_assets={excluded_assets}. "
+            "티커, 상장일, yfinance 다운로드 상태를 확인해 주세요."
         )
 
-    first_valid_dates = {asset: prices[asset].first_valid_index() for asset in available_assets}
+    first_valid_dates = {
+        asset: prices[asset].first_valid_index()
+        for asset in available_assets
+    }
     common_start = max(first_valid_dates.values())
     limiting_assets = [
-        asset for asset, start_date in first_valid_dates.items() if start_date == common_start
+        asset
+        for asset, start_date in first_valid_dates.items()
+        if start_date == common_start
     ]
 
-    # 추천·위험지표·기대수익률은 실제 가격 데이터만 사용한다.
-    # 신규 상장 자산의 과거 구간을 현금으로 채우지 않고, 모든 자산이 실제 가격을 가진 공통 구간만 사용한다.  # noqa: E501
-    bm_series_key = bm_config["series_key"]
-    benchmark_available = (
-        bm_series_key in prices.columns
-        and prices[bm_series_key].notna().any()
+    common_prices = (
+        prices.loc[common_start:, available_assets]
+        .ffill()
+        .dropna(how="any")
     )
-    common_columns = list(available_assets)
-    if benchmark_available and bm_config["needs_extra_ticker"]:
-        # kospi/sp500은 asset 컬럼으로 이미 common_columns에 포함됨
-        common_columns.append(bm_series_key)
-    common_prices = prices.loc[common_start:, common_columns].ffill().dropna(how="any")
 
     if len(common_prices) < MIN_COMMON_PRICE_OBSERVATIONS:
         raise RuntimeError(
             "공통 실제 가격 데이터 구간이 너무 짧습니다. "
-            f"observations={len(common_prices)}, min_required={MIN_COMMON_PRICE_OBSERVATIONS}, "
+            f"observations={len(common_prices)}, "
+            f"min_required={MIN_COMMON_PRICE_OBSERVATIONS}, "
             f"common_start={common_start.date() if common_start is not None else None}, "
-            f"limiting_assets={limiting_assets}. 최근 상장 ETF proxy를 더 긴 이력 proxy로 바꾸는지 검토해 주세요."  # noqa: E501
+            f"limiting_assets={limiting_assets}. "
+            "최근 상장 ETF proxy를 더 긴 이력 proxy로 바꾸는지 검토해 주세요."
         )
 
     daily_cash_return = (1 + cash_return) ** (1 / TRADING_DAYS) - 1
-    common_prices["cash"] = (1 + daily_cash_return) ** np.arange(len(common_prices))
+    common_prices["cash"] = (
+        (1 + daily_cash_return) ** np.arange(len(common_prices))
+    )
 
-    ordered_assets = [asset for asset in ASSET_TICKERS.keys() if asset in common_prices.columns]
-    ordered_columns = list(ordered_assets)
-    if bm_config["needs_extra_ticker"] and bm_series_key in common_prices.columns:
-        ordered_columns.append(bm_series_key)
-    common_prices = common_prices[ordered_columns]
+    ordered_assets = [
+        asset
+        for asset in ASSET_TICKERS.keys()
+        if asset in common_prices.columns
+    ]
+    common_prices = common_prices[ordered_assets]
 
     common_prices.attrs["data_snapshot"] = {
         "period_requested": period,
@@ -1016,22 +1237,16 @@ def download_price_data(
         "observations": int(len(common_prices)),
         "available_assets": ordered_assets,
         "excluded_assets": excluded_assets,
-        "benchmark": {
-            "choice": benchmark_choice,
-            "policy": bm_config["policy"],
-            "ticker": bm_config["ticker"],
-            "label": bm_config["label"],
-            "available": benchmark_available,
-            "official_index_series": False,
-        },
         "first_valid_dates": {
-            asset: date.strftime("%Y-%m-%d") for asset, date in first_valid_dates.items()
+            asset: date.strftime("%Y-%m-%d")
+            for asset, date in first_valid_dates.items()
         },
         "limiting_assets": limiting_assets,
-        "usage": "metrics_and_recommendation_actual_data_only",
+        "usage": "metrics_and_recommendation_investable_assets_only",
+        "benchmark_included": False,
         "note": (
-            "추천·기대수익률·위험지표 계산용 데이터. 전체 자산의 공통 실제 가격 구간만 사용하며, "
-            "신규 상장 자산의 과거 구간을 현금으로 대체하지 않음."
+            "추천·기대수익률·공분산·위험지표 계산용 데이터. "
+            "벤치마크는 포함하지 않으며, 전체 투자자산의 공통 실제 가격 구간만 사용."
         ),
     }
 
@@ -1041,29 +1256,21 @@ def download_price_data(
 def download_backtest_price_data(
     period: str,
     cash_return: float,
-    benchmark_choice: BenchmarkChoice = "acwi",
 ) -> pd.DataFrame:
-    """백테스트 차트 전용 5년 가격 데이터.
+    """백테스트 차트 전용 투자자산 5년 가격 데이터.
 
-    과제 조건상 백테스트 차트는 무조건 5년 구간을 유지한다.
-    단, 신규 상장 또는 데이터 시작 전 구간은 추천·지표 계산에 쓰지 않고,
-    백테스트 차트에서만 현금 수익률로 대체한다.
+    벤치마크는 별도 함수에서 조회하고 이 결과에는 포함하지 않는다.
     """
     period = "5y"
-    bm_config = AVAILABLE_BENCHMARKS.get(benchmark_choice, AVAILABLE_BENCHMARKS["acwi"])
 
     tickers = {
         asset: ticker
         for asset, ticker in ASSET_TICKERS.items()
         if ticker != "CASH"
     }
-    if bm_config["needs_extra_ticker"]:
-        download_tickers = list(dict.fromkeys([*tickers.values(), bm_config["ticker"]]))
-    else:
-        download_tickers = list(dict.fromkeys(tickers.values()))
 
     raw = yf.download(
-        download_tickers,
+        list(tickers.values()),
         period=period,
         auto_adjust=True,
         progress=False,
@@ -1082,8 +1289,6 @@ def download_backtest_price_data(
         prices = raw[["Close"]].copy()
 
     reverse_map = {ticker: asset for asset, ticker in tickers.items()}
-    if bm_config["needs_extra_ticker"]:
-        reverse_map[bm_config["ticker"]] = bm_config["series_key"]
     prices = prices.rename(columns=reverse_map)
     prices = prices.dropna(how="all").sort_index()
 
@@ -1116,22 +1321,23 @@ def download_backtest_price_data(
         first_valid_dates[asset] = first_valid_date
         first_pos = base_index.get_loc(first_valid_date)
 
-        # 백테스트 차트 전용 처리: 신규 상장/데이터 시작 전 구간만 현금 수익률로 대체한다.
-        # 첫 실제 가격일에 가격 점프가 생기지 않도록 첫 실제 가격에서 현금 수익률만큼 역산한다.
         if first_pos > 0:
             first_real_price = float(series.loc[first_valid_date])
             reverse_steps = np.arange(first_pos, 0, -1)
             pre_listing_values = first_real_price / (
                 (1 + daily_cash_return) ** reverse_steps
             )
-
             series.iloc[:first_pos] = pre_listing_values
 
             cash_substituted_assets[asset] = {
                 "substituted_from": base_index[0].strftime("%Y-%m-%d"),
-                "substituted_until": base_index[first_pos - 1].strftime("%Y-%m-%d"),
+                "substituted_until": base_index[first_pos - 1].strftime(
+                    "%Y-%m-%d"
+                ),
                 "first_real_price_date": first_valid_date.strftime("%Y-%m-%d"),
-                "method": "backtest_only_pre_listing_period_replaced_with_cash_return",
+                "method": (
+                    "backtest_only_pre_listing_period_replaced_with_cash_return"
+                ),
             }
 
         backtest_prices[asset] = series.ffill()
@@ -1139,28 +1345,20 @@ def download_backtest_price_data(
     if excluded_assets:
         raise RuntimeError(
             "확정 자산군 중 가격 데이터를 전혀 가져오지 못한 자산이 있습니다. "
-            f"excluded_assets={excluded_assets}. 티커 또는 yfinance 다운로드 상태를 확인해 주세요."
+            f"excluded_assets={excluded_assets}. "
+            "티커 또는 yfinance 다운로드 상태를 확인해 주세요."
         )
 
-    backtest_prices["cash"] = (1 + daily_cash_return) ** np.arange(len(base_index))
-
-    bm_series_key = bm_config["series_key"]
-    if bm_config["needs_extra_ticker"] and (
-        bm_series_key in prices.columns
-        and prices[bm_series_key].notna().any()
-    ):
-        backtest_prices[bm_series_key] = (
-            prices[bm_series_key].reindex(base_index).ffill()
-        )
+    backtest_prices["cash"] = (
+        (1 + daily_cash_return) ** np.arange(len(base_index))
+    )
 
     ordered_assets = [
-        asset for asset in ASSET_TICKERS.keys()
+        asset
+        for asset in ASSET_TICKERS.keys()
         if asset in backtest_prices.columns
     ]
-    ordered_columns = list(ordered_assets)
-    if bm_config["needs_extra_ticker"] and bm_series_key in backtest_prices.columns:
-        ordered_columns.append(bm_series_key)
-    backtest_prices = backtest_prices[ordered_columns]
+    backtest_prices = backtest_prices[ordered_assets]
 
     if backtest_prices.isna().any().any():
         missing_assets = backtest_prices.columns[
@@ -1186,24 +1384,18 @@ def download_backtest_price_data(
         "observations": int(len(backtest_prices)),
         "available_assets": ordered_assets,
         "excluded_assets": excluded_assets,
-        "benchmark": {
-            "choice": benchmark_choice,
-            "policy": bm_config["policy"],
-            "ticker": bm_config["ticker"],
-            "label": bm_config["label"],
-            "available": bm_series_key in backtest_prices.columns,
-            "official_index_series": False,
-        },
         "first_valid_dates": {
-            asset: date.strftime("%Y-%m-%d") for asset, date in first_valid_dates.items()
+            asset: date.strftime("%Y-%m-%d")
+            for asset, date in first_valid_dates.items()
         },
         "cash_substituted_assets": cash_substituted_assets,
         "limiting_assets": [],
-        "usage": "backtest_chart_only_5y_with_cash_substitution",
+        "usage": "backtest_chart_investable_assets_only",
+        "benchmark_included": False,
         "note": (
-            "백테스트 차트 전용 데이터. 과제 조건 때문에 5년 구간을 유지하며, "
-            "신규 상장 또는 데이터 시작 전 구간만 현금 수익률로 대체함. "
-            "추천·기대수익률·위험지표 계산에는 사용하지 않음."
+            "백테스트 차트 전용 투자자산 데이터. "
+            "신규 상장 또는 데이터 시작 전 구간만 현금 수익률로 대체하며, "
+            "벤치마크는 별도 조회."
         ),
     }
 
@@ -1934,55 +2126,38 @@ def calculate_mdd(portfolio_daily_returns: pd.Series) -> float:
 def build_portfolio_benchmark(
     weights: Dict[str, float],
     returns: pd.DataFrame,
-    benchmark_choice: BenchmarkChoice = "acwi",
+    benchmark_key: str,
 ) -> Tuple[Optional[pd.Series], Dict[str, Any]]:
-    """Return the selected benchmark series for the portfolio.
-
-    benchmark_choice:
-      - "acwi"  : iShares MSCI ACWI ETF proxy (requires extra download)
-      - "kospi" : domestic_equity column (^KS11, already in returns)
-      - "sp500" : overseas_blue_chip column (SPY ETF, already in returns)
-    """
-    bm_config = AVAILABLE_BENCHMARKS.get(benchmark_choice, AVAILABLE_BENCHMARKS["acwi"])
-    bm_series_key = bm_config["series_key"]
-
+    """선택한 비교용 벤치마크와 메타데이터를 반환한다."""
+    config = get_benchmark_config(benchmark_key)
+    series_key = config["series_key"]
     normalized = normalize_weights(weights)
     equity_exposure = sum(
-        normalized.get(asset, 0.0) for asset in [*STOCK_ASSETS, "reit"]
+        normalized.get(asset, 0.0)
+        for asset in [*STOCK_ASSETS, "reit"]
     )
 
     base_meta = {
-        "choice": benchmark_choice,
-        "policy": bm_config["policy"],
-        "benchmark_key": bm_series_key,
-        "benchmark_ticker": bm_config["ticker"],
-        "benchmark_label": bm_config["label"],
+        "policy": BENCHMARK_POLICY_VERSION,
+        "benchmark_key": benchmark_key,
+        "series_key": series_key,
+        "ticker": config["ticker"],
+        "label": config["label"],
+        "official_index_series": config["official_index_series"],
+        "proxy_note": config["proxy_note"],
         "equity_portfolio_weight": safe_round(equity_exposure, 6),
-        "official_index_series": False,
-        "proxy_note": bm_config["proxy_note"],
-        # 기존 응답 필드 하위호환: 지역 혼합 비중은 더 이상 사용하지 않는다.
-        "domestic_asset": None,
-        "domestic_ticker": None,
-        "us_asset": None,
-        "us_ticker": None,
-        "domestic_portfolio_weight": None,
-        "us_portfolio_weight": None,
-        "domestic_share_in_equity_sleeve": None,
-        "us_share_in_equity_sleeve": None,
+        "affects_portfolio_recommendation": False,
     }
 
-    if bm_series_key not in returns.columns:
+    if series_key not in returns.columns:
         return None, {
             **base_meta,
             "applicable": False,
-            "mode": "none",
-            "label": None,
             "reason": "benchmark_data_missing",
-            "missing_assets": [bm_series_key],
         }
 
     benchmark = (
-        returns[bm_series_key]
+        returns[series_key]
         .replace([np.inf, -np.inf], np.nan)
         .dropna()
     )
@@ -1990,20 +2165,39 @@ def build_portfolio_benchmark(
         return None, {
             **base_meta,
             "applicable": False,
-            "mode": "none",
-            "label": None,
             "reason": "benchmark_data_empty",
-            "missing_assets": [bm_series_key],
         }
 
     return benchmark, {
         **base_meta,
         "applicable": True,
-        "mode": bm_config["mode"],
-        "label": bm_config["label"],
         "reason": None,
-        "missing_assets": [],
     }
+
+
+def calculate_benchmark_comparisons(
+    portfolio_daily_returns: pd.Series,
+    weights: Dict[str, float],
+    returns: pd.DataFrame,
+) -> Dict[str, Any]:
+    comparisons: Dict[str, Any] = {}
+
+    for benchmark_key in BENCHMARK_CONFIGS.keys():
+        benchmark_returns, metadata = build_portfolio_benchmark(
+            weights=weights,
+            returns=returns,
+            benchmark_key=benchmark_key,
+        )
+        beta = calculate_beta(
+            portfolio_daily_returns,
+            benchmark_returns,
+        )
+        comparisons[benchmark_key] = {
+            "beta": safe_round(beta, 6) if beta is not None else None,
+            "metadata": metadata,
+        }
+
+    return comparisons
 
 
 def calculate_beta(
@@ -2230,7 +2424,7 @@ def calculate_stress_test(
         "fx_effect": round(float(fx_effect), 6),
         "total_stress_return": round(float(total_stress_return), 6),
         "estimated_loss_ratio": round(float(estimated_loss_ratio), 6),
-        "method": "금리효과는 -듀레이션×금리변화, 환율효과는 외화노출자산비중×환율변화로 단순 추정.",  # noqa: E501
+        "method": "금리효과는 -듀레이션×금리변화, 환율효과는 외화노출자산비중×환율변화로 단순 추정.",
     }
 
 
@@ -2338,7 +2532,7 @@ def calculate_metric_amounts(
         ),
         "note": (
             "원화 지표는 현재 총자산에 각 포트폴리오의 비율 지표를 곱한 값. "
-            "after_tax_return_amount만 세후 기대 이익이며, MDD/VaR는 과거 수익률 기반 손실률의 원화 환산이다."  # noqa: E501
+            "after_tax_return_amount만 세후 기대 이익이며, MDD/VaR는 과거 수익률 기반 손실률의 원화 환산이다."
         ),
     }
 
@@ -2351,15 +2545,18 @@ def calculate_metrics(
     cov_matrix: Optional[pd.DataFrame] = None,
     include_benchmark_metrics: bool = False,
     shocks: Optional[Dict[str, float]] = None,
-    benchmark_choice: BenchmarkChoice = "acwi",
 ) -> Dict[str, Any]:
     """포트폴리오 지표의 단일 계산 진입점.
 
-    PR #65의 결정적 계산·베타 규약과 PR #69의 시계열 충격 규약을 함께 유지한다.
-    ``shocks``가 없으면 기존 결과와 동일하고, 있으면 세금 계산까지 같은 충격을 쓴다.
+    벤치마크 지표는 최종 결과 표시 단계에서만 계산한다.
+    추천 후보 계산에서는 include_benchmark_metrics=False를 유지한다.
     """
     weights = normalize_weights(weights)
-    validate_required_assets_available(weights, list(returns.columns), "portfolio_weights")
+    validate_required_assets_available(
+        weights,
+        list(returns.columns),
+        "portfolio_weights",
+    )
 
     assets = [
         asset
@@ -2375,52 +2572,67 @@ def calculate_metrics(
     selected_returns = returns[assets]
     selected_expected_returns = expected_returns.reindex(assets).fillna(0.0)
 
-    # 세금 계산은 전체 자산 기대수익률을 사용하므로 같은 충격을 별도로 반영한다.
     expected_returns_for_tax = expected_returns
     if shocks:
         selected_returns, selected_expected_returns = apply_return_shocks(
-            selected_returns, selected_expected_returns, shocks
+            selected_returns,
+            selected_expected_returns,
+            shocks,
         )
-        expected_returns_for_tax = shift_expected_returns(expected_returns, shocks)
-        # 충격으로 변동성이 바뀌므로 기존 공분산 행렬은 재사용하지 않는다.
+        expected_returns_for_tax = shift_expected_returns(
+            expected_returns,
+            shocks,
+        )
         cov_matrix = None
 
     if cov_matrix is None:
         selected_cov_matrix = selected_returns.cov() * TRADING_DAYS
     else:
-        selected_cov_matrix = cov_matrix.reindex(index=assets, columns=assets).fillna(0.0)
+        selected_cov_matrix = cov_matrix.reindex(
+            index=assets,
+            columns=assets,
+        ).fillna(0.0)
 
     portfolio_return = float(np.dot(w, selected_expected_returns))
-    variance = float(np.dot(w.T, np.dot(selected_cov_matrix.values, w)))
+    variance = float(
+        np.dot(w.T, np.dot(selected_cov_matrix.values, w))
+    )
     portfolio_volatility = float(np.sqrt(max(variance, 0.0)))
-
     portfolio_daily_returns = selected_returns.dot(w)
 
     if portfolio_volatility < 1e-8 or np.isnan(portfolio_volatility):
         sharpe = 0.0
     else:
-        sharpe = float((portfolio_return - request.risk_free_rate) / portfolio_volatility)
+        sharpe = float(
+            (portfolio_return - request.risk_free_rate)
+            / portfolio_volatility
+        )
 
     sortino = calculate_sortino(
         portfolio_daily_returns=portfolio_daily_returns,
         annual_return=portfolio_return,
         risk_free_rate=request.risk_free_rate,
     )
-
     mdd = calculate_mdd(portfolio_daily_returns)
+
     if include_benchmark_metrics:
-        benchmark_daily_returns, benchmark_meta = build_portfolio_benchmark(
-            weights, returns, benchmark_choice
+        benchmark_comparisons = calculate_benchmark_comparisons(
+            portfolio_daily_returns=portfolio_daily_returns,
+            weights=weights,
+            returns=returns,
         )
-        beta = calculate_beta(portfolio_daily_returns, benchmark_daily_returns)
+        selected_comparison = benchmark_comparisons[request.benchmark_key]
+        beta = selected_comparison["beta"]
+        benchmark_meta = selected_comparison["metadata"]
     else:
+        benchmark_comparisons = {}
         beta = None
-        bm_cfg = AVAILABLE_BENCHMARKS.get(benchmark_choice, AVAILABLE_BENCHMARKS["acwi"])
         benchmark_meta = {
-            "choice": benchmark_choice,
-            "policy": bm_cfg["policy"],
+            "policy": BENCHMARK_POLICY_VERSION,
+            "benchmark_key": request.benchmark_key,
             "applicable": None,
             "reason": "deferred_until_final_portfolio",
+            "affects_portfolio_recommendation": False,
         }
 
     after_tax_return, tax_breakdown = calculate_after_tax_return(
@@ -2444,10 +2656,14 @@ def calculate_metrics(
     )
 
     group_weights = calculate_asset_group_weights(weights)
-
     portfolio_duration = calculate_portfolio_duration(weights)
-    target_duration = target_duration_by_horizon(request.investment_horizon_years)
-    duration_fit_score = calculate_duration_fit_score(portfolio_duration, target_duration)
+    target_duration = target_duration_by_horizon(
+        request.investment_horizon_years
+    )
+    duration_fit_score = calculate_duration_fit_score(
+        portfolio_duration,
+        target_duration,
+    )
 
     stress_test = calculate_stress_test(weights, request)
     historical_var = calculate_historical_var(portfolio_daily_returns)
@@ -2492,13 +2708,24 @@ def calculate_metrics(
         "sharpe_ratio": safe_round(sharpe, 6),
         "sortino_ratio": safe_round(sortino, 6),
         "mdd": safe_round(mdd, 6),
-        "beta": safe_round(beta, 6) if beta is not None else None,
+        "beta": beta,
         "beta_benchmark": benchmark_meta,
-        "taxable_financial_income": safe_round(taxable_financial_income, 0),
+        "selected_benchmark_key": request.benchmark_key,
+        "benchmark_comparisons": benchmark_comparisons,
+        "taxable_financial_income": safe_round(
+            taxable_financial_income,
+            0,
+        ),
         "liquidity_coverage": safe_round(liquidity_coverage, 6),
         "stock_weight": safe_round(group_weights["stock_weight"], 6),
-        "bond_cash_weight": safe_round(group_weights["bond_cash_weight"], 6),
-        "alternative_weight": safe_round(group_weights["alternative_weight"], 6),
+        "bond_cash_weight": safe_round(
+            group_weights["bond_cash_weight"],
+            6,
+        ),
+        "alternative_weight": safe_round(
+            group_weights["alternative_weight"],
+            6,
+        ),
         "portfolio_duration": safe_round(portfolio_duration, 6),
         "target_duration": safe_round(target_duration, 6),
         "duration_fit_score": safe_round(duration_fit_score, 6),
@@ -2509,7 +2736,10 @@ def calculate_metrics(
         "selection_risk_control": selection_risk_control,
         "stress_test": stress_test,
         "risk_level": risk_level,
-        "risk_level_label": RISK_LEVEL_NAME.get(risk_level, "기준 미충족"),
+        "risk_level_label": RISK_LEVEL_NAME.get(
+            risk_level,
+            "기준 미충족",
+        ),
         "metric_amounts": metric_amounts,
         "tax_breakdown": tax_breakdown,
     }
@@ -2547,13 +2777,19 @@ def calculate_cumulative_returns(
 def calculate_benchmark_cumulative_returns(
     weights: Dict[str, float],
     returns: pd.DataFrame,
-    benchmark_choice: BenchmarkChoice = "acwi",
+    benchmark_key: str,
 ) -> Dict[str, Any]:
     benchmark_daily_returns, metadata = build_portfolio_benchmark(
-        weights, returns, benchmark_choice
+        weights=weights,
+        returns=returns,
+        benchmark_key=benchmark_key,
     )
     if benchmark_daily_returns is None:
-        return {"metadata": metadata, "series": []}
+        return {
+            "metadata": metadata,
+            "series": [],
+        }
+
     cumulative = (1 + benchmark_daily_returns).cumprod() - 1
     return {
         "metadata": metadata,
@@ -2562,12 +2798,27 @@ def calculate_benchmark_cumulative_returns(
                 "date": date.strftime("%Y-%m-%d"),
                 "value": safe_round(value, 6),
                 "index_value": safe_round(
-                    (1.0 + value) * BACKTEST_BASE_INDEX, 4
+                    (1.0 + value) * BACKTEST_BASE_INDEX,
+                    4,
                 ),
                 "base_index": BACKTEST_BASE_INDEX,
             }
             for date, value in cumulative.items()
         ],
+    }
+
+
+def calculate_all_benchmark_cumulative_returns(
+    weights: Dict[str, float],
+    returns: pd.DataFrame,
+) -> Dict[str, Any]:
+    return {
+        benchmark_key: calculate_benchmark_cumulative_returns(
+            weights=weights,
+            returns=returns,
+            benchmark_key=benchmark_key,
+        )
+        for benchmark_key in BENCHMARK_CONFIGS.keys()
     }
 
 
@@ -2758,39 +3009,130 @@ def apply_unique_constraint(
 
 
 def build_selection_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
-    risk_control = metrics.get("selection_risk_control", {})
-    risk_control_passed = bool(risk_control.get("passed", False))
-    var_loss = safe_float(metrics.get("historical_var_95_daily_loss"))
-    rc_max = safe_float(metrics.get("risk_contribution_max_share"))
-
+    """포트폴리오 A 순위: 공통 필터 통과 후보 중 세후수익률 최대."""
     return (
-        1 if risk_control_passed else 0,
         safe_float(metrics.get("after_tax_return")),
         safe_float(metrics.get("expected_return")),
         safe_float(metrics.get("sharpe_ratio")),
-        -var_loss,
-        -rc_max,
+        -safe_float(metrics.get("historical_var_95_daily_loss")),
+        -safe_float(metrics.get("risk_contribution_max_share")),
         safe_float(metrics.get("mdd")),
     )
 
 
-def build_selection_summary(metrics: Dict[str, Any]) -> Dict[str, Any]:
+def build_portfolio_b_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
+    """목표 달성 후보 중 위험기여도 집중도를 가장 먼저 최소화한다."""
+    return (
+        safe_float(metrics.get("risk_contribution_max_share")),
+        safe_float(metrics.get("historical_var_95_daily_loss")),
+        safe_float(metrics.get("volatility")),
+        -safe_float(metrics.get("after_tax_return")),
+        -safe_float(metrics.get("sharpe_ratio")),
+    )
+
+
+def build_portfolio_b_fallback_rank_tuple(
+    metrics: Dict[str, Any],
+    target_after_tax_return: float,
+) -> Tuple[Any, ...]:
+    """목표 달성 후보가 없으면 목표 부족 폭을 먼저 최소화한다."""
+    after_tax_return = safe_float(metrics.get("after_tax_return"))
+    target_shortfall = max(target_after_tax_return - after_tax_return, 0.0)
+    return (
+        target_shortfall,
+        safe_float(metrics.get("risk_contribution_max_share")),
+        safe_float(metrics.get("historical_var_95_daily_loss")),
+        safe_float(metrics.get("volatility")),
+        -after_tax_return,
+    )
+
+
+def build_selection_summary(
+    metrics: Dict[str, Any],
+    portfolio_type: str = "current",
+    target_after_tax_return: Optional[float] = None,
+) -> Dict[str, Any]:
+    after_tax_return = safe_float(metrics.get("after_tax_return"))
+    risk_control = metrics.get("selection_risk_control", {})
+    checks = risk_control.get("checks", {})
+
+    common_filters = {
+        "suitability": True,
+        "liquidity": True,
+        "historical_var_95": bool(checks.get("historical_var_95", False)),
+        "risk_contribution": bool(checks.get("risk_contribution", False)),
+    }
+
+    if portfolio_type == "A":
+        return {
+            "portfolio_type": "A",
+            "strategy_type": "return_seeking",
+            "ranking_basis": [
+                "after_tax_return_desc",
+                "expected_return_desc",
+                "sharpe_ratio_desc",
+                "historical_var_95_asc",
+                "risk_contribution_max_share_asc",
+            ],
+            "common_filters": common_filters,
+            "risk_control": risk_control,
+            "primary_objective": "after_tax_return_desc",
+            "achieved_after_tax_return": safe_round(after_tax_return, 6),
+            "note": (
+                "고객 적합성·유동성·VaR·위험기여도 제한을 모두 통과한 후보 중 "
+                "예상 세후수익률이 가장 높은 포트폴리오입니다."
+            ),
+        }
+
+    if portfolio_type == "B":
+        target = safe_float(target_after_tax_return)
+        target_shortfall = max(target - after_tax_return, 0.0)
+        target_met = after_tax_return >= target
+        return {
+            "portfolio_type": "B",
+            "strategy_type": "target_return_risk_minimizing",
+            "ranking_basis": (
+                [
+                    "target_after_tax_return_filter",
+                    "risk_contribution_max_share_asc",
+                    "historical_var_95_asc",
+                    "volatility_asc",
+                    "after_tax_return_desc",
+                ]
+                if target_met
+                else [
+                    "target_shortfall_asc",
+                    "risk_contribution_max_share_asc",
+                    "historical_var_95_asc",
+                    "volatility_asc",
+                    "after_tax_return_desc",
+                ]
+            ),
+            "common_filters": common_filters,
+            "risk_control": risk_control,
+            "primary_objective": (
+                "risk_contribution_max_share_asc"
+                if target_met
+                else "target_shortfall_asc"
+            ),
+            "target_after_tax_return": safe_round(target, 6),
+            "achieved_after_tax_return": safe_round(after_tax_return, 6),
+            "target_met": target_met,
+            "target_shortfall": safe_round(target_shortfall, 6),
+            "note": (
+                "IPS 목표 세후수익률을 충족한 후보 중 위험기여도 집중도가 "
+                "가장 낮은 포트폴리오입니다."
+                if target_met
+                else "IPS 목표 세후수익률 달성 후보가 없어 목표 부족 폭이 가장 작고 "
+                "위험기여도 집중도가 낮은 대체 포트폴리오를 선택했습니다."
+            ),
+        }
+
     return {
-        "ranking_basis": SELECTION_RANKING_BASIS,
-        "risk_control": metrics.get("selection_risk_control", {}),
-        "primary_objective": "after_tax_return_desc",
-        "tie_breakers": [
-            "expected_return_desc",
-            "sharpe_ratio_desc",
-            "historical_var_95_asc",
-            "risk_contribution_max_share_asc",
-            "mdd_desc",
-        ],
-        "note": (
-            "8th는 임의 scoring weight 합산식을 쓰지 않고, "
-            "적합성·VaR·ERC 필터를 통과한 후보를 "
-            "세후수익률 중심의 우선순위로 정렬한다."
-        ),
+        "portfolio_type": portfolio_type,
+        "ranking_basis": [],
+        "risk_control": risk_control,
+        "note": "현재 포트폴리오는 추천 후보 선정 대상이 아닙니다.",
     }
 
 
@@ -2833,13 +3175,30 @@ def find_recommended_portfolios(
     request: PortfolioRequest,
     cov_matrix: Optional[pd.DataFrame] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    rng = np.random.default_rng(request.random_seed)
+    """공통 하드필터 후 A는 세후수익률 최대, B는 목표수익률 달성 후 위험 최소."""
+    target_after_tax_return = safe_float(
+        request.target_after_tax_return,
+        default=np.nan,
+    )
+    if not np.isfinite(target_after_tax_return) or target_after_tax_return <= 0:
+        raise ValueError(
+            "포트폴리오 B 선정에 필요한 RRTTLLU.Return 목표 세후수익률이 없습니다."
+        )
 
-    candidates = []
+    rng = np.random.default_rng(request.random_seed)
+    candidates: List[Dict[str, Any]] = []
     generated_count = request.num_simulations
     guideline_pass_count = 0
     suitable_count = 0
+    liquidity_pass_count = 0
     risk_control_pass_count = 0
+    common_filter_pass_count = 0
+    rejection_counts = {
+        "suitability": 0,
+        "liquidity": 0,
+        "historical_var_95": 0,
+        "risk_contribution": 0,
+    }
 
     raw_available_assets = [
         asset for asset in ASSET_TICKERS.keys() if asset in returns.columns
@@ -2857,14 +3216,12 @@ def find_recommended_portfolios(
 
     for _ in range(request.num_simulations):
         base_weights = generate_random_weights(assets=available_assets, rng=rng)
-
         final_weights = apply_unique_constraint(
             base_weights=base_weights,
             total_asset=request.total_asset,
             unique_need_amount=request.unique_need_amount,
             unique_asset=request.unique_asset,
         )
-
         metrics = calculate_metrics(
             weights=final_weights,
             returns=returns,
@@ -2876,79 +3233,154 @@ def find_recommended_portfolios(
         if metrics["risk_level"] is not None:
             guideline_pass_count += 1
 
-        if not is_suitable_for_client(metrics, request.risk_profile):
-            continue
+        suitability_passed = is_suitable_for_client(metrics, request.risk_profile)
+        guideline_detail = evaluate_guideline_detail(metrics, request.risk_profile)
+        liquidity_passed = bool(
+            guideline_detail.get("hard_checks", {}).get("liquidity_coverage", False)
+        )
+        risk_control = metrics.get("selection_risk_control", {})
+        risk_checks = risk_control.get("checks", {})
+        var_passed = bool(risk_checks.get("historical_var_95", False))
+        risk_contribution_passed = bool(
+            risk_checks.get("risk_contribution", False)
+        )
 
-        suitable_count += 1
-        if metrics["selection_risk_control"]["passed"]:
+        if suitability_passed:
+            suitable_count += 1
+        else:
+            rejection_counts["suitability"] += 1
+
+        if liquidity_passed:
+            liquidity_pass_count += 1
+        else:
+            rejection_counts["liquidity"] += 1
+
+        if var_passed:
+            pass
+        else:
+            rejection_counts["historical_var_95"] += 1
+
+        if risk_contribution_passed:
+            pass
+        else:
+            rejection_counts["risk_contribution"] += 1
+
+        if risk_control.get("passed", False):
             risk_control_pass_count += 1
 
-        selection_rank = build_selection_rank_tuple(metrics)
+        common_filter_passed = all(
+            (
+                suitability_passed,
+                liquidity_passed,
+                var_passed,
+                risk_contribution_passed,
+            )
+        )
+        if not common_filter_passed:
+            continue
 
+        common_filter_pass_count += 1
         candidates.append(
             {
                 "weights": final_weights,
                 "metrics": metrics,
-                "selection_rank": selection_rank,
-                "selection_summary": build_selection_summary(metrics),
+                "selection_rank": build_selection_rank_tuple(metrics),
             }
         )
 
-    if len(candidates) == 0:
+    if not candidates:
         raise RuntimeError(
-            "기준표와 고객 위험성향 기준을 통과한 포트폴리오가 없습니다. "
-            "num_simulations를 늘리거나 기준표를 재검토해야 합니다."
+            "고객 적합성·유동성·VaR·위험기여도 제한을 모두 통과한 "
+            "포트폴리오가 없습니다. num_simulations 또는 위험 기준을 검토해야 합니다."
         )
 
-    candidates = sorted(candidates, key=lambda x: x["selection_rank"], reverse=True)
+    candidates = sorted(
+        candidates,
+        key=lambda candidate: candidate["selection_rank"],
+        reverse=True,
+    )
 
+    # 포트폴리오 A: 공통 필터 통과 후보 중 세후수익률 최대.
     recommendation_1 = candidates[0]
-    recommendation_2 = None
+    recommendation_1["selection_summary"] = build_selection_summary(
+        recommendation_1["metrics"],
+        portfolio_type="A",
+        target_after_tax_return=target_after_tax_return,
+    )
+
+    # 포트폴리오 B: A와 다른 후보를 우선 사용한다.
+    portfolio_b_pool = candidates[1:]
+    if not portfolio_b_pool:
+        portfolio_b_pool = [dict(recommendation_1)]
+
+    target_met_candidates = [
+        candidate
+        for candidate in portfolio_b_pool
+        if safe_float(candidate["metrics"].get("after_tax_return"))
+        >= target_after_tax_return
+    ]
+
+    if target_met_candidates:
+        recommendation_2 = min(
+            target_met_candidates,
+            key=lambda candidate: build_portfolio_b_rank_tuple(candidate["metrics"]),
+        )
+        portfolio_b_selection_mode = "target_met_risk_minimization"
+    else:
+        recommendation_2 = min(
+            portfolio_b_pool,
+            key=lambda candidate: build_portfolio_b_fallback_rank_tuple(
+                candidate["metrics"],
+                target_after_tax_return,
+            ),
+        )
+        portfolio_b_selection_mode = "target_shortfall_fallback"
+
+    recommendation_2["selection_summary"] = build_selection_summary(
+        recommendation_2["metrics"],
+        portfolio_type="B",
+        target_after_tax_return=target_after_tax_return,
+    )
+
+    # A/B 상관계수는 선정 조건이 아니라 화면 참고값으로만 제공한다.
     recommendation_1_series = calculate_portfolio_return_series(
         recommendation_1["weights"],
         returns,
     )
-
-    for candidate in candidates[1:]:
-        corr = calculate_portfolio_return_correlation(
-            recommendation_1["weights"],
-            candidate["weights"],
-            returns,
-            series_a=recommendation_1_series,
-        )
-
-        if corr <= SECOND_PORTFOLIO_MAX_CORRELATION:
-            candidate["correlation_with_recommended_1"] = corr
-            recommendation_2 = candidate
-            break
-
-    if recommendation_2 is None:
-        recommendation_2 = candidates[1] if len(candidates) > 1 else candidates[0]
-        recommendation_2["correlation_with_recommended_1"] = calculate_portfolio_return_correlation(
+    recommendation_2["correlation_with_recommended_1"] = (
+        calculate_portfolio_return_correlation(
             recommendation_1["weights"],
             recommendation_2["weights"],
             returns,
             series_a=recommendation_1_series,
         )
+    )
 
     search_summary = {
         "generated_portfolios": generated_count,
         "guideline_pass_portfolios": guideline_pass_count,
         "suitable_portfolios": suitable_count,
+        "liquidity_pass_portfolios": liquidity_pass_count,
         "risk_control_pass_portfolios": risk_control_pass_count,
-        "filtered_out_portfolios": generated_count - suitable_count,
-        "selection_method": "suitability_filter_var_erc_after_tax_ranking",
+        "common_filter_pass_portfolios": common_filter_pass_count,
+        "filtered_out_portfolios": generated_count - common_filter_pass_count,
+        "rejection_counts": rejection_counts,
+        "selection_method": 'portfolio_a_max_after_tax_return_portfolio_b_target_risk_minimization',
+        "portfolio_a_selection_mode": "max_after_tax_return",
+        "portfolio_b_selection_mode": portfolio_b_selection_mode,
+        "target_after_tax_return": safe_round(target_after_tax_return, 6),
         "random_seed": request.random_seed,
         "eligible_assets": available_assets,
-        "excluded_by_horizon": [
-            "separate_tax_bond"
-        ]
-        if "separate_tax_bond" in raw_available_assets
-        and "separate_tax_bond" not in available_assets
-        else [],
+        "excluded_by_horizon": (
+            ["separate_tax_bond"]
+            if "separate_tax_bond" in raw_available_assets
+            and "separate_tax_bond" not in available_assets
+            else []
+        ),
     }
 
     return [recommendation_1, recommendation_2], search_summary
+
 
 # ============================================================
 # 11. 응답 생성
@@ -2975,7 +3407,6 @@ def build_portfolio_response(
     correlation_with_recommended_1: Optional[float] = None,
     cov_matrix: Optional[pd.DataFrame] = None,
     backtest_returns: Optional[pd.DataFrame] = None,
-    benchmark_choice: BenchmarkChoice = "acwi",
 ) -> Dict[str, Any]:
     metrics = calculate_metrics(
         weights=weights,
@@ -2984,14 +3415,22 @@ def build_portfolio_response(
         request=request,
         cov_matrix=cov_matrix,
         include_benchmark_metrics=True,
-        benchmark_choice=benchmark_choice,
     )
 
-    cumulative_source_returns = backtest_returns if backtest_returns is not None else returns
-    cumulative_returns = calculate_cumulative_returns(weights, cumulative_source_returns)
-    benchmark_backtest = calculate_benchmark_cumulative_returns(
-        weights, cumulative_source_returns, benchmark_choice
+    cumulative_source_returns = (
+        backtest_returns
+        if backtest_returns is not None
+        else returns
     )
+    cumulative_returns = calculate_cumulative_returns(
+        weights,
+        cumulative_source_returns,
+    )
+    benchmark_backtests = calculate_all_benchmark_cumulative_returns(
+        weights=weights,
+        returns=cumulative_source_returns,
+    )
+    benchmark_backtest = benchmark_backtests[request.benchmark_key]
 
     response = {
         "api_key": api_key,
@@ -3001,7 +3440,10 @@ def build_portfolio_response(
                 "label": ASSET_NAMES_KR.get(asset, asset),
                 "ticker": ASSET_TICKERS.get(asset, asset),
                 "weight": round(float(weight), 6),
-                "amount": round(float(weight) * request.total_asset, 0),
+                "amount": round(
+                    float(weight) * request.total_asset,
+                    0,
+                ),
             }
             for asset, weight in weights.items()
         },
@@ -3011,7 +3453,6 @@ def build_portfolio_response(
             if asset in expected_returns.index
         },
         "metrics": {
-            # 원형 차트와 5대 지표에서 주로 쓸 값
             "expected_return": metrics["expected_return"],
             "volatility": metrics["volatility"],
             "sharpe_ratio": metrics["sharpe_ratio"],
@@ -3019,22 +3460,30 @@ def build_portfolio_response(
             "mdd": metrics["mdd"],
             "beta": metrics["beta"],
             "beta_benchmark": metrics["beta_benchmark"],
+            "selected_benchmark_key": metrics[
+                "selected_benchmark_key"
+            ],
+            "benchmark_comparisons": metrics[
+                "benchmark_comparisons"
+            ],
             "liquidity_coverage": metrics["liquidity_coverage"],
-            # 세후수익률은 절세 최적화 계산 이후 반영되는 값
             "after_tax_return": metrics["after_tax_return"],
             "krw": metrics["metric_amounts"],
             "metric_amounts": metrics["metric_amounts"],
-            # 포트폴리오 위험/세금/스트레스 정보
-            "taxable_financial_income": metrics["taxable_financial_income"],
+            "taxable_financial_income": metrics[
+                "taxable_financial_income"
+            ],
             "portfolio_financial_income": metrics["tax_breakdown"][
                 "financial_income_comprehensive_tax"
             ]["portfolio_financial_income"],
             "total_financial_income": metrics["tax_breakdown"][
                 "financial_income_comprehensive_tax"
             ]["total_financial_income"],
-            "financial_income_comprehensive_tax_status": metrics["tax_breakdown"][
-                "financial_income_comprehensive_tax"
-            ],
+            "financial_income_comprehensive_tax_status": (
+                metrics["tax_breakdown"][
+                    "financial_income_comprehensive_tax"
+                ]
+            ),
             "financial_income_tax_gauge": metrics["tax_breakdown"][
                 "financial_income_comprehensive_tax"
             ]["gauge"],
@@ -3043,17 +3492,20 @@ def build_portfolio_response(
             "stock_weight": metrics["stock_weight"],
             "bond_cash_weight": metrics["bond_cash_weight"],
             "alternative_weight": metrics["alternative_weight"],
-            # 듀레이션은 표시용 6종 지표가 아니라 점수화/내부 설명용
             "portfolio_duration": metrics["portfolio_duration"],
             "target_duration": metrics["target_duration"],
             "duration_fit_score": metrics["duration_fit_score"],
             "historical_var_95": metrics["historical_var_95"],
-            "historical_var_95_daily_loss": (
-                metrics["historical_var_95_daily_loss"]
-            ),
+            "historical_var_95_daily_loss": metrics[
+                "historical_var_95_daily_loss"
+            ],
             "risk_contribution": metrics["risk_contribution"],
-            "risk_contribution_max_share": metrics["risk_contribution_max_share"],
-            "selection_risk_control": metrics["selection_risk_control"],
+            "risk_contribution_max_share": metrics[
+                "risk_contribution_max_share"
+            ],
+            "selection_risk_control": metrics[
+                "selection_risk_control"
+            ],
             "stress_test": metrics["stress_test"],
         },
         "metric_amounts": metrics["metric_amounts"],
@@ -3061,19 +3513,27 @@ def build_portfolio_response(
         "financial_income_tax_gauge": metrics["tax_breakdown"][
             "financial_income_comprehensive_tax"
         ]["gauge"],
-        "selection_summary": selection_summary
-        if selection_summary is not None
-        else build_selection_summary(metrics),
+        "selection_summary": (
+            selection_summary
+            if selection_summary is not None
+            else build_selection_summary(metrics)
+        ),
         "guideline_report": build_guideline_report(metrics),
         "cumulative_returns": cumulative_returns,
+        # 기존 프론트 호환: PB가 선택한 한 개
         "benchmark_backtest": benchmark_backtest,
+        # 신규 계약: PB가 선택할 수 있는 전체 3종
+        "benchmark_backtests": benchmark_backtests,
     }
 
     if score is not None:
         response["score"] = round(float(score), 6)
 
     if correlation_with_recommended_1 is not None:
-        response["correlation_with_recommended_1"] = round(float(correlation_with_recommended_1), 6)
+        response["correlation_with_recommended_1"] = round(
+            float(correlation_with_recommended_1),
+            6,
+        )
 
     return response
 
@@ -3111,19 +3571,21 @@ def get_guideline_definition() -> Dict[str, Any]:
         "verified_basis": {
             "financial_income_threshold": "금융소득종합과세 검토 기준 2,000만 원",
             "overseas_stock_deduction": "해외주식 양도소득 기본공제 250만 원",
-            "isa": "ISA 의무보유기간 3년, 일반형 비과세 200만 원, 서민형 비과세 400만 원, 초과분 저율 분리과세 가정",  # noqa: E501
+            "isa": "ISA 의무보유기간 3년, 일반형 비과세 200만 원, 서민형 비과세 400만 원, 초과분 저율 분리과세 가정",
             "risk_suitability": "투자자성향보다 높은 위험도의 투자성 상품 권유 제한 원칙 반영",
-            "risk_factors": "변동성, 최대손실가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등을 위험 판단 요소로 반영",  # noqa: E501
+            "risk_factors": "변동성, 최대손실가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등을 위험 판단 요소로 반영",
         },
         "project_assumptions": {
-            "risk_profile_thresholds": "안정형/균형형/공격형별 변동성, MDD, 자산군 비중 한도는 프로젝트용 수치화 기준",  # noqa: E501
+            "risk_profile_thresholds": "안정형/균형형/공격형별 변동성, MDD, 자산군 비중 한도는 프로젝트용 수치화 기준",
             "selection_risk_controls": SELECTION_RISK_CONTROLS,
             "selection_ranking_basis": SELECTION_RANKING_BASIS,
-            "second_portfolio_max_correlation": SECOND_PORTFOLIO_MAX_CORRELATION,
+            "portfolio_b_target_source": "RRTTLLU.Return",
+            "portfolio_b_objective": "target_return_then_risk_contribution_minimization",
+            "portfolio_a_b_correlation_usage": "display_only",
             "benchmark_policy": BENCHMARK_POLICY_VERSION,
             "benchmark_policy_note": (
-                "프로젝트 방법론: 국내·미국 주식 슬리브 비중으로 KOSPI/S&P500을 합성. "
-                "포트폴리오 A와 B는 서로 다른 벤치마크 구성을 가질 수 있음."
+                "KOSPI, S&P 500, MSCI ACWI 3종을 비교용으로 제공. "
+                "벤치마크는 베타·비교 차트에만 사용하며 추천 로직에는 미반영."
             ),
             "duration_source_note": (
                 "듀레이션은 채권형 ETF proxy 기준으로만 적용. "
@@ -3141,37 +3603,67 @@ def get_guideline_definition() -> Dict[str, Any]:
     }
 
 
-def extract_backtest_payload(full_response: Dict[str, Any]) -> Dict[str, Any]:
+def extract_backtest_payload(
+    full_response: Dict[str, Any],
+) -> Dict[str, Any]:
     data_snapshot = full_response["input_summary"].get(
         "backtest_data_snapshot",
         full_response["input_summary"].get("data_snapshot", {}),
     )
+    portfolios = full_response["portfolios"]
+
     return {
         "session_id": full_response["session_id"],
+        "selected_benchmark_key": full_response["input_summary"][
+            "benchmark_key"
+        ],
+        "benchmark_catalog": get_benchmark_catalog(),
         "basis": {
             "base_index": BACKTEST_BASE_INDEX,
             "base_date": data_snapshot.get("data_start"),
-            "as_of": data_snapshot.get("as_of") or data_snapshot.get("data_end"),
+            "as_of": (
+                data_snapshot.get("as_of")
+                or data_snapshot.get("data_end")
+            ),
             "note": (
                 "백테스트 차트는 5년 구간을 100으로 둔 누적수익률 지수. "
-                "신규 상장 또는 데이터 시작 전 구간은 차트에서만 현금 수익률로 대체."
+                "벤치마크 3종은 추천 계산과 분리된 비교선."
             ),
         },
         "data_snapshot": data_snapshot,
         "backtest": {
-            "current": full_response["portfolios"]["current"]["cumulative_returns"],
-            "portfolio_a": full_response["portfolios"]["recommended_1"]["cumulative_returns"],
-            "portfolio_b": full_response["portfolios"]["recommended_2"]["cumulative_returns"],
+            "current": portfolios["current"]["cumulative_returns"],
+            "portfolio_a": portfolios["recommended_1"][
+                "cumulative_returns"
+            ],
+            "portfolio_b": portfolios["recommended_2"][
+                "cumulative_returns"
+            ],
         },
+        # 기존 호환: 선택된 벤치마크
         "benchmarks": {
-            "current": full_response["portfolios"]["current"]["benchmark_backtest"],
-            "portfolio_a": full_response["portfolios"]["recommended_1"]["benchmark_backtest"],
-            "portfolio_b": full_response["portfolios"]["recommended_2"]["benchmark_backtest"],
+            "current": portfolios["current"]["benchmark_backtest"],
+            "portfolio_a": portfolios["recommended_1"][
+                "benchmark_backtest"
+            ],
+            "portfolio_b": portfolios["recommended_2"][
+                "benchmark_backtest"
+            ],
+        },
+        # 신규: 전체 3종
+        "benchmark_options": {
+            "current": portfolios["current"]["benchmark_backtests"],
+            "portfolio_a": portfolios["recommended_1"][
+                "benchmark_backtests"
+            ],
+            "portfolio_b": portfolios["recommended_2"][
+                "benchmark_backtests"
+            ],
         },
         "summary_metrics": {
-            "current": full_response["portfolios"]["current"]["metrics"],
-            "portfolio_a": full_response["portfolios"]["recommended_1"]["metrics"],
-            "portfolio_b": full_response["portfolios"]["recommended_2"]["metrics"],
+            "current": portfolios["current"]["metrics"],
+            "portfolio_a": portfolios["recommended_1"]["metrics"],
+            "portfolio_b": portfolios["recommended_2"]["metrics"],
         },
     }
 
@@ -3296,6 +3788,140 @@ TAX_STRATEGY_META = {
 }
 
 
+def build_tax_strategy_reason(
+    strategy_key: str,
+    raw_reason: Any,
+    card: Dict[str, Any],
+    contribution: float,
+) -> Dict[str, Any]:
+    """내부 부적합 사유를 화면에서 바로 이해할 수 있는 문구로 바꾼다."""
+    raw_text = (
+        str(raw_reason).strip()
+        if raw_reason is not None and str(raw_reason).strip()
+        else None
+    )
+
+    if contribution > 0:
+        return {"reason": None, "reason_code": None, "raw_reason": raw_text}
+
+    if raw_text and "상위 효율 전략 적용 후" in raw_text:
+        return {
+            "reason": (
+                "중복 적용 가능한 과세소득이 앞선 절세 전략에서 모두 사용되어 "
+                "이 전략의 추가 절감액은 0원입니다."
+            ),
+            "reason_code": "shared_tax_base_exhausted",
+            "raw_reason": raw_text,
+        }
+
+    if strategy_key == "isa":
+        if raw_text and "신규 개설 불가" in raw_text:
+            reason = "ISA 신규 개설 적격성 조건을 충족하지 못해 이번 절세안에서 제외했습니다."
+            code = "isa_new_account_ineligible"
+        elif raw_text and "투자기간" in raw_text:
+            reason = (
+                f"{raw_text}. 고객의 투자기간보다 ISA 잔여 의무보유기간이 길어 "
+                "단기 유동성 제약이 발생할 수 있습니다."
+            )
+            code = "isa_lockup_exceeds_horizon"
+        elif raw_text and "적격성·잔여한도" in raw_text:
+            reason = (
+                "ISA 계좌 사용 요건을 충족하지 못했거나 사용 가능한 "
+                "잔여 납입한도가 없어 적용하지 않았습니다."
+            )
+            code = "isa_ineligible_or_no_capacity"
+        else:
+            reason = (
+                "ISA로 이전할 적격 자산 또는 사용 가능한 납입한도가 없어 "
+                "예상 절감액이 없습니다."
+            )
+            code = "isa_no_transferable_amount"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "pension_credit":
+        if raw_text and "투자기간" in raw_text:
+            reason = (
+                f"{raw_text}. 연금 수령 가능 시점 전에 자금이 필요할 수 있어 "
+                "IRP 배치 대상에서 제외했습니다."
+            )
+            code = "pension_lockup_exceeds_horizon"
+        elif raw_text and "산출세액" in raw_text:
+            reason = (
+                "예상 산출세액이 세액공제액보다 작아 IRP 납입액 전부에 대한 "
+                "공제 효과를 적용할 수 없습니다."
+            )
+            code = "insufficient_tax_liability"
+        else:
+            reason = (
+                "IRP 사용 요건을 충족하지 못했거나 당해 연도 세액공제 한도를 "
+                "이미 모두 사용했습니다."
+            )
+            code = "pension_ineligible_or_no_capacity"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "separate_bond":
+        if raw_text and "한계세율" in raw_text:
+            reason = (
+                "고객 한계세율이 분리과세 가정세율보다 높지 않아 "
+                "분리과세 채권의 추가 절세 효과가 없습니다."
+            )
+            code = "marginal_rate_not_high_enough"
+        elif raw_text and "초과분 없음" in raw_text:
+            reason = (
+                "예상 금융소득이 종합과세 기준을 초과하지 않아 "
+                "분리과세 전환으로 줄일 추가 세금이 없습니다."
+            )
+            code = "no_comprehensive_tax_excess"
+        else:
+            reason = (
+                "현재 포트폴리오에서 분리과세 전환 대상이 되는 "
+                "채권 이자소득이 계산되지 않았습니다."
+            )
+            code = "no_eligible_bond_income"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "low_tax_dividend":
+        if raw_text and "초과분 없음" in raw_text:
+            reason = (
+                "예상 금융소득이 종합과세 기준을 초과하지 않아 "
+                "배당소득 조정에 따른 추가 절세 효과가 없습니다."
+            )
+            code = "no_comprehensive_tax_excess"
+        else:
+            reason = (
+                "현재 포트폴리오에 절세 대상으로 계산할 "
+                "배당주·리츠의 예상 배당소득이 없습니다."
+            )
+            code = "no_eligible_dividend_income"
+        return {"reason": reason, "reason_code": code, "raw_reason": raw_text}
+
+    if strategy_key == "overseas_exemption":
+        return {
+            "reason": (
+                "해외주식의 예상 가격차익이 없거나 기본공제를 적용할 "
+                "양도차익이 없어 절세액이 계산되지 않았습니다."
+            ),
+            "reason_code": "no_overseas_capital_gain",
+            "raw_reason": raw_text,
+        }
+
+    if strategy_key == "tax_loss":
+        return {
+            "reason": (
+                "상계할 해외주식 양도차익 또는 확정 가능한 해외주식 손실이 없어 "
+                "Tax-loss Harvesting 효과가 없습니다."
+            ),
+            "reason_code": "no_offsettable_gain_or_loss",
+            "raw_reason": raw_text,
+        }
+
+    return {
+        "reason": raw_text or "현재 입력 조건에서는 예상 절세 효과가 없습니다.",
+        "reason_code": "not_applicable",
+        "raw_reason": raw_text,
+    }
+
+
 def build_six_tax_strategy_cards(
     portfolio_response: Dict[str, Any],
     request: PortfolioRequest,
@@ -3355,10 +3981,16 @@ def build_six_tax_strategy_cards(
     for key, meta in TAX_STRATEGY_META.items():
         card = standalone_map.get(key, {})
         contribution = safe_float(contribution_won.get(key))
-        reason = (
+        raw_reason = (
             combined.get("ineligible", {}).get(key)
             or combined.get("exhausted", {}).get(key)
             or card.get("ineligibleReason")
+        )
+        reason_payload = build_tax_strategy_reason(
+            strategy_key=key,
+            raw_reason=raw_reason,
+            card=card,
+            contribution=contribution,
         )
         cards.append(
             {
@@ -3375,7 +4007,9 @@ def build_six_tax_strategy_cards(
                 "transferable_amount": safe_round(
                     safe_float(card.get("transferableManwon")) * 10_000, 0
                 ),
-                "reason": reason,
+                "reason": reason_payload["reason"],
+                "reason_code": reason_payload["reason_code"],
+                "raw_reason": reason_payload["raw_reason"],
             }
         )
 
@@ -3413,6 +4047,7 @@ def build_tax_optimizer_payload(
     tax_saving = max(tax_before - tax_after, 0.0)
 
     before_after_tax_profit = gross_profit - tax_before
+    after_strategy_profit = gross_profit - tax_after
     before_after_tax_return = before_after_tax_profit / request.total_asset
     six_strategy = build_six_tax_strategy_cards(portfolio_response, request)
     combined_tax_saving = safe_float(six_strategy["combined_total"])
@@ -3465,9 +4100,9 @@ def build_tax_optimizer_payload(
                 "tax_amount": safe_round(tax_before, 0),
             },
             "after_tax_strategy": {
-                "after_tax_profit": safe_round(combined_after_tax_profit, 0),
-                "tax_amount": safe_round(combined_tax_after, 0),
-                "tax_saving": safe_round(modeled_tax_reduction, 0),
+                "after_tax_profit": safe_round(after_strategy_profit, 0),
+                "tax_amount": safe_round(tax_after, 0),
+                "tax_saving": safe_round(tax_saving, 0),
             },
         },
         "common_tax_rules": get_common_tax_rules(),
@@ -3546,7 +4181,6 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
     prices = download_price_data(
         period=request.period,
         cash_return=request.cash_return,
-        benchmark_choice=request.benchmark,
     )
     data_snapshot = prices.attrs.get("data_snapshot", {})
 
@@ -3564,10 +4198,39 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
     backtest_prices = download_backtest_price_data(
         period="5y",
         cash_return=request.cash_return,
-        benchmark_choice=request.benchmark,
     )
     backtest_data_snapshot = backtest_prices.attrs.get("data_snapshot", {})
     backtest_returns = calculate_daily_returns(backtest_prices)
+
+    benchmark_returns, benchmark_snapshot = download_benchmark_returns(
+        period=request.period,
+    )
+    if request.period == "5y":
+        backtest_benchmark_returns = benchmark_returns
+        backtest_benchmark_snapshot = benchmark_snapshot
+    else:
+        (
+            backtest_benchmark_returns,
+            backtest_benchmark_snapshot,
+        ) = download_benchmark_returns(period="5y")
+
+    analysis_returns = attach_benchmark_returns(
+        returns,
+        benchmark_returns,
+    )
+    analysis_backtest_returns = attach_benchmark_returns(
+        backtest_returns,
+        backtest_benchmark_returns,
+    )
+
+    data_snapshot = {
+        **data_snapshot,
+        "benchmarks": benchmark_snapshot,
+    }
+    backtest_data_snapshot = {
+        **backtest_data_snapshot,
+        "benchmarks": backtest_benchmark_snapshot,
+    }
 
     validate_required_assets_available(
         {request.unique_asset: 1.0},
@@ -3597,39 +4260,36 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         name="현재 포트폴리오",
         api_key="current",
         weights=current_weights,
-        returns=returns,
+        returns=analysis_returns,
         expected_returns=expected_returns,
         request=request,
         cov_matrix=cov_matrix,
-        backtest_returns=backtest_returns,
-        benchmark_choice=request.benchmark,
+        backtest_returns=analysis_backtest_returns,
     )
 
     rec_1_response = build_portfolio_response(
         name="포트폴리오 A",
         api_key="portfolio_a",
         weights=recommendations[0]["weights"],
-        returns=returns,
+        returns=analysis_returns,
         expected_returns=expected_returns,
         request=request,
         selection_summary=recommendations[0]["selection_summary"],
         cov_matrix=cov_matrix,
-        backtest_returns=backtest_returns,
-        benchmark_choice=request.benchmark,
+        backtest_returns=analysis_backtest_returns,
     )
 
     rec_2_response = build_portfolio_response(
         name="포트폴리오 B",
         api_key="portfolio_b",
         weights=recommendations[1]["weights"],
-        returns=returns,
+        returns=analysis_returns,
         expected_returns=expected_returns,
         request=request,
         selection_summary=recommendations[1]["selection_summary"],
         correlation_with_recommended_1=recommendations[1].get("correlation_with_recommended_1"),
         cov_matrix=cov_matrix,
-        backtest_returns=backtest_returns,
-        benchmark_choice=request.benchmark,
+        backtest_returns=analysis_backtest_returns,
     )
 
     correlation_matrix = returns.corr().round(4).to_dict()
@@ -3648,6 +4308,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "unique_profile": request.unique_profile,
             "age": request.age,
             "client_context": request.client_context,
+            "target_after_tax_return": request.target_after_tax_return,
             "analysis_scope": request.client_context.get(
                 "calculation_scope",
                 "개인 투자포트폴리오 계산",
@@ -3665,6 +4326,8 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "risk_free_rate_basis": "미국 기준 무위험이자율. 시나리오 테스트 금리와 분리.",
             "cash_return": request.cash_return,
             "period": request.period,
+            "benchmark_key": request.benchmark_key,
+            "benchmark_catalog": get_benchmark_catalog(),
             "backtest_period": "5y",
             "num_simulations": request.num_simulations,
             "random_seed": request.random_seed,
@@ -3732,26 +4395,34 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
                 "Monte Carlo 방식으로 후보 포트폴리오 생성. "
                 "8th 기본값은 5,000개이며 request.random_seed로 재현 가능."
             ),
-            "optimization_basis": "Mean-Variance 기반: 실제 가격 데이터의 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",  # noqa: E501
-            "risk_classification": "변동성, MDD, 유동성 커버리지, 자산구성비중을 hard filter로 사용.",  # noqa: E501
-            "selection_logic": "임의 점수 가중치 없이 적합성, VaR, ERC 통과 후보를 세후수익률 중심으로 정렬.",  # noqa: E501
+            "optimization_basis": "Mean-Variance 기반: 실제 가격 데이터의 기대수익률, 공분산 기반 변동성, Sharpe Ratio 계산.",
+            "risk_classification": "변동성, MDD, 유동성 커버리지, 자산구성비중을 hard filter로 사용.",
+            "selection_logic": (
+                "고객 적합성·유동성·95% Historical VaR·위험기여도 집중도 제한을 "
+                "모두 통과한 후보만 추천 대상으로 사용합니다. 포트폴리오 A는 세후수익률 "
+                "최대, 포트폴리오 B는 IPS 목표 세후수익률 달성 후 위험집중도 최소를 "
+                "목적으로 선정합니다."
+            ),
             "duration_logic": "듀레이션은 채권형 자산에만 적용하고 ETF proxy 기준 수치를 사용.",
             "suitability_filter": "포트폴리오 위험등급이 고객 위험성향 이하인 경우만 추천.",
-            "liquidity_metric": "현금+일반채/저쿠폰채/분리과세채 금액에서 ISA 의무기간 잠김 금액을 제외한 값 / 단기 필요금액.",  # noqa: E501
+            "liquidity_metric": "현금+일반채/저쿠폰채/분리과세채 금액에서 ISA 의무기간 잠김 금액을 제외한 값 / 단기 필요금액.",
             "tax_logic": (
                 "금융소득종합과세 검토액, 해외주식 양도세 추정액, "
                 "ISA/IRP 효과를 포트폴리오별로 계산. 배당·이자성 수익과 "
                 "가격차익은 간이 분리하여 중복 과세를 피함."
             ),
             "second_portfolio_logic": (
-                "포트폴리오 B는 포트폴리오 A와 수익률 상관계수 "
-                f"{SECOND_PORTFOLIO_MAX_CORRELATION} 이하인 후보 중 우선순위가 높은 후보."
+                "포트폴리오 B는 RRTTLLU.Return을 목표 세후수익률로 사용합니다. "
+                "목표를 충족한 후보 중 위험기여도 최대 집중도가 가장 낮은 후보를 선택하고, "
+                "목표 달성 후보가 없으면 목표 부족 폭이 가장 작은 후보를 선택합니다. "
+                "포트폴리오 A와의 상관계수는 선정 조건이 아니라 화면 참고값으로만 제공합니다."
             ),
             "stress_test_logic": "금리 충격은 채권형 자산에만 -듀레이션×금리변화를 적용.",
-            "var_erc_logic": "95% historical VaR와 공분산 기반 위험기여도 집중도를 리스크 관리에 반영.",  # noqa: E501
+            "var_erc_logic": "95% historical VaR와 공분산 기반 위험기여도 집중도를 리스크 관리에 반영.",
             "benchmark_beta_logic": (
-                "각 포트폴리오의 국내·미국 주식 슬리브 비중으로 KOSPI와 S&P500 "
-                "일간수익률을 합성하고, 동일 벤치마크 대비 회귀 베타를 계산."
+                "KOSPI, S&P 500, MSCI ACWI 중 PB가 선택한 벤치마크를 표시 기준으로 사용. "
+                "세 벤치마크의 베타와 백테스트 비교값은 최종 포트폴리오 확정 후 계산하며, "
+                "후보 생성·필터·순위에는 반영하지 않음."
             ),
             "corporate_context_logic": (
                 "법인·가업승계 키워드는 범용 advisory flag와 단기 유동성 제약으로만 "
@@ -3820,7 +4491,7 @@ def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
 # 프론트 연동용 보조 로직.
 # 검증된 사실: consultations API의 ips_json은 Goal/Asset/Return/Risk/Time/Tax/Liquidity/Legal/Unique
 # 형태이고, 포트폴리오 계산 로직은 AnalysisRequest 형태를 사용한다.
-# 프로젝트용 처리: /portfolio/calculate는 AnalysisRequest와 consultations 응답/ips_json을 모두 받을 수 있게 정규화한다.  # noqa: E501
+# 프로젝트용 처리: /portfolio/calculate는 AnalysisRequest와 consultations 응답/ips_json을 모두 받을 수 있게 정규화한다.
 
 KOREAN_MONEY_UNITS = {
     "억": 100_000_000,
@@ -4159,7 +4830,7 @@ def extract_unique_profile(unique_value: Any) -> Dict[str, Any]:
     isa_start_year = parse_start_year_from_text(isa_window)
     isa_contribution = parse_explicit_money_amount_krw(isa_window) if isa_window else 0.0
     isa_account_exists = bool(isa_window) and not bool(
-        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", isa_window)  # noqa: E501
+        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", isa_window)
     )
 
     irp_start_year = parse_start_year_from_text(irp_window)
@@ -4169,7 +4840,7 @@ def extract_unique_profile(unique_value: Any) -> Dict[str, Any]:
     )
     irp_cumulative_contribution = parse_explicit_money_amount_krw(irp_window) if irp_window else 0.0
     irp_account_exists = bool(irp_window) and not bool(
-        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", irp_window)  # noqa: E501
+        re.search(r"(?:(?:ISA|isa|IRP|irp|개인종합자산관리|개인형퇴직연금|퇴직연금)\s*(?:계좌\s*)?(?:없음|없다)|미가입|계좌\s*없|가입.{0,5}안|개설.{0,5}안|안\s*만듦|안\s*만들)", irp_window)
     )
 
     items: List[Dict[str, Any]] = []
@@ -4620,13 +5291,13 @@ def normalize_analysis_request_payload(
     unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
     if unique_need_amount <= 0:
         adapter_warnings.append(
-            "IPS의 Unique 값에서 별도 필요자금을 숫자로 추출하지 못해 unique_need_amount=0으로 계산했습니다."  # noqa: E501
+            "IPS의 Unique 값에서 별도 필요자금을 숫자로 추출하지 못해 unique_need_amount=0으로 계산했습니다."
         )
 
     scenario_input = payload.get("scenario") if isinstance(payload.get("scenario"), dict) else {}
     if not scenario_input:
         adapter_warnings.append(
-            "scenario 입력이 없어 stress shock은 0으로 두고, 기준 금리는 기본 risk_free_rate를 사용했습니다."  # noqa: E501
+            "scenario 입력이 없어 stress shock은 0으로 두고, 기준 금리는 기본 risk_free_rate를 사용했습니다."
         )
 
     base_fx_rate = safe_float(
@@ -4635,7 +5306,7 @@ def normalize_analysis_request_payload(
     )
     if base_fx_rate == 1.0 and "base_fx_rate_krw_per_usd" not in scenario_input:
         adapter_warnings.append(
-            "base_fx_rate_krw_per_usd가 없어 1.0을 표시용 기본값으로 사용했습니다. 스트레스 테스트 화면에서는 실제 환율 입력을 넘겨야 합니다."  # noqa: E501
+            "base_fx_rate_krw_per_usd가 없어 1.0을 표시용 기본값으로 사용했습니다. 스트레스 테스트 화면에서는 실제 환율 입력을 넘겨야 합니다."
         )
 
     analysis_payload = {
@@ -4647,6 +5318,10 @@ def normalize_analysis_request_payload(
             "unique_profile": unique_profile,
             "age": extract_optional_age(payload),
             "client_context": unique_profile.get("client_context", {}),
+            "target_after_tax_return": normalize_target_after_tax_return(
+                flat_ips.get("Return"),
+                percent_input=True,
+            ),
             "risk_profile": normalize_risk_profile_value(flat_ips.get("Risk")),
             "investment_horizon_years": investment_horizon,
             "tax_sensitivity": normalize_tax_sensitivity_value(flat_ips.get("Tax")),
@@ -4661,6 +5336,10 @@ def normalize_analysis_request_payload(
                 DEFAULT_CASH_RETURN,
             ),
             "period": str(payload.get("period", "5y")),
+            "benchmark_key": payload.get(
+                "benchmark_key",
+                payload.get("benchmark", DEFAULT_BENCHMARK_KEY),
+            ),
             "num_simulations": int(safe_float(payload.get("num_simulations"), 5000)),
             "expected_return_haircut": safe_float(
                 payload.get("expected_return_haircut"),
@@ -4803,6 +5482,13 @@ def build_metrics_payload(
         if metrics.get("beta") is not None
         else None,
         "beta_benchmark": metrics.get("beta_benchmark"),
+        "selected_benchmark_key": metrics.get(
+            "selected_benchmark_key"
+        ),
+        "benchmark_comparisons": metrics.get(
+            "benchmark_comparisons",
+            {},
+        ),
         "after_tax_return": rate_to_percent(metrics["after_tax_return"]),
     }
 
@@ -4937,10 +5623,28 @@ def build_spec_portfolio_item(
         "vs_current_krw": vs_current_krw,
         "backtest": build_backtest_payload(portfolio["cumulative_returns"]),
         "benchmark": {
-            "metadata": portfolio.get("benchmark_backtest", {}).get("metadata", {}),
+            "metadata": portfolio.get(
+                "benchmark_backtest",
+                {},
+            ).get("metadata", {}),
             "backtest": build_backtest_payload(
-                portfolio.get("benchmark_backtest", {}).get("series", [])
+                portfolio.get(
+                    "benchmark_backtest",
+                    {},
+                ).get("series", [])
             ),
+        },
+        "benchmarks": {
+            key: {
+                "metadata": benchmark.get("metadata", {}),
+                "backtest": build_backtest_payload(
+                    benchmark.get("series", [])
+                ),
+            }
+            for key, benchmark in portfolio.get(
+                "benchmark_backtests",
+                {},
+            ).items()
         },
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
@@ -5058,6 +5762,12 @@ def get_guidelines():
     return get_guideline_definition()
 
 
+@router.get("/benchmarks", response_model=Dict[str, Any])
+def get_benchmarks():
+    """PB가 선택할 수 있는 비교용 벤치마크 메타데이터."""
+    return get_benchmark_catalog()
+
+
 @router.post("/portfolio/calculate", response_model=PortfolioCalculateResponse)
 def portfolio_calculate(request: Dict[str, Any]):
     """API 명세서 ⑤ 포트폴리오 계산."""
@@ -5106,10 +5816,15 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
         weights = canonicalize_weights(request.weights) or get_default_current_weights()
         weights = normalize_weights(weights)
 
-        prices = download_price_data(
-            period=req.period, cash_return=req.cash_return, benchmark_choice=req.benchmark
-        )
+        prices = download_price_data(period=req.period, cash_return=req.cash_return)
         returns = calculate_daily_returns(prices)
+        benchmark_returns, _ = download_benchmark_returns(
+            period=req.period,
+        )
+        analysis_returns = attach_benchmark_returns(
+            returns,
+            benchmark_returns,
+        )
         expected_returns = calculate_expected_returns(
             returns=returns,
             expected_return_haircut=req.expected_return_haircut,
@@ -5119,8 +5834,7 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
         )
 
         base = calculate_metrics(
-            weights, returns, expected_returns, req,
-            include_benchmark_metrics=True, benchmark_choice=req.benchmark
+            weights, analysis_returns, expected_returns, req, include_benchmark_metrics=True
         )
         assets = [
             asset
@@ -5130,12 +5844,11 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
         asset_shocks = derive_asset_shocks_from_macro(assets, req)
         stressed = calculate_metrics(
             weights,
-            returns,
+            analysis_returns,
             expected_returns,
             req,
             include_benchmark_metrics=True,
             shocks=asset_shocks,
-            benchmark_choice=req.benchmark,
         )
 
         return {
@@ -5150,7 +5863,11 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/all", response_model=Dict[str, Any])
+@router.post(
+    "/api/portfolio/all",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_portfolio_all(request: AnalysisRequest):
     """
     최초 대시보드용 전체 API.
@@ -5162,7 +5879,11 @@ def api_portfolio_all(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/current", response_model=Dict[str, Any])
+@router.post(
+    "/api/portfolio/current",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_portfolio_current(request: AnalysisRequest):
     """
     현재 포트폴리오만 반환.
@@ -5177,7 +5898,11 @@ def api_portfolio_current(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/a", response_model=Dict[str, Any])
+@router.post(
+    "/api/portfolio/a",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_portfolio_a(request: AnalysisRequest):
     """
     포트폴리오 A만 반환.
@@ -5192,7 +5917,11 @@ def api_portfolio_a(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/b", response_model=Dict[str, Any])
+@router.post(
+    "/api/portfolio/b",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_portfolio_b(request: AnalysisRequest):
     """
     포트폴리오 B만 반환.
@@ -5207,7 +5936,11 @@ def api_portfolio_b(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/portfolio/bundle", response_model=Dict[str, Any])
+@router.post(
+    "/api/portfolio/bundle",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_portfolio_bundle(request: AnalysisRequest):
     """
     현재 / 포트폴리오 A / 포트폴리오 B 묶음만 반환.
@@ -5225,7 +5958,11 @@ def api_portfolio_bundle(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/backtest", response_model=Dict[str, Any])
+@router.post(
+    "/api/backtest",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_backtest(request: AnalysisRequest):
     """
     현재 / 포트폴리오 A / 포트폴리오 B 백테스트 데이터만 반환.
@@ -5237,7 +5974,11 @@ def api_backtest(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/tax-inputs", response_model=Dict[str, Any])
+@router.post(
+    "/api/tax-inputs",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_tax_inputs(request: AnalysisRequest):
     """
     절세 최적화 파트에 넘길 값만 반환.
@@ -5250,7 +5991,11 @@ def api_tax_inputs(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.post("/api/tax-optimizer", response_model=Dict[str, Any])
+@router.post(
+    "/api/tax-optimizer",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def api_tax_optimizer(request: AnalysisRequest):
     """
     절세 최적화 화면 전용 payload만 반환.
@@ -5290,7 +6035,11 @@ def api_get_saved_request(session_id: str):
 # 새 프론트는 /api/portfolio/all 등 분리 API를 사용하면 됨.
 
 
-@router.post("/analyze", response_model=Dict[str, Any])
+@router.post(
+    "/analyze",
+    response_model=Dict[str, Any],
+    deprecated=True,
+)
 def analyze_portfolio(request: PortfolioRequest):
     try:
         return run_analysis_core(request)

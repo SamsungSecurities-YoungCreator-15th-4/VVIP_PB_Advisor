@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 # 고객 SSOT 는 DB(client 테이블)다. 과거에는 페르소나 3명을 Literal 로 고정했으나,
@@ -11,10 +11,8 @@ CustomerName = str
 
 class ConsultationResponse(BaseModel):
     consultation_id: str
-    customer_id: str = Field(description="DB client.id. 요청도 이 고유 ID 기준으로 받는다.")
-    customer_name: CustomerName = Field(
-        description="DB client.name 표시값. 라우터가 customer_id로 client를 조회해 채운다."
-    )
+    customer_id: str
+    customer_name: CustomerName
     consultation_date: str
     transcript_title: str
     ips_title: str
@@ -28,10 +26,8 @@ class ConsultationResponse(BaseModel):
 
 class ConsultationSummaryResponse(BaseModel):
     consultation_id: str
-    customer_id: str = Field(description="DB client.id. 요청도 이 고유 ID 기준으로 받는다.")
-    customer_name: CustomerName = Field(
-        description="DB client.name 표시값. 라우터가 customer_id로 client를 조회해 채운다."
-    )
+    customer_id: str
+    customer_name: CustomerName
     consultation_date: str
     transcript_title: str
     ips_title: str
@@ -41,10 +37,7 @@ class ConsultationSummaryResponse(BaseModel):
 
 
 class ConsultationListResponse(BaseModel):
-    customer_id: str = Field(description="DB client.id. 요청도 이 고유 ID 기준으로 받는다.")
-    customer_name: CustomerName = Field(
-        description="DB client.name 표시값. 라우터가 customer_id로 client를 조회해 채운다."
-    )
+    customer_name: CustomerName
     consultations: list[ConsultationSummaryResponse]
 
     model_config = ConfigDict(extra="forbid")
@@ -52,10 +45,8 @@ class ConsultationListResponse(BaseModel):
 
 class InitialIpsResponse(BaseModel):
     ips_snapshot_id: str
-    customer_id: str = Field(description="DB client.id. 요청도 이 고유 ID 기준으로 받는다.")
-    customer_name: CustomerName = Field(
-        description="DB client.name 표시값. 라우터가 customer_id로 client를 조회해 채운다."
-    )
+    customer_id: str
+    customer_name: CustomerName
     source_type: Literal["initial"]
     ips_json: dict
     created_at: str

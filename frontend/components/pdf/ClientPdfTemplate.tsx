@@ -26,15 +26,14 @@ const TEXT = "#111827";
 const MUTED = "#6B7280";
 const BORDER = "#E5E7EB";
 
-const getTodayShort = () =>
-  new Date()
-    .toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-    .replace(/\. /g, ".")
-    .replace(/\.$/, "");
+const TODAY_SHORT = new Date()
+  .toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+  .replace(/\. /g, ".")
+  .replace(/\.$/, "");
 
 // ── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -59,7 +58,7 @@ function PageFooter({ page, total }: { page: number; total: number }) {
       <span style={{ fontSize: 10, color: MUTED }}>
         Page {page} / {total}
       </span>
-      <span style={{ fontSize: 10, color: MUTED }}>{getTodayShort()}</span>
+      <span style={{ fontSize: 10, color: MUTED }}>{TODAY_SHORT}</span>
     </div>
   );
 }
@@ -266,7 +265,7 @@ function CoverPage() {
           }}
         >
           {[
-            { label: "보고서 일자", value: getTodayShort(), color: TEXT },
+            { label: "보고서 일자", value: TODAY_SHORT, color: TEXT },
             { label: "선택 포트폴리오", value: "포트폴리오 A", color: BRAND },
             {
               label: "예상 연간 절세",
@@ -447,7 +446,7 @@ function MarketIpsPage() {
             {C.name} 고객님
           </div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
+            {TODAY_SHORT} 기준
           </div>
         </div>
       </div>
@@ -738,7 +737,7 @@ function PortfolioPage() {
             {C.name} 고객님
           </div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
+            {TODAY_SHORT} 기준
           </div>
         </div>
       </div>
@@ -1141,7 +1140,7 @@ function TaxPage() {
             {C.name} 고객님
           </div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
+            {TODAY_SHORT} 기준
           </div>
         </div>
       </div>
@@ -1512,7 +1511,7 @@ function DiversificationPage() {
             {C.name} 고객님
           </div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
+            {TODAY_SHORT} 기준
           </div>
         </div>
       </div>

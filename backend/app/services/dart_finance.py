@@ -61,7 +61,7 @@ def _parse_amount(raw: str) -> int | None:
     if s in ("", "-"):
         return None
     try:
-        return int(float(s))
+        return int(s)
     except ValueError:
         return None
 

@@ -62,16 +62,12 @@ def _write_snapshot_entry(section: str, key: str, data: dict) -> None:
             with open(_snapshot_path(), "w", encoding="utf-8") as f:
                 json.dump(snapshot, f)
         except OSError:
-            logger.warning(
-                "Failed to persist market snapshot (section=%s, key=%s)",
-                section, key, exc_info=True,
-            )
+            pass
 
 
 def _read_snapshot_entry(section: str, key: str) -> dict | None:
-    with _SNAPSHOT_LOCK:
-        entry = _read_snapshot().get(section, {}).get(key)
-        return entry["data"] if entry else None
+    entry = _read_snapshot().get(section, {}).get(key)
+    return entry["data"] if entry else None
 
 
 # ── 시세 (KOSPI/S&P500/미국채10년 등) ───────────────────────────────────────
@@ -152,11 +148,10 @@ def _read_forex_history() -> dict | None:
 def _write_forex_history(history: dict) -> None:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        with _SNAPSHOT_LOCK:
-            with open(FOREX_HISTORY_PATH, "w", encoding="utf-8") as f:
-                json.dump(history, f, indent=2)
+        with open(FOREX_HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
     except OSError:
-        logger.warning("Failed to write forex history cache: %s", FOREX_HISTORY_PATH, exc_info=True)
+        pass
 
 
 def _fetch_wise_rate() -> float:
@@ -295,8 +290,7 @@ def _fetch_historical_sync(ticker: str, years: int = 5) -> MarketDataPoint:
         dates = [ts.strftime("%Y-%m-%d") for ts in closes.index]
 
         weekly_returns = [
-            (prices[i] - prices[i - 1]) / prices[i - 1] if prices[i - 1] != 0 else 0.0
-            for i in range(1, len(prices))
+            (prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))
         ]
         mean = sum(weekly_returns) / len(weekly_returns)
         annual_return = (1 + mean) ** 52 - 1
