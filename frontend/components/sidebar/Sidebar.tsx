@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Loader2,
-  Mic,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -18,8 +17,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
-import StressTestSection from "@/components/right-panel/StressTestSection";
-import { type Customer, CUSTOMERS, PAST_CONSULTATIONS } from "@/lib/mockData";
+import {
+  type Customer,
+  CUSTOMERS,
+  PAST_CONSULTATIONS,
+} from "@/lib/mockData";
 import {
   type ListedClient,
   createClient,
@@ -222,7 +224,7 @@ export default function Sidebar() {
             className="text-[9px] font-bold leading-none text-muted-foreground"
             style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            IPS&Test
+            고객IPS
           </span>
         </button>
       </div>
@@ -235,7 +237,7 @@ export default function Sidebar() {
         {/* 패널 헤더 */}
         <div className="flex items-center justify-between px-0.5 pb-0.5">
           <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-            IPS&Test
+            고객 IPS
           </span>
           <button
             onClick={() => setIsOpen(false)}
@@ -299,44 +301,27 @@ export default function Sidebar() {
             className="hidden"
             onChange={(e) => setUploadedFile(e.target.files?.[0] ?? null)}
           />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
-            >
-              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
-                <Upload className="size-4 text-brand" />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+          >
+            <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+              <Upload className="size-4 text-brand" />
+            </span>
+            <span className="block text-[13px] font-bold text-brand-dark">
+              음성 업로드
+            </span>
+            {uploadedFile ? (
+              <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
+                {uploadedFile.name}
               </span>
-              <span className="block text-[13px] font-bold text-brand-dark">
-                음성 업로드
-              </span>
-              {uploadedFile ? (
-                <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
-                  {uploadedFile.name}
-                </span>
-              ) : (
-                <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                  wav 지원
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
-            >
-              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
-                <Mic className="size-4 text-brand" />
-              </span>
-              <span className="block text-[13px] font-bold text-brand-dark">
-                실시간 전사
-              </span>
+            ) : (
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                실시간 녹음
+                wav 지원
               </span>
-            </button>
-          </div>
+            )}
+          </button>
 
           {uploadedFile && (
             <Button
@@ -373,7 +358,7 @@ export default function Sidebar() {
             <p className="text-[14px] font-bold">상담 내역</p>
             <DataSourceBadge source={transcriptSource} note={sttNote} />
           </div>
-          <div className="flex max-h-[150px] flex-col gap-1.5 overflow-y-auto pr-0.5">
+          <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-0.5">
             {transcript.map((m, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span
@@ -488,8 +473,6 @@ export default function Sidebar() {
             />
           </IpsRow>
         </Card>
-
-        <StressTestSection />
 
         <Button
           size="lg"

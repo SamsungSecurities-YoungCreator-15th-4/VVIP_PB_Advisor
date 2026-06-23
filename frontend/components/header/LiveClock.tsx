@@ -27,10 +27,10 @@ export default function LiveClock() {
 
   return (
     <div className="flex items-center gap-1 pr-1 text-[11px] font-semibold text-muted-foreground">
-      <span>현재</span>
       <b className="text-sm font-bold tabular-nums text-foreground">
         {time ?? "--:--"}
       </b>
+      <span>현재</span>
     </div>
   );
 }

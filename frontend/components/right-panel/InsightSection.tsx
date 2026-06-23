@@ -22,9 +22,7 @@ export default function InsightSection() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiResult<InsightData> | null>(null);
 
-  const portfolioName = PORTFOLIOS.find(
-    (p) => p.id === selectedPortfolioId,
-  )?.name;
+  const portfolioName = PORTFOLIOS.find((p) => p.id === selectedPortfolioId)?.name;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,12 +67,7 @@ export default function InsightSection() {
           className="h-8 text-[13px] md:text-[13px]"
           disabled={loading}
         />
-        <Button
-          type="submit"
-          size="sm"
-          className="font-bold"
-          disabled={loading}
-        >
+        <Button type="submit" size="sm" className="font-bold" disabled={loading}>
           {loading ? <Loader2 className="size-3.5 animate-spin" /> : "검색"}
         </Button>
       </form>
@@ -87,14 +80,11 @@ export default function InsightSection() {
           </span>
           {result?.data.asOf && (
             <span className="ml-auto text-[9px] font-semibold text-muted-foreground/70">
-              기준{" "}
-              {new Date(result.data.asOf).toLocaleString("ko-KR", {
-                timeZone: "Asia/Seoul",
-              })}
+              기준 {new Date(result.data.asOf).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
             </span>
           )}
         </div>
-        <div className="h-[560px] overflow-y-auto pr-1">
+        <div className="h-60 overflow-y-auto pr-1">
           {isEmpty ? (
             <p className="text-[13px] font-medium text-muted-foreground">
               {note ?? "관련 문서를 찾지 못했습니다."}
