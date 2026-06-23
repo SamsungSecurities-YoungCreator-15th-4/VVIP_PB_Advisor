@@ -183,7 +183,7 @@ function Metric({
       <div className="h-full bg-card px-2 py-1.5">
         <div
           className={`w-fit text-[12px] font-bold text-muted-foreground ${
-            helpMode ? "border-b-[1.5px] border-dashed border-brand/70" : ""
+            helpMode ? "rounded border border-brand/40 bg-brand/[0.06] px-1" : ""
           }`}
         >
           {k}

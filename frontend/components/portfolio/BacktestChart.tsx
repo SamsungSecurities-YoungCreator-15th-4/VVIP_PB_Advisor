@@ -53,7 +53,7 @@ export default function BacktestChart() {
         <HelpTooltip text={BACKTEST_HELP}>
           <p className="cursor-default text-[14px] font-bold">
             <span
-              className={helpMode ? "border-b-[1.5px] border-dashed border-brand/70" : ""}
+              className={helpMode ? "rounded border border-brand/40 bg-brand/[0.06] px-1" : ""}
             >
               백테스트
             </span>{" "}
