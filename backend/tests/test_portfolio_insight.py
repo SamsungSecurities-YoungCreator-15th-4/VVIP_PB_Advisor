@@ -170,7 +170,10 @@ def test_fallback_contains_no_invented_numbers():
                 invented.append(num)
 
     assert invented == [], f"fallback이 입력에 없는 숫자를 생성했습니다: {invented}"
-    print(f"✅ fallback_portfolio_summary: 입력 외 숫자 생성 없음 (출력 수치 수: {len(output_numbers)})")
+    print(
+        "✅ fallback_portfolio_summary: 입력 외 숫자 생성 없음 "
+        f"(출력 수치 수: {len(output_numbers)})"
+    )
 
 
 def test_fallback_empty_payload():
