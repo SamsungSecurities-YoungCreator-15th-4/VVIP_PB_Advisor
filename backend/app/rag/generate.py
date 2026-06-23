@@ -5,6 +5,7 @@
 생성기는 인터페이스(Generator)로 추상화하며, 추출형이 기본 구현이다.
 """
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -72,7 +73,13 @@ def normalize_insight_summary(text: str, max_chars: int = 50, min_chars: int = 3
 
 def fallback_insight_summary(answer: str) -> str:
     """mini 요약 실패 시 answer 첫 문장을 최대 50자로 줄여 반환한다."""
-    summary = normalize_insight_summary(answer)
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.?!])\s+", answer.strip())
+        if sentence.strip()
+    ]
+    first_sentence = sentences[0] if sentences else answer
+    summary = normalize_insight_summary(first_sentence)
     if summary:
         return summary
     return "인사이트 요약을 생성하지 못했습니다."

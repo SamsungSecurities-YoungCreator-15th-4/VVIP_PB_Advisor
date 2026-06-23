@@ -187,13 +187,13 @@ class TestRagGeneratorDeterminism:
 
     def test_insight_summary_fallback_is_deterministic_and_bounded(self):
         answer = (
-            "고객은 최근 금리 변동성 확대를 우려하며 단기 유동성과 절세 가능성을 "
-            "동시에 고려해야 합니다. 제공된 자료 기준입니다."
+            "절세와 유동성 니즈가 함께 확인됩니다. 제공된 자료 기준입니다."
         )
         a = fallback_insight_summary(answer)
         b = fallback_insight_summary(answer)
         assert a == b
         assert 0 < len(a) <= 50
+        assert "제공된 자료" not in a
 
     def test_normalize_insight_summary_removes_prefix_and_bounds_length(self):
         raw = "요약: " + "절세와 유동성 니즈를 함께 고려한 보수적 상담 포인트입니다" * 2
