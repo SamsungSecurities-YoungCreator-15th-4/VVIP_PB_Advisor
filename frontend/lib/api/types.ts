@@ -68,7 +68,7 @@ export interface TaxInsightResponse {
 }
 
 // ── STT: POST /consultations/stt (multipart) ───────────────────
-// 백엔드는 client_id 를 받아 DB(client.id)로 검증한다(없으면 404).
+// 백엔드는 customer_name 을 str 로 받아 DB(client.name)로 검증한다(없으면 404).
 // /clients 로 신규 고객을 만들 수 있으므로 페르소나 3인으로 좁히지 않는다.
 export type CustomerName = string;
 

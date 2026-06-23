@@ -48,7 +48,11 @@ export default function StressTestSection() {
   const pnlEok = (id: "current" | "a" | "b") => {
     const live = byId[BACKEND_PORTFOLIO_ID[id]];
     if (!failed && live) {
-      return ((live.stressed.expectedReturn ?? 0) - (live.base.expectedReturn ?? 0)) * aumEokwon;
+      return (
+        ((live.stressed.expectedReturn ?? 0) -
+          (live.base.expectedReturn ?? 0)) *
+        aumEokwon
+      );
     }
     const s = SCENARIO_SENSITIVITY[id];
     return s.perRatePct * rateDelta + s.perFxKrw * fxDelta;
@@ -56,7 +60,7 @@ export default function StressTestSection() {
 
   return (
     <Card className="gap-0 p-3.5">
-      <p className="mb-3 text-[14px] font-bold">시나리오 Test</p>
+      <p className="mb-3 text-[14px] font-bold">Stress Test</p>
 
       <ScenarioSlider
         label="금리"
@@ -94,7 +98,8 @@ export default function StressTestSection() {
         <p className="mb-2 text-[13px] font-extrabold">예상 평가손익 (연간)</p>
         {PORTFOLIOS.map((pf) => {
           const v = pnlEok(pf.id);
-          const label = pf.id === "current" ? "현재" : `제안 ${pf.id.toUpperCase()}`;
+          const label =
+            pf.id === "current" ? "현재" : `제안 ${pf.id.toUpperCase()}`;
           return (
             <div
               key={pf.id}

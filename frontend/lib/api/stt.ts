@@ -5,7 +5,7 @@
  * 처리 시간이 길어 타임아웃을 넉넉히 잡는다(Whisper/Azure + Supabase RPC).
  *
  * 성공: 실 전사/IPS 로 화면 갱신. 실패: mock 상담(CONSULT_LOG/IPS_DEFAULT)으로 폴백(배지).
- * client_id 는 백엔드가 DB(client.id)로 검증한다 — 등록되지 않은 고객이면 404.
+ * customer_name 은 백엔드가 DB(client.name)로 검증한다 — 등록되지 않은 고객이면 404.
  */
 
 import { ApiError, apiPostForm } from "@/lib/api";
@@ -109,18 +109,11 @@ function mockConsultation(): SttConsultationData {
 }
 
 export async function uploadSttConsultation(
-  clientId: string | undefined,
+  customerName: string,
   file: File,
 ): Promise<ApiResult<SttConsultationData>> {
-  if (!clientId) {
-    return fallback(
-      mockConsultation(),
-      "DB에 저장된 고객만 STT 처리를 할 수 있습니다. 데모 상담을 표시합니다.",
-    );
-  }
-
   const form = new FormData();
-  form.append("client_id", clientId);
+  form.append("customer_name", customerName);
   form.append("audio_file", file);
 
   try {

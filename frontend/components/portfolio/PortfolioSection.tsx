@@ -7,6 +7,16 @@ import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
 import { DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
 import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
+import HelpTooltip from "@/components/common/HelpTooltip";
+
+const METRIC_HELP: Record<string, string> = {
+  기대수익률: "연간 기대 수익률입니다. 과거 수익률과 자산별 위험 프리미엄을 바탕으로 추정한 값으로, 실제 수익을 보장하지 않습니다.",
+  샤프지수: "위험 1단위당 초과 수익을 나타냅니다. 값이 클수록 위험 대비 수익이 높으며, 1.0 이상이면 우수한 수준으로 평가합니다.",
+  소르티노: "하락 위험(손실 변동성)만을 고려한 위험 조정 수익률입니다. 샤프지수보다 손실 가능성을 더 엄밀하게 반영합니다.",
+  세후수익률: "세금 효과를 반영한 실질 수익률입니다. ISA·연금 계좌 활용 등 절세 전략 적용 시 수치가 높아집니다.",
+  변동성: "포트폴리오 수익률의 표준편차로 측정한 위험 수준입니다. 값이 낮을수록 수익이 안정적입니다.",
+  MDD: "분석 기간 중 고점 대비 최대 하락폭(Maximum Drawdown)입니다. 최악의 시나리오에서의 손실 규모를 나타냅니다.",
+};
 
 /** 중앙 상단: 현재 / 포트폴리오 A / 포트폴리오 B — 카드 클릭으로 선택 */
 export default function PortfolioSection() {
@@ -164,25 +174,34 @@ function Metric({
   sub?: string;
   tone?: "up" | "down";
 }) {
+  const helpMode = useDashboardStore((s) => s.helpMode);
   const toneCls =
     tone === "up" ? "text-up" : tone === "down" ? "text-down" : "";
   const arrow = tone === "up" ? "▲" : tone === "down" ? "▼" : null;
   return (
-    <div className="bg-card px-2 py-1.5">
-      <div className="text-[12px] font-bold text-muted-foreground">{k}</div>
-      <div
-        className={`mt-1 text-[14px] font-extrabold leading-none tabular-nums ${toneCls}`}
-      >
-        {arrow && <span className="mr-0.5 text-[14px]">{arrow}</span>}
-        {v}
-      </div>
-      {sub && (
+    <HelpTooltip text={METRIC_HELP[k] ?? ""}>
+      <div className="h-full bg-card px-2 py-1.5">
         <div
-          className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}
+          className={`w-fit text-[12px] font-bold text-muted-foreground ${
+            helpMode ? "rounded border border-brand/40 bg-brand/[0.06] px-1" : ""
+          }`}
         >
-          {sub}
+          {k}
         </div>
-      )}
-    </div>
+        <div
+          className={`mt-1 text-[14px] font-extrabold leading-none tabular-nums ${toneCls}`}
+        >
+          {arrow && <span className="mr-0.5 text-[14px]">{arrow}</span>}
+          {v}
+        </div>
+        {sub && (
+          <div
+            className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}
+          >
+            {sub}
+          </div>
+        )}
+      </div>
+    </HelpTooltip>
   );
 }

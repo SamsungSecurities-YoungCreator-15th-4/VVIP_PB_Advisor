@@ -52,6 +52,9 @@ interface DashboardState {
   sttStatus: SttStatus;
   sttNote?: string;
 
+  helpMode: boolean;
+  toggleHelpMode: () => void;
+
   addCustomer: (c: Customer) => void;
   setCustomers: (customers: Customer[]) => void;
   selectCustomer: (id: string) => void;
@@ -93,7 +96,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   consultationId: "",
   sttStatus: "idle",
   sttNote: undefined,
+  helpMode: false,
 
+  toggleHelpMode: () => set((s) => ({ helpMode: !s.helpMode })),
   addCustomer: (c) => set((s) => ({ customers: [...s.customers, c] })),
   setCustomers: (customers) =>
     set((s) => ({

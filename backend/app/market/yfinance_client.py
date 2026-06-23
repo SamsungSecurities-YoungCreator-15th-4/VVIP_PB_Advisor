@@ -62,13 +62,11 @@ def _write_snapshot_entry(section: str, key: str, data: dict) -> None:
             with open(_snapshot_path(), "w", encoding="utf-8") as f:
                 json.dump(snapshot, f)
         except OSError:
-            logger.warning(
-                "Failed to persist market snapshot (section=%s, key=%s)",
-                section, key, exc_info=True,
-            )
+            pass
 
 
 def _read_snapshot_entry(section: str, key: str) -> dict | None:
+    # 쓰기(_write_snapshot_entry)와 동일한 락으로 보호해 동시 접근 시 일관성을 보장한다.
     with _SNAPSHOT_LOCK:
         entry = _read_snapshot().get(section, {}).get(key)
         return entry["data"] if entry else None
@@ -152,11 +150,10 @@ def _read_forex_history() -> dict | None:
 def _write_forex_history(history: dict) -> None:
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        with _SNAPSHOT_LOCK:
-            with open(FOREX_HISTORY_PATH, "w", encoding="utf-8") as f:
-                json.dump(history, f, indent=2)
+        with open(FOREX_HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
     except OSError:
-        logger.warning("Failed to write forex history cache: %s", FOREX_HISTORY_PATH, exc_info=True)
+        pass
 
 
 def _fetch_wise_rate() -> float:

@@ -11,18 +11,21 @@ import {
 } from "recharts";
 import { TAX_EFFECT } from "@/lib/mockData";
 
-const AFTER_TAX_COLORS = ["#AEB5BD", "#0064FF"]; // 일반과세(회색) / 절세전략(브랜드 블루)
-const TAX_COLORS = ["#F04452", "#F4A8AE"]; // 세금 누수(빨강) / 절세 후 잔여 세금
+const AFTER_TAX_COLORS = ["#AEB5BD", "#0064FF", "#0064FF"];
+const TAX_COLORS = ["#F04452", "#F4A8AE", "transparent"];
 
 /**
- * ① 세금 흐름 비교 — 일반과세 vs 절세전략의 세후수익·세금을
- * 가로 누적 바(워터폴 바)로 비교한다. recharts BarChart 사용.
+ * ① 세금 흐름 비교 — 기존 자산 / 포트폴리오 전환 / + 절세 제안을
+ * 가로 누적 바로 비교한다. afterTaxManwon·taxManwon 기준.
  */
 export default function TaxWaterfall() {
-  const data = TAX_EFFECT.flow.rows.map((r) => ({
+  const { rows, pretaxLabel, totalLabel, totalSavingManwon } =
+    TAX_EFFECT.flow;
+
+  const data = rows.map((r) => ({
     name: r.label,
-    afterTax: r.afterTax,
-    tax: r.tax,
+    afterTax: r.afterTaxManwon,
+    tax: r.taxManwon,
   }));
 
   return (
@@ -33,55 +36,69 @@ export default function TaxWaterfall() {
         </span>
         세금 흐름 비교
         <span className="text-[12px] font-semibold text-muted-foreground">
-          · {TAX_EFFECT.flow.pretaxLabel}
+          · {pretaxLabel}
         </span>
       </p>
-      <div className="h-27.5">
+      <div className="h-30">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
             layout="vertical"
-            margin={{ top: 0, right: 40, bottom: 0, left: 0 }}
-            barSize={28}
+            margin={{ top: 0, right: 44, bottom: 0, left: 0 }}
+            barSize={26}
           >
-            <XAxis type="number" hide />
+            <XAxis type="number" hide domain={[0, 27000]} />
             <YAxis
               type="category"
               dataKey="name"
-              width={52}
+              width={76}
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 12, fontWeight: 800, fill: "#4E5968" }}
+              tick={{ fontSize: 11, fontWeight: 800, fill: "#4E5968" }}
             />
             <Bar dataKey="afterTax" stackId="flow" isAnimationActive={false}>
               {data.map((_, i) => (
-                <Cell key={i} fill={AFTER_TAX_COLORS[i]} radius={8} />
+                <Cell key={i} fill={AFTER_TAX_COLORS[i]} radius={10} />
               ))}
               <LabelList
                 dataKey="afterTax"
                 position="insideLeft"
-                formatter={(v) => `세후 ${Number(v).toLocaleString()}만`}
-                style={{ fontSize: 12, fontWeight: 800, fill: "#fff" }}
+                formatter={(v: unknown) =>
+                  `세후 ${(Number(v) / 10000).toFixed(2)}억`
+                }
+                style={{ fontSize: 11, fontWeight: 800, fill: "#fff" }}
               />
             </Bar>
             <Bar dataKey="tax" stackId="flow" isAnimationActive={false}>
               {data.map((_, i) => (
-                <Cell key={i} fill={TAX_COLORS[i]} radius={8} />
+                <Cell key={i} fill={TAX_COLORS[i]} radius={10} />
               ))}
               <LabelList
                 dataKey="tax"
                 position="right"
-                formatter={(v) => Number(v).toLocaleString()}
+                formatter={(v: unknown) =>
+                  Number(v) > 0 ? `${Number(v).toLocaleString()}만` : ""
+                }
                 style={{ fontSize: 11, fontWeight: 800, fill: "#F04452" }}
               />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-3">
-        <LegendDot color="#0064FF" label="세후 수익(절세전략)" />
-        <LegendDot color="#AEB5BD" label="세후 수익(일반)" />
-        <LegendDot color="#F04452" label="세금 누수" />
+
+      {/* 총 절세 효과 요약 */}
+      <div className="mt-1.5 flex items-center justify-between rounded-lg bg-muted/60 px-2.5 py-1.5">
+        <span className="text-[11px] font-semibold text-muted-foreground">
+          {totalLabel}
+        </span>
+        <span className="text-[13px] font-extrabold tabular-nums text-up">
+          +{totalSavingManwon.toLocaleString()}만원
+        </span>
+      </div>
+
+      <div className="mt-1.5 flex gap-3">
+        <LegendDot color="#0064FF" label="세후 수익" />
+        <LegendDot color="#F04452" label="세금" />
       </div>
     </div>
   );
@@ -89,11 +106,8 @@ export default function TaxWaterfall() {
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground">
-      <span
-        className="size-2 rounded-[3px]"
-        style={{ backgroundColor: color }}
-      />
+    <span className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+      <span className="size-2 rounded-[3px]" style={{ backgroundColor: color }} />
       {label}
     </span>
   );

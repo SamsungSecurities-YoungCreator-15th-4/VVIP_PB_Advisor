@@ -23,6 +23,33 @@ export default function TaxGauge() {
   } = TAX_THRESHOLD;
 
   const [otherIncome, setOtherIncome] = useState(otherIncomeDefault);
+  const [inputVal, setInputVal] = useState(String(otherIncomeDefault));
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^0-9]/g, "");
+    setInputVal(raw);
+    const parsed = parseInt(raw, 10);
+    if (!isNaN(parsed)) {
+      setOtherIncome(Math.min(parsed, otherIncomeMax));
+    }
+  };
+
+  const handleInputBlur = () => {
+    if (inputVal === "") {
+      setOtherIncome(0);
+      setInputVal("0");
+      return;
+    }
+    const parsed = parseInt(inputVal, 10);
+    const clamped = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), otherIncomeMax);
+    setOtherIncome(clamped);
+    setInputVal(String(clamped));
+  };
+
+  const handleSliderChange = (v: number) => {
+    setOtherIncome(v);
+    setInputVal(String(v));
+  };
   const total = otherIncome + portfolioDividendManwon;
   const isOver = total > thresholdManwon;
   const totalPct = (Math.min(total, gaugeMaxManwon) / gaugeMaxManwon) * 100;
@@ -35,13 +62,20 @@ export default function TaxGauge() {
           <p className="text-[12px] font-bold text-muted-foreground">
             고객 기타 금융소득 입력 (연 이자·배당)
           </p>
-          <p className="mt-1 text-lg font-extrabold tabular-nums">
-            {fmt(otherIncome)}
-            <span className="text-[12px]">만원</span>
-          </p>
+          <div className="mt-1 flex items-baseline gap-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={inputVal}
+              onChange={handleInputChange}
+              onBlur={handleInputBlur}
+              className="w-32 rounded-md border border-border bg-transparent px-2 py-0.5 text-lg font-extrabold tabular-nums outline-none focus:border-brand"
+            />
+            <span className="text-[12px] font-bold text-muted-foreground">만원</span>
+          </div>
           <Slider
             value={[otherIncome]}
-            onValueChange={([v]) => setOtherIncome(v)}
+            onValueChange={([v]) => handleSliderChange(v)}
             min={0}
             max={otherIncomeMax}
             step={10}
