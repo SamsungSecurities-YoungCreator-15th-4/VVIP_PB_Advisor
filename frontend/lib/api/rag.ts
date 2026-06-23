@@ -52,6 +52,7 @@ export interface FetchInsightOptions {
   consultationId?: string;
   riskProfile?: string | null;
   selectedPortfolio?: string | null;
+  dashboard?: Record<string, unknown> | null;
 }
 
 export async function fetchRagInsight(
@@ -66,6 +67,7 @@ export async function fetchRagInsight(
     context: {
       risk_profile: options.riskProfile ?? null,
       selected_portfolio: options.selectedPortfolio ?? null,
+      dashboard: options.dashboard ?? null,
     },
   };
 

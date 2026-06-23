@@ -11,6 +11,7 @@ export interface RagInsightRequest {
   context?: {
     risk_profile?: string | null;
     selected_portfolio?: string | null;
+    dashboard?: Record<string, unknown> | null;
   };
 }
 

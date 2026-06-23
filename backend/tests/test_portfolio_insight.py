@@ -212,6 +212,39 @@ def test_portfolio_insight_request_schema():
     print("✅ PortfolioInsightRequest 스키마 파싱·직렬화 정상")
 
 
+def test_rag_dashboard_query_intent_detection():
+    """RAG 인사이트가 대시보드 요약성 질의를 별도 분기로 감지한다."""
+    import importlib  # noqa: PLC0415
+    mod = importlib.import_module("app.routers.rag")
+
+    assert mod._is_dashboard_summary_query("중앙대시보드 결과 요약해줘")
+    assert mod._is_dashboard_summary_query("분석 겨로가 요약해줘")
+    assert mod._is_dashboard_summary_query("분석결과 다시 설명해줘")
+    assert not mod._is_dashboard_summary_query("ISA 절세 효과는?")
+
+
+def test_rag_insight_context_accepts_dashboard_payload():
+    """RAG 요청 context.dashboard 가 중앙 대시보드 스냅샷 extra 필드를 보존한다."""
+    import importlib  # noqa: PLC0415
+    mod = importlib.import_module("app.routers.rag")
+
+    req = mod.InsightRequest(
+        consultation_id="00000000-0000-0000-0000-000000000000",
+        query="중앙대시보드 결과 요약해줘",
+        context={
+            "risk_profile": "균형형",
+            "dashboard": {
+                "schema_version": "dashboard_context_v1",
+                "current": {"metrics": {"expected_return": 0.048}},
+            },
+        },
+    )
+    dashboard = req.context.dashboard.model_dump()
+    assert dashboard["schema_version"] == "dashboard_context_v1"
+    assert dashboard["current"]["metrics"]["expected_return"] == 0.048
+    print("✅ Rag InsightRequest: dashboard context extra 필드 보존")
+
+
 if __name__ == "__main__":
     test_guardrail_detector_catches_new_number()
     test_guardrail_detector_allows_input_numbers()
@@ -220,4 +253,6 @@ if __name__ == "__main__":
     test_fallback_returns_string()
     test_fallback_includes_portfolio_labels()
     test_portfolio_insight_request_schema()
+    test_rag_dashboard_query_intent_detection()
+    test_rag_insight_context_accepts_dashboard_payload()
     print("\n모든 테스트 통과 ✅")
