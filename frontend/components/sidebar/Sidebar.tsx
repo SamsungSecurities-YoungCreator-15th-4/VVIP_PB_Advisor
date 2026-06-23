@@ -255,9 +255,6 @@ export default function Sidebar() {
             <div className="flex-1 text-left">
               <div className="flex items-center gap-2 text-[15px] font-extrabold">
                 {customer.name}
-                <span className="rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-extrabold text-white">
-                  {customer.grade}
-                </span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                 <span>{customer.aumLabel}</span>
