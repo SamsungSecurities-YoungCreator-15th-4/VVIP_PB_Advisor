@@ -12,6 +12,11 @@ import {
 } from "recharts";
 import { Card } from "@/components/ui/card";
 import { BACKTEST_SERIES } from "@/lib/mockData";
+import HelpTooltip from "@/components/common/HelpTooltip";
+import { useDashboardStore } from "@/lib/store";
+
+const BACKTEST_HELP =
+  "과거 5년 시장 데이터를 기반으로 각 포트폴리오의 누적 수익률을 시뮬레이션한 결과입니다. 현재 포트폴리오(회색)와 제안 포트폴리오 A·B를 비교하며, 과거 성과가 미래 수익을 보장하지 않습니다.";
 
 const BENCHMARKS = ["KOSPI", "S&P500", "MSCI ACWI"] as const;
 type Benchmark = (typeof BENCHMARKS)[number];
@@ -40,19 +45,26 @@ const pctFmt = (v: number) => {
 export default function BacktestChart() {
   const [benchmark, setBenchmark] = useState<Benchmark>("KOSPI");
   const benchKey = BENCHMARK_KEY[benchmark];
+  const helpMode = useDashboardStore((s) => s.helpMode);
 
   return (
     <Card className="gap-0 p-3">
       <div className="mb-1 flex items-center justify-between">
-        <p className="text-[14px] font-bold">
-          백테스트{" "}
-          <span className="text-[12px] font-semibold text-muted-foreground">
-            최근 5년
-          </span>
-          <span className="ml-1.5 text-[11px] font-semibold text-muted-foreground/60">
-            (누적 수익률, 2021년 기준)
-          </span>
-        </p>
+        <HelpTooltip text={BACKTEST_HELP}>
+          <p className="cursor-default text-[14px] font-bold">
+            <span
+              className={helpMode ? "border-b-[1.5px] border-dashed border-brand/70" : ""}
+            >
+              백테스트
+            </span>{" "}
+            <span className="text-[12px] font-semibold text-muted-foreground">
+              최근 5년
+            </span>
+            <span className="ml-1.5 text-[11px] font-semibold text-muted-foreground/60">
+              (누적 수익률, 2021년 기준)
+            </span>
+          </p>
+        </HelpTooltip>
         <div className="flex items-center gap-3">
           {/* 벤치마크 세그먼트 컨트롤 */}
           <div className="flex items-center gap-1.5">
