@@ -262,7 +262,7 @@ export default function Sidebar() {
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
                 <span>
-                  {customer.pbCode} · {customer.aumLabel}
+                  {customer.aumLabel}
                 </span>
                 {customer.persisted === false && (
                   <DataSourceBadge
