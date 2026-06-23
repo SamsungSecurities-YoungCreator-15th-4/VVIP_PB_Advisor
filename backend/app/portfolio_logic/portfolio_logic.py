@@ -3470,8 +3470,12 @@ def _metric_percentile_payload(
 
 
 def _effective_tax_rate_from_breakdown(
-    tax_breakdown: Dict[str, Any],
+    tax_breakdown: Optional[Dict[str, Any]],
 ) -> float:
+    """세금 상세가 없거나 잘못된 형식이면 세율 0으로 안전하게 처리한다."""
+    if not isinstance(tax_breakdown, dict):
+        return 0.0
+
     gross_profit = safe_float(
         tax_breakdown.get("gross_profit")
     )
@@ -3627,43 +3631,61 @@ def calculate_monte_carlo_metric_ranges(
         }
     weight_vector = weight_vector / weight_total
 
-    asset_values = np.broadcast_to(
-        weight_vector * total_asset,
-        (simulations, len(assets)),
-    ).copy()
-
-    gross_portfolio_value = np.full(
-        simulations,
-        total_asset,
-        dtype=float,
-    )
-    running_peak = gross_portfolio_value.copy()
-    path_mdd = np.zeros(simulations, dtype=float)
-
     scenario_seed = (
         int(random_seed)
         + MONTE_CARLO_METRIC_RANGE_SEED_OFFSET
     )
     rng = np.random.default_rng(scenario_seed)
 
-    for _ in range(months):
-        monthly_log_draws = rng.multivariate_normal(
-            mean=monthly_log_mean,
-            cov=monthly_covariance,
-            size=simulations,
-            check_valid="ignore",
-        )
-        asset_values *= np.exp(monthly_log_draws)
-        gross_portfolio_value = asset_values.sum(axis=1)
+    # 모든 월·경로의 자산별 로그수익률을 한 번에 생성한다.
+    # 약 60개월 × 10,000경로 × 12자산 규모로,
+    # 월별 Python 반복 호출보다 빠르면서 메모리 사용도 제한적이다.
+    monthly_log_draws = rng.multivariate_normal(
+        mean=monthly_log_mean,
+        cov=monthly_covariance,
+        size=(months, simulations),
+        check_valid="ignore",
+    )
 
-        running_peak = np.maximum(
-            running_peak,
-            gross_portfolio_value,
-        )
-        drawdown = (
-            gross_portfolio_value / running_peak - 1.0
-        )
-        path_mdd = np.minimum(path_mdd, drawdown)
+    # Buy & Hold: 누적 로그수익률을 자산별 초기 금액에 적용한다.
+    np.cumsum(
+        monthly_log_draws,
+        axis=0,
+        out=monthly_log_draws,
+    )
+    np.exp(
+        monthly_log_draws,
+        out=monthly_log_draws,
+    )
+    monthly_log_draws *= (
+        weight_vector * total_asset
+    )
+
+    portfolio_value_history = (
+        monthly_log_draws.sum(axis=2)
+    )
+    portfolio_value_history = np.vstack(
+        [
+            np.full(
+                (1, simulations),
+                total_asset,
+                dtype=float,
+            ),
+            portfolio_value_history,
+        ]
+    )
+
+    running_peak = np.maximum.accumulate(
+        portfolio_value_history,
+        axis=0,
+    )
+    drawdown = (
+        portfolio_value_history / running_peak - 1.0
+    )
+    path_mdd = drawdown.min(axis=0)
+    gross_portfolio_value = (
+        portfolio_value_history[-1]
+    )
 
     effective_tax_rate = _effective_tax_rate_from_breakdown(
         tax_breakdown
@@ -3692,11 +3714,35 @@ def calculate_monte_carlo_metric_ranges(
         - 1.0
     )
 
+    start_index_value = clean_returns.index[0]
+    end_index_value = clean_returns.index[-1]
+
+    start_formatter = getattr(
+        start_index_value,
+        "strftime",
+        None,
+    )
+    end_formatter = getattr(
+        end_index_value,
+        "strftime",
+        None,
+    )
+
+    start_date_str = (
+        start_formatter("%Y-%m-%d")
+        if callable(start_formatter)
+        else str(start_index_value)
+    )
+    end_date_str = (
+        end_formatter("%Y-%m-%d")
+        if callable(end_formatter)
+        else str(end_index_value)
+    )
+
     scenario_basis_id = (
         f"{MONTE_CARLO_METRIC_RANGE_VERSION}:"
         f"{scenario_seed}:{simulations}:{horizon_years}:"
-        f"{clean_returns.index[0].strftime('%Y-%m-%d')}:"
-        f"{clean_returns.index[-1].strftime('%Y-%m-%d')}"
+        f"{start_date_str}:{end_date_str}"
     )
 
     return {
@@ -4823,19 +4869,32 @@ def build_portfolio_response(
         include_benchmark_metrics=True,
     )
 
-    monte_carlo_metric_ranges = (
-        calculate_monte_carlo_metric_ranges(
-            weights=weights,
-            returns=returns,
-            expected_returns=expected_returns,
-            total_asset=request.total_asset,
-            investment_horizon_years=(
-                request.investment_horizon_years
-            ),
-            tax_breakdown=metrics["tax_breakdown"],
-            random_seed=request.random_seed,
+    try:
+        monte_carlo_metric_ranges = (
+            calculate_monte_carlo_metric_ranges(
+                weights=weights,
+                returns=returns,
+                expected_returns=expected_returns,
+                total_asset=request.total_asset,
+                investment_horizon_years=(
+                    request.investment_horizon_years
+                ),
+                tax_breakdown=metrics.get(
+                    "tax_breakdown"
+                ),
+                random_seed=request.random_seed,
+            )
         )
-    )
+    except Exception:
+        # Range는 부가 지표이므로 계산 실패가 전체 추천 응답을
+        # 중단시키지 않도록 안전하게 unavailable로 내린다.
+        logger.exception(
+            "Failed to calculate Monte Carlo metric ranges"
+        )
+        monte_carlo_metric_ranges = {
+            "available": False,
+            "reason": "unexpected_simulation_error",
+        }
 
     cumulative_source_returns = (
         backtest_returns

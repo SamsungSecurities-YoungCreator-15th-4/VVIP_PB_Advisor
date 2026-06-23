@@ -851,3 +851,97 @@ def test_ranges_are_not_added_to_other_ratio_metrics() -> None:
     assert "sortino_ratio_range" not in metrics
     assert "beta_range" not in metrics
 
+
+def test_pr106_gemini_review_defensive_tax_breakdown() -> None:
+    assert (
+        portfolio_module
+        ._effective_tax_rate_from_breakdown(None)
+        == 0.0
+    )
+    assert (
+        portfolio_module
+        ._effective_tax_rate_from_breakdown("invalid")
+        == 0.0
+    )
+
+
+def test_pr106_gemini_review_accepts_string_index() -> None:
+    returns = _returns(n=120)
+    returns.index = returns.index.strftime(
+        "%Y-%m-%d"
+    )
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+
+    result = (
+        portfolio_module
+        .calculate_monte_carlo_metric_ranges(
+            weights={
+                "overseas_blue_chip": 0.5,
+                "general_bond": 0.3,
+                "cash": 0.2,
+            },
+            returns=returns,
+            expected_returns=expected,
+            total_asset=3_000_000_000,
+            investment_horizon_years=1,
+            tax_breakdown={},
+            random_seed=42,
+            num_simulations=100,
+        )
+    )
+
+    assert result["available"] is True
+    assert "2023-01-02" in result[
+        "scenario_basis_id"
+    ]
+
+
+def test_pr106_gemini_review_range_failure_is_graceful(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    returns = _returns()
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+
+    def raise_simulation_error(*args, **kwargs):
+        raise np.linalg.LinAlgError(
+            "forced simulation failure"
+        )
+
+    monkeypatch.setattr(
+        portfolio_module,
+        "calculate_monte_carlo_metric_ranges",
+        raise_simulation_error,
+    )
+
+    response = build_portfolio_response(
+        "포트폴리오 A",
+        "portfolio_a",
+        {
+            "overseas_blue_chip": 0.4,
+            "general_bond": 0.4,
+            "cash": 0.2,
+        },
+        returns,
+        expected,
+        _request(age=62),
+        backtest_returns=returns,
+    )
+
+    metrics = response["metrics"]
+    assert metrics[
+        "monte_carlo_range_basis"
+    ] == {
+        "available": False,
+        "reason": "unexpected_simulation_error",
+    }
+    assert metrics[
+        "after_tax_return_range"
+    ] is None
+    assert metrics["mdd_range"] is None
+
