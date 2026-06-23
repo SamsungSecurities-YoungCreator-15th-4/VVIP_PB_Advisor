@@ -17,6 +17,8 @@ class Settings:
     def __init__(self) -> None:
         self.supabase_url = os.getenv("SUPABASE_URL", "")
         self.supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        # JWT 로컬 검증용 시크릿 — Supabase Dashboard → Settings → API → JWT Secret
+        self.supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "")
         self.allowed_origins_raw = os.getenv(
             "ALLOWED_ORIGINS",
             "http://localhost:3000,http://127.0.0.1:3000",

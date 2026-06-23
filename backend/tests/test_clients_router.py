@@ -1,11 +1,11 @@
 import unittest
 
-from app.routers.clients import _client_response_from_row
+from app.routers.clients import _to_list_item
 
 
-class ClientResponseTest(unittest.TestCase):
+class ClientListItemTest(unittest.TestCase):
     def test_reads_meta_aum_and_persona_flag(self):
-        response = _client_response_from_row(
+        item = _to_list_item(
             {
                 "id": "00000000-0000-0000-0000-000000000001",
                 "name": "김성삼",
@@ -14,14 +14,14 @@ class ClientResponseTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(response.client_id, "00000000-0000-0000-0000-000000000001")
-        self.assertEqual(response.name, "김성삼")
-        self.assertEqual(response.aum_eokwon, 18.0)
-        self.assertIs(response.is_persona, True)
-        self.assertEqual(response.created_at, "2026-06-22T17:00:00+09:00")
+        self.assertEqual(item.client_id, "00000000-0000-0000-0000-000000000001")
+        self.assertEqual(item.name, "김성삼")
+        self.assertEqual(item.aum_eokwon, 18.0)
+        self.assertIs(item.is_persona, True)
+        self.assertEqual(item.created_at, "2026-06-22T17:00:00+09:00")
 
-    def test_falls_back_when_meta_is_missing(self):
-        response = _client_response_from_row(
+    def test_falls_back_when_meta_is_none(self):
+        item = _to_list_item(
             {
                 "id": "00000000-0000-0000-0000-000000000002",
                 "name": "신규고객",
@@ -30,16 +30,16 @@ class ClientResponseTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(response.aum_eokwon, 0.0)
-        self.assertIs(response.is_persona, False)
+        self.assertIsNone(item.aum_eokwon)
+        self.assertIs(item.is_persona, False)
 
     def test_falls_back_when_required_display_fields_are_missing(self):
-        response = _client_response_from_row({"meta": {"aum_eokwon": "bad"}})
+        item = _to_list_item({"meta": {"aum_eokwon": "bad"}})
 
-        self.assertIsNone(response.client_id)
-        self.assertIsNone(response.name)
-        self.assertEqual(response.aum_eokwon, 0.0)
-        self.assertIsNone(response.created_at)
+        self.assertEqual(item.client_id, "")
+        self.assertEqual(item.name, "Unknown")
+        self.assertIsNone(item.aum_eokwon)
+        self.assertEqual(item.created_at, "")
 
 
 if __name__ == "__main__":
