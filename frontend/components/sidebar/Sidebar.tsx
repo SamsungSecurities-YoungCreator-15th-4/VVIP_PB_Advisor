@@ -261,9 +261,7 @@ export default function Sidebar() {
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                <span>
-                  {customer.aumLabel}
-                </span>
+                <span>{customer.aumLabel}</span>
                 {customer.persisted === false && (
                   <DataSourceBadge
                     source="fallback"
@@ -308,7 +306,7 @@ export default function Sidebar() {
                 </span>
               ) : (
                 <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                  wav 지원
+                  wav 파일
                 </span>
               )}
             </button>
@@ -321,10 +319,10 @@ export default function Sidebar() {
                 <Mic className="size-4 text-brand" />
               </span>
               <span className="block text-[13px] font-bold text-brand-dark">
-                실시간 전사
+                실시간 녹음
               </span>
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                실시간 녹음
+                STT
               </span>
             </button>
           </div>
