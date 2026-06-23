@@ -1,4 +1,4 @@
-import { AlertTriangle, Inbox, Wifi } from "lucide-react";
+import { Inbox, Wifi } from "lucide-react";
 import type { DataSource } from "@/lib/api";
 
 /**
@@ -17,22 +17,14 @@ export default function DataSourceBadge({
   note?: string;
   className?: string;
 }) {
-  if (source === "live") return null;
+  if (source === "live" || source === "fallback") return null;
 
-  const config =
-    source === "fallback"
-      ? {
-          Icon: AlertTriangle,
-          label: "데모 데이터",
-          // 눈에 거슬리지 않게 차분한 회색 톤. 단, 실데이터인 척 숨기진 않는다(거버넌스).
-          cls: "border-muted-foreground/15 bg-muted/30 text-muted-foreground/60",
-        }
-      : {
-          Icon: Inbox,
-          label: "데이터 없음",
-          cls: "border-muted-foreground/15 bg-muted/30 text-muted-foreground/60",
-        };
-  const { Icon, label, cls } = config;
+  // source === "fallback"은 위에서 null 반환 → 여기서는 "empty"만 도달
+  const { Icon, label, cls } = {
+    Icon: Inbox,
+    label: "데이터 없음",
+    cls: "border-muted-foreground/15 bg-muted/30 text-muted-foreground/60",
+  };
 
   return (
     <span
