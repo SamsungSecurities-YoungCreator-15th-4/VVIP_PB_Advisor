@@ -6947,8 +6947,8 @@ class StressMetricsRequest(BaseModel):
     weights: Optional[Dict[str, float]] = Field(None)
     portfolio: PortfolioRequest
     # 위기 시나리오 버튼용. 지정 시 금리·환율 슬라이더 대신 해당 위기 충격 벡터를 주입한다.
-    # 지원: "crisis_2008", "crisis_ru_war". None이면 슬라이더(금리·환율) 기반.
-    scenario: Optional[str] = Field(None)
+    # None이면 슬라이더(금리·환율) 기반. Literal로 두어 Pydantic이 입구에서 값 검증·문서화.
+    scenario: Optional[Literal["crisis_2008", "crisis_ru_war"]] = Field(None)
 
 
 @router.post("/portfolio/stress-metrics", response_model=Dict[str, Any])
@@ -7001,8 +7001,11 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
         return {
             "as_of": datetime.now(KST).isoformat(timespec="seconds"),
             "scenario": request.scenario,
-            "stress_interest_rate_shock": req.stress_interest_rate_shock,
-            "stress_fx_shock": req.stress_fx_shock,
+            # 위기 시나리오일 땐 슬라이더 충격이 무시되므로 None으로 명시(오해 방지).
+            "stress_interest_rate_shock": (
+                None if request.scenario else req.stress_interest_rate_shock
+            ),
+            "stress_fx_shock": None if request.scenario else req.stress_fx_shock,
             "asset_shocks": {k: safe_round(v, 6) for k, v in asset_shocks.items()},
             "base": base,
             "stressed": stressed,
