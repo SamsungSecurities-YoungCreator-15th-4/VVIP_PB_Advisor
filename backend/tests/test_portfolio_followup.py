@@ -16,44 +16,89 @@ import pytest
 # only these unit tests do not need the network package itself.
 sys.modules.setdefault("yfinance", types.SimpleNamespace(download=lambda *a, **k: None))
 
+from app.portfolio_logic import portfolio_logic as portfolio_module  # noqa: E402
 from app.portfolio_logic.portfolio_logic import (  # noqa: E402
-    BENCHMARK_SERIES_KEY,
-    BENCHMARK_TICKER,
+    BENCHMARK_CONFIGS,
     DEFAULT_RANDOM_SEED,
+    MIN_BETA_OBSERVATIONS,
+    PORTFOLIO_B_MIN_WEIGHT_DISTANCE,
     PortfolioRequest,
     allocate_account_buckets,
     build_portfolio_benchmark,
     build_portfolio_response,
     build_tax_optimizer_payload,
     calculate_beta,
-    calculate_irp_status,
     calculate_financial_income_comprehensive_tax_status,
-    resolve_external_financial_income_krw,
+    calculate_irp_status,
+    calculate_weight_distance,
     extract_unique_profile,
     generate_random_weights,
+    resolve_external_financial_income_krw,
 )
 from app.portfolio_logic.tax_advice import calc_combined_tax_saving  # noqa: E402
 
 
-def _returns(seed: int = 7, n: int = 600) -> pd.DataFrame:
+def _returns(
+    seed: int = 7,
+    n: int = 600,
+) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
-    index = pd.bdate_range("2023-01-02", periods=n)
+    index = pd.bdate_range(
+        "2023-01-02",
+        periods=n,
+    )
+    data = {
+        "domestic_equity": rng.normal(
+            0.00035, 0.010, n
+        ),
+        "overseas_blue_chip": rng.normal(
+            0.00045, 0.011, n
+        ),
+        "overseas_growth": rng.normal(
+            0.00055, 0.014, n
+        ),
+        "overseas_dividend": rng.normal(
+            0.00030, 0.009, n
+        ),
+        "reit": rng.normal(
+            0.00025, 0.012, n
+        ),
+        "general_bond": rng.normal(
+            0.00012, 0.003, n
+        ),
+        "separate_tax_bond": rng.normal(
+            0.00010, 0.004, n
+        ),
+        "low_coupon_bond": rng.normal(
+            0.00009, 0.004, n
+        ),
+        "gold": rng.normal(
+            0.00020, 0.009, n
+        ),
+        "commodity": rng.normal(
+            0.00010, 0.012, n
+        ),
+        "dollar": rng.normal(
+            0.00005, 0.005, n
+        ),
+        "cash": np.full(
+            n,
+            0.00005,
+        ),
+    }
+    for offset, config in enumerate(
+        BENCHMARK_CONFIGS.values()
+    ):
+        data[config["series_key"]] = (
+            rng.normal(
+                0.00038
+                + offset * 0.00001,
+                0.0105,
+                n,
+            )
+        )
     return pd.DataFrame(
-        {
-            "domestic_equity": rng.normal(0.00035, 0.010, n),
-            "overseas_blue_chip": rng.normal(0.00045, 0.011, n),
-            "overseas_growth": rng.normal(0.00055, 0.014, n),
-            "overseas_dividend": rng.normal(0.00030, 0.009, n),
-            "reit": rng.normal(0.00025, 0.012, n),
-            "general_bond": rng.normal(0.00012, 0.003, n),
-            "separate_tax_bond": rng.normal(0.00010, 0.004, n),
-            "low_coupon_bond": rng.normal(0.00009, 0.004, n),
-            "gold": rng.normal(0.00020, 0.009, n),
-            "commodity": rng.normal(0.00010, 0.012, n),
-            "dollar": rng.normal(0.00005, 0.005, n),
-            "cash": np.full(n, 0.00005),
-            BENCHMARK_SERIES_KEY: rng.normal(0.00040, 0.0105, n),
-        },
+        data,
         index=index,
     )
 
@@ -64,6 +109,7 @@ def _request(**overrides) -> PortfolioRequest:
         "risk_profile": "aggressive",
         "investment_horizon_years": 10,
         "unique_need_amount": 0,
+        "target_after_tax_return": 0.05,
         "isa_account_exists": True,
         "isa_account_age_years": 3,
         "isa_years_until_liquid": 0,
@@ -81,51 +127,135 @@ def test_random_weight_fallback_is_deterministic() -> None:
     assert sum(first.values()) == pytest.approx(1.0)
 
 
-def test_fixed_msci_acwi_benchmark_is_same_for_every_portfolio() -> None:
+@pytest.mark.parametrize(
+    "benchmark_key",
+    list(BENCHMARK_CONFIGS.keys()),
+)
+def test_pb_selectable_benchmark_is_fixed_market_series(
+    benchmark_key: str,
+) -> None:
     returns = _returns()
-
-    domestic_benchmark, domestic = build_portfolio_benchmark(
-        {"domestic_equity": 0.6, "cash": 0.4}, returns
+    first, first_meta = (
+        build_portfolio_benchmark(
+            {
+                "domestic_equity": 0.6,
+                "cash": 0.4,
+            },
+            returns,
+            benchmark_key,
+        )
     )
-    overseas_benchmark, overseas = build_portfolio_benchmark(
-        {"overseas_growth": 0.6, "cash": 0.4}, returns
+    second, second_meta = (
+        build_portfolio_benchmark(
+            {
+                "general_bond": 0.8,
+                "cash": 0.2,
+            },
+            returns,
+            benchmark_key,
+        )
     )
-    bond_benchmark, bond = build_portfolio_benchmark(
-        {"general_bond": 0.8, "cash": 0.2}, returns
+    assert first is not None
+    assert second is not None
+    pd.testing.assert_series_equal(
+        first,
+        second,
     )
+    config = BENCHMARK_CONFIGS[
+        benchmark_key
+    ]
+    for metadata in (
+        first_meta,
+        second_meta,
+    ):
+        assert (
+            metadata["benchmark_key"]
+            == benchmark_key
+        )
+        assert (
+            metadata["ticker"]
+            == config["ticker"]
+        )
+        assert (
+            metadata[
+                "affects_portfolio_"
+                "recommendation"
+            ]
+            is False
+        )
 
-    assert domestic_benchmark is not None
-    assert overseas_benchmark is not None
-    assert bond_benchmark is not None
-    pd.testing.assert_series_equal(domestic_benchmark, overseas_benchmark)
-    pd.testing.assert_series_equal(domestic_benchmark, bond_benchmark)
 
-    for metadata in (domestic, overseas, bond):
-        assert metadata["mode"] == "msci_acwi_proxy"
-        assert metadata["benchmark_ticker"] == BENCHMARK_TICKER
-        assert metadata["official_index_series"] is False
-        assert metadata["domestic_share_in_equity_sleeve"] is None
-        assert metadata["us_share_in_equity_sleeve"] is None
-
-
-def test_beta_uses_the_same_fixed_msci_acwi_benchmark() -> None:
+def test_beta_uses_aligned_selected_benchmark() -> None:
     returns = _returns()
-    weights = {"domestic_equity": 0.4, "overseas_growth": 0.6}
-    benchmark, metadata = build_portfolio_benchmark(weights, returns)
+    benchmark, metadata = (
+        build_portfolio_benchmark(
+            {
+                "domestic_equity": 0.4,
+                "overseas_growth": 0.6,
+            },
+            returns,
+            "msci_acwi",
+        )
+    )
     assert benchmark is not None
-    assert metadata["mode"] == "msci_acwi_proxy"
-    assert calculate_beta(benchmark, benchmark) == pytest.approx(1.0)
-    assert calculate_beta(benchmark * 2.0, benchmark) == pytest.approx(2.0)
+    assert (
+        metadata["benchmark_key"]
+        == "msci_acwi"
+    )
+    assert calculate_beta(
+        benchmark,
+        benchmark,
+    ) == pytest.approx(1.0)
+    assert calculate_beta(
+        benchmark * 2.0,
+        benchmark,
+    ) == pytest.approx(2.0)
 
 
-def test_fixed_benchmark_reports_missing_data() -> None:
-    returns = _returns().drop(columns=[BENCHMARK_SERIES_KEY])
-    benchmark, metadata = build_portfolio_benchmark(
-        {"domestic_equity": 0.6, "cash": 0.4}, returns
+def test_beta_requires_minimum_common_observations() -> None:
+    returns = _returns(
+        n=MIN_BETA_OBSERVATIONS - 1
+    )
+    benchmark, _ = (
+        build_portfolio_benchmark(
+            {
+                "domestic_equity": 1.0,
+            },
+            returns,
+            "kospi",
+        )
+    )
+    assert benchmark is not None
+    assert calculate_beta(
+        returns["domestic_equity"],
+        benchmark,
+    ) is None
+
+
+def test_selected_benchmark_reports_missing_data() -> None:
+    returns = _returns()
+    series_key = BENCHMARK_CONFIGS[
+        "sp500"
+    ]["series_key"]
+    returns = returns.drop(
+        columns=[series_key]
+    )
+    benchmark, metadata = (
+        build_portfolio_benchmark(
+            {
+                "domestic_equity": 0.6,
+                "cash": 0.4,
+            },
+            returns,
+            "sp500",
+        )
     )
     assert benchmark is None
     assert metadata["applicable"] is False
-    assert metadata["reason"] == "benchmark_data_missing"
+    assert (
+        metadata["reason"]
+        == "benchmark_data_missing"
+    )
 
 
 def test_pension_gating_zeroes_irp_for_short_horizon_young_client() -> None:
@@ -341,3 +471,227 @@ def test_pension_credit_zeroed_when_tax_liability_insufficient() -> None:
     )
     assert result["contributionsWon"]["pension_credit"] == 0
     assert "pension_credit" in result["ineligible"]
+
+
+def test_weight_distance_means_minimum_reallocation() -> None:
+    distance = calculate_weight_distance(
+        {"cash": 1.0},
+        {
+            "cash": 0.8,
+            "gold": 0.2,
+        },
+    )
+    assert distance == pytest.approx(
+        0.20
+    )
+    assert (
+        PORTFOLIO_B_MIN_WEIGHT_DISTANCE
+        == 0.10
+    )
+
+
+def test_non_liquid_assets_do_not_fund_liquidity_reserve() -> None:
+    request = _request(
+        age=60,
+        unique_need_amount=500_000_000,
+    )
+    buckets = allocate_account_buckets(
+        {
+            "overseas_growth": 1.0,
+        },
+        request.total_asset,
+        request,
+    )
+    taxable = buckets[
+        "taxable_account"
+    ]
+    assert (
+        taxable[
+            "liquidity_reserve_allocated"
+        ]
+        == 0
+    )
+    assert (
+        taxable[
+            "liquidity_reserve_shortfall"
+        ]
+        == 500_000_000
+    )
+    assert (
+        taxable[
+            "liquidity_reserve_fully_funded"
+        ]
+        is False
+    )
+
+
+def test_missing_age_requires_manual_irp_review() -> None:
+    status = calculate_irp_status(
+        _request(age=None)
+    )
+    assert status["usable"] is False
+    assert (
+        status[
+            "manual_review_required"
+        ]
+        is True
+    )
+    assert (
+        status["reason"]
+        == "age_missing_manual_"
+        "review_required"
+    )
+
+
+def test_recommendation_and_tax_screen_use_same_after_tax_return() -> None:
+    returns = _returns()
+    asset_keys = list(
+        portfolio_module
+        .ASSET_TICKERS.keys()
+    )
+    expected = (
+        returns[asset_keys].mean()
+        * 252
+    )
+    weights = {
+        "overseas_growth": 0.30,
+        "overseas_dividend": 0.20,
+        "general_bond": 0.25,
+        "gold": 0.10,
+        "cash": 0.15,
+    }
+    request = _request(
+        age=62,
+        marginal_income_tax_rate=0.385,
+        external_financial_income_manwon=1000,
+        overseas_realized_loss=5_000_000,
+    )
+    response = build_portfolio_response(
+        "포트폴리오 A",
+        "portfolio_a",
+        weights,
+        returns,
+        expected,
+        request,
+        backtest_returns=returns,
+    )
+    payload = build_tax_optimizer_payload(
+        "portfolio_a",
+        response,
+        request,
+    )
+    assert (
+        response["metrics"][
+            "after_tax_return"
+        ]
+        == payload["headline"][
+            "after_tax_return_after"
+        ]
+    )
+    assert (
+        response["tax_breakdown"][
+            "tax_saving_effect"
+        ]["selection_model"]
+        == "six_strategy_combined_v1"
+    )
+
+
+def test_price_data_uses_last_success_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setattr(
+        portfolio_module,
+        "PRICE_SNAPSHOT_DIR",
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        portfolio_module,
+        "PRICE_SNAPSHOT_PATH",
+        tmp_path
+        / "price_frames.json",
+    )
+
+    index = pd.bdate_range(
+        "2024-01-02",
+        periods=130,
+    )
+    cached = pd.DataFrame(
+        {
+            "domestic_equity": (
+                np.linspace(
+                    100,
+                    110,
+                    len(index),
+                )
+            ),
+            "cash": np.linspace(
+                1.0,
+                1.01,
+                len(index),
+            ),
+        },
+        index=index,
+    )
+    cached.attrs[
+        "data_snapshot"
+    ] = {
+        "data_start": "2024-01-02",
+        "data_end": (
+            index[-1].strftime(
+                "%Y-%m-%d"
+            )
+        ),
+    }
+
+    key = (
+        portfolio_module
+        ._price_snapshot_key(
+            "analysis_prices",
+            "5y",
+            0.025,
+        )
+    )
+    portfolio_module._save_price_frame_snapshot(
+        key,
+        cached,
+    )
+
+    def raise_network_error(
+        period: str,
+        cash_return: float,
+    ) -> pd.DataFrame:
+        raise RuntimeError(
+            "network unavailable"
+        )
+
+    monkeypatch.setattr(
+        portfolio_module,
+        "_download_price_data_live",
+        raise_network_error,
+    )
+    result = (
+        portfolio_module
+        .download_price_data(
+            period="5y",
+            cash_return=0.025,
+        )
+    )
+    pd.testing.assert_frame_equal(
+        result,
+        cached,
+        check_freq=False,
+    )
+    assert (
+        result.attrs[
+            "data_snapshot"
+        ]["fallback_used"]
+        is True
+    )
+    assert (
+        result.attrs[
+            "data_snapshot"
+        ]["data_source"]
+        == "disk_last_success_snapshot"
+    )
+
