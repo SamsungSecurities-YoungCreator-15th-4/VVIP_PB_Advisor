@@ -139,8 +139,8 @@ def _to_list_item(row: dict) -> ClientListItem:
     created_at = _to_kst_iso(created_at_raw) if created_at_raw else ""
 
     return ClientListItem(
-        client_id=row.get("id", ""),
-        name=row.get("name", "Unknown"),
+        client_id=row.get("id") or "",
+        name=row.get("name") or "Unknown",
         aum_eokwon=aum_eokwon,
         is_persona=bool((meta or {}).get("persona", False)),
         created_at=created_at,

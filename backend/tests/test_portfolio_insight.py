@@ -94,7 +94,8 @@ def _extract_numbers_from_text(text: str) -> list[float]:
         try:
             result.append(float(tok))
         except ValueError:
-            pass
+            # 숫자로 변환되지 않는 토큰은 무시하고 다음 토큰으로 진행한다.
+            continue
     return result
 
 

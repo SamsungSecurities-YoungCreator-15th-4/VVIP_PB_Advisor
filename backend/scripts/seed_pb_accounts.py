@@ -116,7 +116,9 @@ def seed() -> None:
     for pb in DEMO_PBS:
         print(f"  [{pb['pb_code']}] {pb['name']}")
         print(f"       이메일 : {pb['email']}")
-        print(f"       비밀번호: {pb['password']}")
+        # 비밀번호는 평문 로깅을 피한다(CodeQL: clear-text logging). 데모 비밀번호는
+        # 이 스크립트 상단 DEMO_PBS 상수에서 직접 확인한다.
+        print("       비밀번호: (DEMO_PBS 상수 참조)")
     print("=" * 48)
 
 

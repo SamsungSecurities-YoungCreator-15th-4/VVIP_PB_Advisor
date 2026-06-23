@@ -66,8 +66,10 @@ def _write_snapshot_entry(section: str, key: str, data: dict) -> None:
 
 
 def _read_snapshot_entry(section: str, key: str) -> dict | None:
-    entry = _read_snapshot().get(section, {}).get(key)
-    return entry["data"] if entry else None
+    # 쓰기(_write_snapshot_entry)와 동일한 락으로 보호해 동시 접근 시 일관성을 보장한다.
+    with _SNAPSHOT_LOCK:
+        entry = _read_snapshot().get(section, {}).get(key)
+        return entry["data"] if entry else None
 
 
 # ── 시세 (KOSPI/S&P500/미국채10년 등) ───────────────────────────────────────
@@ -290,7 +292,8 @@ def _fetch_historical_sync(ticker: str, years: int = 5) -> MarketDataPoint:
         dates = [ts.strftime("%Y-%m-%d") for ts in closes.index]
 
         weekly_returns = [
-            (prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))
+            (prices[i] - prices[i - 1]) / prices[i - 1] if prices[i - 1] != 0 else 0.0
+            for i in range(1, len(prices))
         ]
         mean = sum(weekly_returns) / len(weekly_returns)
         annual_return = (1 + mean) ** 52 - 1
