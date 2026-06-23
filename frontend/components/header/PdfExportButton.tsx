@@ -110,7 +110,7 @@ export default function PdfExportButton() {
             <ChevronDown className="size-3 opacity-70" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="start">
           <DropdownMenuItem onSelect={() => handleExport("pb")}>
             PB용
           </DropdownMenuItem>

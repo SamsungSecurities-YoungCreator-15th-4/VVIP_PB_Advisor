@@ -24,7 +24,7 @@ export default function RightPanel() {
   }
 
   return (
-    <div className="flex w-[320px] shrink-0 flex-col gap-2.5 self-stretch rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
+    <div className="flex w-[320px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
       {/* 패널 헤더 */}
       <div className="flex items-center px-0.5 pb-0.5">
         <button

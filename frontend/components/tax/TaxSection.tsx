@@ -24,17 +24,23 @@ export default function TaxSection() {
     <Tabs defaultValue="effect">
       <div className="mb-2 flex items-center justify-between px-0.5">
         <h2 className="text-lg font-extrabold">절세 최적화 시뮬레이터</h2>
-        <TabsList className="h-7">
-          <TabsTrigger value="effect" className="px-2.5 text-[12px] font-bold">
+        <TabsList className="h-auto rounded-lg bg-muted p-0.5">
+          <TabsTrigger
+            value="effect"
+            className="rounded-md px-2.5 py-0.5 text-[12px] font-bold data-[state=active]:bg-white data-[state=active]:text-brand-dark data-[state=active]:shadow-sm"
+          >
             절세 효과
           </TabsTrigger>
           <TabsTrigger
             value="threshold"
-            className="px-2.5 text-[12px] font-bold"
+            className="rounded-md px-2.5 py-0.5 text-[12px] font-bold data-[state=active]:bg-white data-[state=active]:text-brand-dark data-[state=active]:shadow-sm"
           >
             종합과세 임계선
           </TabsTrigger>
-          <TabsTrigger value="advice" className="px-2.5 text-[12px] font-bold">
+          <TabsTrigger
+            value="advice"
+            className="rounded-md px-2.5 py-0.5 text-[12px] font-bold data-[state=active]:bg-white data-[state=active]:text-brand-dark data-[state=active]:shadow-sm"
+          >
             절세 제안
           </TabsTrigger>
         </TabsList>
@@ -42,22 +48,22 @@ export default function TaxSection() {
 
       <Card className="gap-0 p-3">
         {/* 탭 1: 절세 효과 */}
-        <TabsContent value="effect" className="flex flex-col gap-3">
+        <TabsContent value="effect" className="flex flex-col gap-2">
           <div className="flex items-center gap-4 rounded-xl border border-brand/20 bg-brand/5 px-3.5 py-3">
             <div className="flex-1">
-              <div className="flex items-center gap-2 text-[12px] font-extrabold">
-                <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[12px] font-bold text-muted-foreground">
+              <div className="flex items-center gap-2 text-[13px] font-extrabold">
+                <span className="rounded-full border border-brand/20 bg-white px-2 py-0.5 text-[13px] font-bold text-muted-foreground">
                   {baseLabel}
                 </span>
               </div>
-              <p className="mt-1.5 flex items-baseline gap-1.5 text-[12px] font-bold text-up">
+              <p className="mt-1.5 flex items-baseline gap-1.5 text-[13px] font-bold text-up">
                 연간 절세 효과
                 <b className="text-3xl font-extrabold tabular-nums tracking-tight">
                   +{TAX_EFFECT.annualSavingManwon.toLocaleString()}
                 </b>
                 <span className="text-[12px] font-extrabold">만원</span>
               </p>
-              <p className="mt-1 text-[12px] font-semibold text-muted-foreground">
+              <p className="mt-1 text-[13px] font-semibold text-muted-foreground">
                 {TAX_EFFECT.subNote}
               </p>
             </div>
@@ -100,7 +106,8 @@ function AdviceCards() {
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="max-h-[520px] overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3">
         {TAX_ADVICE.cards.map((card) => {
           const active = tabs[card.title] ?? "제안설명";
           return (
@@ -140,11 +147,11 @@ function AdviceCards() {
                     {card.body}
                   </p>
                   <div className="mt-auto pt-1">
-                    <p className="text-[12px] font-bold text-muted-foreground/60">
+                    <p className="text-[13px] font-bold text-muted-foreground/60">
                       {card.tag}
                     </p>
                     {card.saving && (
-                      <p className="text-[12px] font-extrabold tabular-nums text-up">
+                      <p className="text-[13px] font-extrabold tabular-nums text-up">
                         {card.saving}
                       </p>
                     )}
@@ -179,12 +186,13 @@ function AdviceCards() {
             </div>
           );
         })}
+        </div>
       </div>
       <div className="mt-2 flex items-center justify-between rounded-xl bg-brand/10 px-3 py-2">
-        <span className="text-[12px] font-bold text-brand-dark">
+        <span className="text-[13px] font-bold text-brand-dark">
           {TAX_ADVICE.totalLabel}
         </span>
-        <span className="text-[12px] font-extrabold tabular-nums text-brand-dark">
+        <span className="text-[13px] font-extrabold tabular-nums text-brand-dark">
           {TAX_ADVICE.totalSaving}
         </span>
       </div>
@@ -195,9 +203,9 @@ function AdviceCards() {
 function SummaryStat({ k, v, d }: { k: string; v: string; d: string }) {
   return (
     <div className="min-w-29.5 rounded-xl border bg-white px-3 py-2">
-      <p className="text-[12px] font-bold text-muted-foreground">{k}</p>
-      <p className="mt-1 text-[12px] font-extrabold tabular-nums">{v}</p>
-      <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
+      <p className="text-[13px] font-bold text-muted-foreground">{k}</p>
+      <p className="mt-1 text-[13px] font-extrabold tabular-nums">{v}</p>
+      <p className="mt-0.5 text-[13px] font-extrabold tabular-nums text-up">
         {d}
       </p>
     </div>

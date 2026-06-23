@@ -3,6 +3,7 @@
 import {
   Bar,
   BarChart,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,7 +20,7 @@ const REFERENCE_MAN: Record<string, number> = {
   pension: 900,
 };
 
-const CHART_MAX = 2500;
+const CHART_MAX = 2000;
 
 const ACCOUNT_META: Record<string, { name: string }> = {
   isa: { name: "ISA" },
@@ -72,17 +73,17 @@ export default function AccountAllocation({
       : buildData(TAX_EFFECT.accounts);
 
   return (
-    <div>
-      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-extrabold">
-        절세 계좌 배치 활용도
+    <div className="flex h-full flex-col">
+      <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
+        계좌 배치 활용도
       </p>
 
-      {/* 전체 계좌 세그먼트 바 */}
-      <div className="mb-1 flex items-center gap-3">
-        <span className="w-[72px] shrink-0 text-right text-[11px] font-extrabold text-[#4E5968]">
+      {/* 전체 계좌 세그먼트 바 — YAxis width(72px) 기준 정렬, 2px 여백 */}
+      <div className="mb-1 flex items-center">
+        <span className="w-[72px] shrink-0 text-right text-[12px] font-extrabold text-[#4E5968]">
           전체 계좌
         </span>
-        <div className="flex h-[10px] flex-1 overflow-hidden rounded-md">
+        <div className="ml-[2px] mr-[16px] flex h-[10px] flex-1 overflow-hidden rounded-md">
           {allocation.map(({ group, weight }) => (
             <div
               key={group}
@@ -96,11 +97,11 @@ export default function AccountAllocation({
       </div>
 
       {/* 세그먼트 범례 */}
-      <div className="mb-3 ml-[84px] flex flex-wrap gap-x-2 gap-y-0.5">
+      <div className="mb-3 ml-[74px] mr-[16px] flex flex-wrap gap-x-2 gap-y-0.5">
         {allocation.map(({ group, weight }) => (
           <span
             key={group}
-            className="flex items-center gap-1 text-[9px] font-semibold text-muted-foreground"
+            className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground"
           >
             <span
               className="inline-block size-1.5 rounded-[2px]"
@@ -112,13 +113,13 @@ export default function AccountAllocation({
       </div>
 
       {/* ISA / 연금저축+IRP 바 차트 */}
-      <div className="h-24">
+      <div className="h-32">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
             layout="vertical"
-            margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
-            barCategoryGap="28%"
+            margin={{ top: 4, right: 16, bottom: 4, left: 2 }}
+            barCategoryGap={28}
             barGap={3}
           >
             <XAxis
@@ -126,9 +127,9 @@ export default function AccountAllocation({
               domain={[0, CHART_MAX]}
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 10, fill: "#B0B8C1", fontWeight: 600 }}
+              tick={{ fontSize: 11, fill: "#B0B8C1", fontWeight: 600 }}
               tickFormatter={xFmt}
-              ticks={[0, 500, 1000, 1500, 2000, 2500]}
+              ticks={[0, 500, 1000, 1500, 2000]}
             />
             <YAxis
               type="category"
@@ -136,7 +137,7 @@ export default function AccountAllocation({
               width={72}
               tickLine={false}
               axisLine={false}
-              tick={{ fontSize: 11, fontWeight: 800, fill: "#4E5968" }}
+              tick={{ dx: 0, fontSize: 12, fontWeight: 800, fill: "#4E5968" }}
             />
             <Tooltip
               cursor={{ fill: "#EAF1FF" }}
@@ -149,7 +150,7 @@ export default function AccountAllocation({
                       border: "1px solid #e5e7eb",
                       borderRadius: 8,
                       padding: "8px 12px",
-                      fontSize: 12,
+                      fontSize: 13,
                     }}
                   >
                     <p style={{ fontWeight: 700, marginBottom: 4 }}>{label}</p>
@@ -176,23 +177,27 @@ export default function AccountAllocation({
               name="기준값"
               fill="#D1D5DB"
               radius={4}
-              barSize={10}
+              barSize={14}
               isAnimationActive={false}
             />
             <Bar
               dataKey="used"
               name="사용액"
-              fill="#0064FF"
               radius={4}
-              barSize={10}
+              barSize={14}
               isAnimationActive={false}
-            />
+            >
+              {data.map((_, i) => (
+                <Cell key={i} fill={i === 0 ? "#0064FF" : "#3D8BFF"} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex gap-3">
-        <LegendDot color="#0064FF" label="사용액" />
+      <div className="mt-auto flex gap-3">
+        <LegendDot color="#0064FF" label="ISA 사용액" />
+        <LegendDot color="#3D8BFF" label="연금 사용액" />
         <LegendDot color="#D1D5DB" label="기준값" />
       </div>
     </div>
@@ -201,7 +206,7 @@ export default function AccountAllocation({
 
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+    <span className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground">
       <span
         className="size-2 rounded-[3px]"
         style={{ backgroundColor: color }}
