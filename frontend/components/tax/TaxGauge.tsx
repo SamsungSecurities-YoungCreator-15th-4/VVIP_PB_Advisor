@@ -35,6 +35,11 @@ export default function TaxGauge() {
   };
 
   const handleInputBlur = () => {
+    if (inputVal === "") {
+      setOtherIncome(0);
+      setInputVal("0");
+      return;
+    }
     const parsed = parseInt(inputVal, 10);
     const clamped = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), otherIncomeMax);
     setOtherIncome(clamped);

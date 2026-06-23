@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDashboardStore } from "@/lib/store";
 
 /**
  * 도움말 모드가 ON일 때만 hover 시 툴팁을 표시하는 래퍼.
  * fixed 포지셔닝을 사용해 overflow:hidden 부모에 잘리지 않는다.
+ * 항상 children을 렌더링해 helpMode 전환 시 자식 state가 초기화되지 않는다.
  */
 export default function HelpTooltip({
   children,
@@ -22,8 +23,6 @@ export default function HelpTooltip({
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
-  if (!helpMode) return <>{children}</>;
-
   const handleMouseEnter = () => {
     if (!ref.current) return;
     const r = ref.current.getBoundingClientRect();
@@ -33,20 +32,33 @@ export default function HelpTooltip({
     });
   };
 
+  const handleMouseLeave = () => setPos(null);
+
+  useEffect(() => {
+    if (!pos) return;
+    const clear = () => setPos(null);
+    window.addEventListener("scroll", clear, true);
+    window.addEventListener("resize", clear);
+    return () => {
+      window.removeEventListener("scroll", clear, true);
+      window.removeEventListener("resize", clear);
+    };
+  }, [pos]);
+
   return (
     <div
       ref={ref}
       className={`relative ${className}`}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setPos(null)}
+      onMouseEnter={helpMode ? handleMouseEnter : undefined}
+      onMouseLeave={helpMode ? handleMouseLeave : undefined}
     >
       {children}
 
-      {pos && (
+      {helpMode && pos && (
         <span className="pointer-events-none absolute inset-0 rounded-lg bg-brand/[0.07]" />
       )}
 
-      {pos && (
+      {helpMode && pos && (
         <div
           className="pointer-events-none fixed z-[9999] w-60 rounded-xl bg-foreground px-3 py-2.5 text-[13px] font-semibold leading-relaxed text-background shadow-xl"
           style={{
