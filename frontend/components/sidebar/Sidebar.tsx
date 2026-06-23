@@ -210,7 +210,7 @@ export default function Sidebar() {
   // 사이드바가 닫혔을 때: 하나의 패널임을 시각적으로 표현하는 좁은 카드 스트립
   if (!isOpen) {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
+      <div className="flex w-10 self-start shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
         <button
           onClick={() => setIsOpen(true)}
           title="사이드바 열기"

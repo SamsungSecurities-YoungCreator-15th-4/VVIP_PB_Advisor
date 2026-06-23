@@ -33,13 +33,22 @@ export default function TaxWaterfall({
   }));
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
         세금 흐름 비교
         <span className="text-[13px] font-semibold text-muted-foreground">
           {pretaxLabel}
         </span>
       </p>
+      <div className="mb-2 flex items-center justify-between rounded-lg bg-muted/60 px-2.5 py-1.5">
+        <span className="text-[12px] font-semibold text-muted-foreground">
+          {totalLabel}
+        </span>
+        <span className="text-[13px] font-extrabold tabular-nums text-up">
+          +{totalSavingManwon.toLocaleString()}만원
+        </span>
+      </div>
+
       <div className="h-32">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -87,16 +96,7 @@ export default function TaxWaterfall({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-1.5 flex items-center justify-between rounded-lg bg-muted/60 px-2.5 py-1.5">
-        <span className="text-[12px] font-semibold text-muted-foreground">
-          {totalLabel}
-        </span>
-        <span className="text-[13px] font-extrabold tabular-nums text-up">
-          +{totalSavingManwon.toLocaleString()}만원
-        </span>
-      </div>
-
-      <div className="mt-auto flex gap-3 pt-1.5">
+      <div className="mt-8 flex gap-3">
         <LegendDot color="#0064FF" label="세후 수익" />
         <LegendDot color="#F04452" label="세금" />
       </div>

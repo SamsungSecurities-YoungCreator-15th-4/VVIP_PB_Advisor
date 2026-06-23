@@ -11,7 +11,7 @@ export default function RightPanel() {
 
   if (!isOpen) {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
+      <div className="flex w-10 self-start shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
         <button
           onClick={() => setIsOpen(true)}
           title="우측 패널 열기"

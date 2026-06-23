@@ -73,7 +73,7 @@ export default function AccountAllocation({
       : buildData(TAX_EFFECT.accounts);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
         계좌 배치 활용도
       </p>
@@ -195,7 +195,7 @@ export default function AccountAllocation({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-auto flex gap-3">
+      <div className="mt-1.5 flex gap-3">
         <LegendDot color="#0064FF" label="ISA 사용액" />
         <LegendDot color="#3D8BFF" label="연금 사용액" />
         <LegendDot color="#D1D5DB" label="기준값" />
