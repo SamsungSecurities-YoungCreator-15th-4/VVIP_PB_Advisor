@@ -38,13 +38,13 @@ function toRows(d: MacroIndicators): Row[] {
   });
 
   return [
-    mk("미국 기준금리", d.baseRate, `${d.baseRate.price.toFixed(2)}%`,
+    mk("美 기준금리", d.baseRate, `${d.baseRate.price.toFixed(2)}%`,
       `${sign(d.baseRate.change)}${d.baseRate.change.toFixed(2)}%p`),
     mk("미 10Y", d.treasuryYield, `${d.treasuryYield.price.toFixed(2)}%`,
       `${sign(d.treasuryYield.change)}${d.treasuryYield.change.toFixed(2)}%p`),
     mk("원/달러", d.krwUsd, num(d.krwUsd.price),
       `${sign(d.krwUsd.change)}${num(Math.round(d.krwUsd.change))}원`),
-    mk("미국 CPI", d.cpi, `${d.cpi.price.toFixed(1)}%`,
+    mk("美 CPI", d.cpi, `${d.cpi.price.toFixed(1)}%`,
       `${sign(d.cpi.change)}${d.cpi.change.toFixed(2)}%p`),
     mk("KOSPI", d.kospi, num(d.kospi.price),
       `${sign(d.kospi.change)}${d.kospi.change.toFixed(2)}`),
@@ -59,6 +59,7 @@ const FALLBACK_ROWS: Row[] = MACRO_INDICATORS.map((m) => ({
   value: m.value,
   change: m.change,
   direction: m.direction,
+  note: "예시",
 }));
 
 // ISO(UTC) → "HH:MM" (KST) 기준 시각 표기
@@ -109,10 +110,9 @@ export default function MacroTicker() {
     };
   }, []);
 
-  // 새로고침 버튼: 클릭 시각 즉시 표시 → 강제 갱신 + 쿨다운
+  // 새로고침 버튼: 강제 갱신 + 쿨다운
   const onRefresh = () => {
     if (loading || cooling) return;
-    setFetchedAt(new Date().toISOString()); // 버튼 누른 시각으로 먼저 표시
     load(true);
     setCooling(true);
     setTimeout(() => {

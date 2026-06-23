@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -13,22 +12,11 @@ import {
 import { Card } from "@/components/ui/card";
 import { BACKTEST_SERIES } from "@/lib/mockData";
 
-const BENCHMARKS = ["KOSPI", "S&P500", "MSCI ACWI"] as const;
-type Benchmark = (typeof BENCHMARKS)[number];
-
-const BENCHMARK_KEY: Record<Benchmark, string> = {
-  KOSPI: "kospi",
-  "S&P500": "sp500",
-  "MSCI ACWI": "msciAcwi",
-};
-
 const LINES = [
   { key: "current", name: "현재", color: "#8B95A1", width: 2 },
   { key: "a", name: "A", color: "#0064FF", width: 2.6 },
   { key: "b", name: "B", color: "#5B9BFF", width: 2 },
 ] as const;
-
-const BENCHMARK_COLOR = "#DC2626";
 
 const pctFmt = (v: number) => {
   if (Number.isNaN(v)) return "";
@@ -38,9 +26,6 @@ const pctFmt = (v: number) => {
 
 /** 중앙 중단: 현재/A/B 백테스트 다중 선그래프 (최근 5년, 누적 수익률 표시) */
 export default function BacktestChart() {
-  const [benchmark, setBenchmark] = useState<Benchmark>("KOSPI");
-  const benchKey = BENCHMARK_KEY[benchmark];
-
   return (
     <Card className="gap-0 p-3">
       <div className="mb-1 flex items-center justify-between">
@@ -54,31 +39,6 @@ export default function BacktestChart() {
           </span>
         </p>
         <div className="flex items-center gap-3">
-          {/* 벤치마크 세그먼트 컨트롤 */}
-          <div className="flex items-center gap-1.5">
-            <span
-              className="h-0.75 w-3.5 rounded-sm"
-              style={{ backgroundColor: BENCHMARK_COLOR }}
-            />
-            <div className="flex rounded-lg bg-muted p-0.5">
-              {BENCHMARKS.map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => setBenchmark(b)}
-                  className={`rounded-md px-2 py-0.5 text-[11px] font-bold transition-colors ${
-                    benchmark === b
-                      ? "bg-white text-brand-dark shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 기존 범례 */}
           {LINES.map((l) => (
             <span
               key={l.key}
@@ -108,38 +68,15 @@ export default function BacktestChart() {
             />
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip
-              formatter={(value, name) => {
-                if (name === benchKey)
-                  return [
-                    value != null ? `${pctFmt(Number(value))} (${value})` : "-",
-                    benchmark,
-                  ];
-                return [
-                  value != null ? `${pctFmt(Number(value))} (${value})` : "-",
-                  LINES.find((l) => l.key === name)?.name ?? String(name),
-                ];
-              }}
+              formatter={(value, name) => [
+                value != null ? `${pctFmt(Number(value))} (${value})` : "-",
+                LINES.find((l) => l.key === name)?.name ?? String(name),
+              ]}
               itemSorter={(item) => {
-                const order: Record<string, number> = {
-                  current: 0,
-                  a: 1,
-                  b: 2,
-                  [benchKey]: 3,
-                };
+                const order: Record<string, number> = { current: 0, a: 1, b: 2 };
                 return order[String(item.dataKey)] ?? 99;
               }}
               contentStyle={{ fontSize: 12, borderRadius: 8 }}
-            />
-            {/* 벤치마크 라인 */}
-            <Line
-              key={benchKey}
-              type="monotone"
-              dataKey={benchKey}
-              stroke={BENCHMARK_COLOR}
-              strokeWidth={1.8}
-              strokeDasharray="4 3"
-              dot={false}
-              isAnimationActive={false}
             />
             {LINES.map((l) => (
               <Line

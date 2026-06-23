@@ -1,6 +1,7 @@
 "use client";
 
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import StressTestSection from "@/components/right-panel/StressTestSection";
 import InsightSection from "@/components/right-panel/InsightSection";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
 
@@ -21,7 +22,7 @@ export default function RightPanel() {
             className="text-[9px] font-bold leading-none text-muted-foreground"
             style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            AI인사이트
+            시나리오·AI인사이트
           </span>
         </button>
       </div>
@@ -33,7 +34,7 @@ export default function RightPanel() {
       {/* 패널 헤더 */}
       <div className="flex items-center justify-between px-0.5 pb-0.5">
         <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-          AI 인사이트
+          시나리오 &amp; AI 인사이트
         </span>
         <button
           onClick={() => setIsOpen(false)}
@@ -44,6 +45,7 @@ export default function RightPanel() {
         </button>
       </div>
 
+      <StressTestSection />
       <InsightSection />
     </div>
   );
