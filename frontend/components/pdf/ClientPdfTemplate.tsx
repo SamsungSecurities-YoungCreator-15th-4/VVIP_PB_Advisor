@@ -11,6 +11,7 @@ import {
   TAX_ADVICE,
   IPS_DEFAULT,
   CORRELATION_MATRIX,
+  BASE_TIME,
 } from "@/lib/mockData";
 import { DISPLAY_GROUPS } from "@/lib/assetMapping";
 
@@ -270,13 +271,14 @@ function CoverPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
+            gridTemplateColumns: "1fr 1fr 1fr 1fr",
             gap: 16,
             marginBottom: 0,
           }}
         >
           {[
             { label: "보고서 일자", value: getTodayShort(), color: TEXT },
+            { label: "기준 시각", value: `${BASE_TIME} 기준`, color: TEXT },
             { label: "선택 포트폴리오", value: "포트폴리오 A", color: BRAND },
             {
               label: "예상 연간 절세",
