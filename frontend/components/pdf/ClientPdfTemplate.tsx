@@ -72,20 +72,33 @@ function PageFooter({ page, total }: { page: number; total: number }) {
         bottom: 24,
         left: 40,
         right: 40,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
         borderTop: `1px solid ${BORDER}`,
         paddingTop: 8,
       }}
     >
-      <span style={{ fontSize: 10, color: MUTED }}>
-        VVIP PB Advisor · 고객 안내 자료
-      </span>
-      <span style={{ fontSize: 10, color: MUTED }}>
-        Page {page} / {total}
-      </span>
-      <span style={{ fontSize: 10, color: MUTED }}>{getTodayShort()}</span>
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontSize: 10, color: MUTED }}>고객 안내 자료</span>
+        <span
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 10,
+            color: MUTED,
+          }}
+        >
+          Page {page} / {total}
+        </span>
+        <span style={{ fontSize: 10, color: MUTED }}>{getTodayShort()}</span>
+      </div>
     </div>
   );
 }
@@ -225,18 +238,7 @@ function CoverPage() {
       </div>
 
       {/* 흰색 영역 콘텐츠 */}
-      <div style={{ position: "relative", padding: "60px 52px 0" }}>
-        {/* 구분선 */}
-        <div
-          style={{
-            width: 40,
-            height: 3,
-            background: BRAND,
-            borderRadius: 2,
-            marginBottom: 28,
-          }}
-        />
-
+      <div style={{ position: "relative", padding: "72px 52px 0" }}>
         {/* 고객 카드 */}
         <div
           style={{
@@ -244,7 +246,8 @@ function CoverPage() {
             border: `1px solid ${BRAND_MID}`,
             borderRadius: 14,
             padding: "24px 28px",
-            marginBottom: 32,
+            marginBottom: 60,
+            marginTop: 90,
           }}
         >
           <div
@@ -274,30 +277,37 @@ function CoverPage() {
         </div>
 
         {/* 요약 스탯 행 */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr 1fr",
-            gap: 16,
-            marginBottom: 0,
-          }}
-        >
+        <div style={{ display: "flex" }}>
           {[
-            { label: "보고서 일자", value: getTodayShort(), color: TEXT },
-            { label: "기준 시각", value: `${BASE_TIME} 기준`, color: TEXT },
-            { label: "선택 포트폴리오", value: "포트폴리오 A", color: BRAND },
+            { label: "보고서 일자", value: getTodayShort() },
+            { label: "기준 시각", value: `${BASE_TIME} 기준` },
+            { label: "선택 포트폴리오", value: "포트폴리오 A" },
             {
               label: "예상 연간 절세",
-              value: `+${TAX_EFFECT.annualSavingManwon}만원`,
-              color: UP,
+              value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원`,
             },
-          ].map((s) => (
-            <div key={s.label}>
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>
-                {s.label}
+          ].map((item, i) => (
+            <div
+              key={item.label}
+              style={{
+                flex: 1,
+                paddingLeft: i > 0 ? 20 : 0,
+                borderLeft: i > 0 ? `1px solid ${BORDER}` : "none",
+                marginLeft: i > 0 ? 20 : 0,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  color: MUTED,
+                  letterSpacing: 0.8,
+                  marginBottom: 5,
+                }}
+              >
+                {item.label}
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>
-                {s.value}
+              <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>
+                {item.value}
               </div>
             </div>
           ))}
@@ -317,7 +327,7 @@ function CoverPage() {
           padding: "14px 18px",
         }}
       >
-        <p style={{ fontSize: 10, color: MUTED, lineHeight: 1.7, margin: 0 }}>
+        <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.7, margin: 0 }}>
           본 보고서는 상담 내용, 고객 IPS, 시장 데이터 및 AI 분석 결과를
           바탕으로 고객의 투자 목적과 제약조건을 정리하고, 이에 적합한
           포트폴리오 방향을 제안하기 위해 작성되었습니다. 본 자료는 PB 상담을
@@ -464,14 +474,6 @@ function MarketIpsPage() {
             시장 현황 쉽게 이해하기 · 내 투자 방향 확인하기
           </div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {C.name} 고객님
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
-          </div>
-        </div>
       </div>
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
@@ -540,8 +542,6 @@ function MarketIpsPage() {
                   }}
                 >
                   {isUp ? "▲" : "▼"} {m.change}
-                  {m.label === "원/달러" ? "원 " : "%p "}
-                  {desc?.dir}
                 </div>
               </div>
             );
@@ -756,14 +756,6 @@ function PortfolioPage() {
             }}
           >
             현재 vs 고객 선택 포트폴리오 · 6가지 핵심 지표 설명
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {C.name} 고객님
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
           </div>
         </div>
       </div>
@@ -1045,7 +1037,7 @@ function PortfolioPage() {
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
-            핵심 투자 지표 6가지 — 쉽게 이해하기
+            핵심 투자 지표 6가지
           </div>
         </div>
 
@@ -1163,14 +1155,6 @@ function TaxPage() {
             }}
           >
             세금 효과 시뮬레이터 · 절세 계좌 배치도 · 절세 제안
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {C.name} 고객님
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
           </div>
         </div>
       </div>
@@ -1674,14 +1658,6 @@ function TaxProductsPage() {
             절세 제안 · 삼성증권 상품 연계 목록
           </div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {C.name} 고객님
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
-          </div>
-        </div>
       </div>
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
@@ -1878,14 +1854,6 @@ function DiversificationPage() {
             }}
           >
             왜 여러 자산을 함께 보유해야 하는지 이해하기
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-            {C.name} 고객님
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-            {getTodayShort()} 기준
           </div>
         </div>
       </div>

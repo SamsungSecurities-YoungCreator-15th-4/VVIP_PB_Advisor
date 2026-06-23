@@ -34,7 +34,7 @@ const portB = PORTFOLIOS.find((p) => p.id === "b")!;
 
 // 절세 계좌 배치 — 기준값(한도) 및 차트 최대값
 // 출처: 조세특례제한법 §91의18(ISA), 소득세법 §59의3(연금·IRP)
-const ACCOUNT_CHART_MAX = 4000;
+const ACCOUNT_CHART_MAX = 2000;
 const ACCOUNT_PDF = [
   {
     key: "isa",
@@ -199,11 +199,27 @@ function PageFooter({ page, total }: { page: number; total: number }) {
         paddingTop: 8,
       }}
     >
-      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <span style={{ fontSize: 10, color: MUTED }}>
           VVIP PB Advisor · 내부 기밀 자료
         </span>
-        <span style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 10, color: MUTED }}>
+        <span
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 10,
+            color: MUTED,
+          }}
+        >
           Page {page} / {total}
         </span>
         <span style={{ fontSize: 10, color: MUTED }}>
@@ -420,7 +436,7 @@ function CoverPage() {
               whiteSpace: "nowrap" as const,
             }}
           >
-            PB 내부용 · CONFIDENTIAL
+            PB 내부용
           </span>
         </div>
         <div
@@ -486,11 +502,11 @@ function CoverPage() {
         </div>
         <div style={{ display: "flex" }}>
           {[
-            { label: "REPORT DATE", value: today },
-            { label: "BASE TIME", value: `${BASE_TIME} 기준` },
-            { label: "SELECTED", value: "포트폴리오 A" },
+            { label: "보고서 일자", value: today },
+            { label: "기준 시각", value: `${BASE_TIME} 기준` },
+            { label: "선택 포트폴리오", value: "포트폴리오 A" },
             {
-              label: "TAX SAVING",
+              label: "예상 연간 절세",
               value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원/년`,
             },
           ].map((item, i) => (
@@ -571,7 +587,7 @@ function MarketIpsPage() {
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
-            주요 시장 지표 (기준 {BASE_TIME})
+            주요 시장 지표
           </div>
         </div>
 
@@ -1045,12 +1061,16 @@ function PortfolioPage() {
 // ── 페이지 4: 절세 최적화 전략 ──────────────────────────────────
 function TaxPage() {
   // 계좌별 사용액 계산 (AccountAllocation 동일 로직)
-  const accountRows = ACCOUNT_PDF.map((acct) => {
-    const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
-    const used =
-      accData?.used != null ? accData.used : Math.round(acct.refManwon * 0.45);
-    return { ...acct, used };
-  });
+  const accountRows = ACCOUNT_PDF.filter((acct) => acct.key !== "general").map(
+    (acct) => {
+      const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
+      const used =
+        accData?.used != null
+          ? accData.used
+          : Math.round(acct.refManwon * 0.45);
+      return { ...acct, used };
+    },
+  );
 
   return (
     <div
@@ -1067,7 +1087,7 @@ function TaxPage() {
       <PageHeader
         pageNum="③"
         title="절세 최적화 전략"
-        subtitle="세금 효과 시뮬레이터 · 절세 계좌 배치도 · 절세 제안"
+        subtitle="세금 효과 시뮬레이터"
       />
 
       <div style={{ padding: "20px 40px 80px", wordBreak: "keep-all" }}>
@@ -1136,6 +1156,8 @@ function TaxPage() {
               border: `1px solid ${BORDER}`,
               borderRadius: 10,
               overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             <div
@@ -1175,7 +1197,7 @@ function TaxPage() {
                     key={row.label}
                     style={{
                       borderBottom: `1px solid ${BORDER}`,
-                      background: i === 1 ? BRAND_LIGHT : "white",
+                      background: "white",
                     }}
                   >
                     <td
@@ -1183,7 +1205,7 @@ function TaxPage() {
                         padding: "7px 8px",
                         fontSize: 11,
                         fontWeight: 700,
-                        color: i === 1 ? BRAND : TEXT,
+                        color: TEXT,
                       }}
                     >
                       {row.label}
@@ -1228,6 +1250,7 @@ function TaxPage() {
                 padding: "7px 12px",
                 background: BG_ALT,
                 borderTop: `1px solid ${BORDER}`,
+                marginTop: "auto",
               }}
             >
               <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.7 }}>
@@ -1262,6 +1285,85 @@ function TaxPage() {
               절세 계좌 배치 최적화
             </div>
             <div style={{ padding: "12px 14px 10px" }}>
+              {/* 전체 계좌 세그먼트 바 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: 4,
+                }}
+              >
+                <span
+                  style={{
+                    width: 68,
+                    flexShrink: 0,
+                    textAlign: "right" as const,
+                    paddingRight: 8,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: "#4E5968",
+                  }}
+                >
+                  전체 계좌
+                </span>
+                <div
+                  style={{
+                    flex: 1,
+                    height: 10,
+                    display: "flex",
+                    overflow: "hidden",
+                    borderRadius: 4,
+                    marginRight: 47,
+                  }}
+                >
+                  {ASSET_GROUPS.map((g, i) => (
+                    <div
+                      key={g.label}
+                      style={{
+                        width: `${WEIGHTS.a[i]}%`,
+                        height: "100%",
+                        background: g.color,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              {/* 세그먼트 범례 */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap" as const,
+                  gap: "2px 6px",
+                  marginLeft: 68,
+                  marginBottom: 10,
+                }}
+              >
+                {ASSET_GROUPS.map((g, i) => (
+                  <span
+                    key={g.label}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 3,
+                      fontSize: 9,
+                      color: MUTED,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 1,
+                        background: g.color,
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    />
+                    {g.label} {WEIGHTS.a[i]}%
+                  </span>
+                ))}
+              </div>
               {/* Y축 + 바 영역 */}
               <div style={{ display: "flex", gap: 0 }}>
                 {/* Y축 레이블 */}
@@ -1292,6 +1394,7 @@ function TaxPage() {
                   {accountRows.map((acct, idx) => {
                     const refPct = (acct.refManwon / ACCOUNT_CHART_MAX) * 100;
                     const usedPct = (acct.used / ACCOUNT_CHART_MAX) * 100;
+                    const usedColor = idx === 0 ? "#0064FF" : "#3D8BFF";
                     return (
                       <div
                         key={acct.name}
@@ -1360,7 +1463,7 @@ function TaxPage() {
                               style={{
                                 width: `${usedPct}%`,
                                 height: "100%",
-                                background: BRAND,
+                                background: usedColor,
                                 borderRadius: 4,
                               }}
                             />
@@ -1370,7 +1473,7 @@ function TaxPage() {
                               width: 42,
                               fontSize: 9,
                               fontWeight: 800,
-                              color: BRAND,
+                              color: usedColor,
                               textAlign: "right" as const,
                               flexShrink: 0,
                             }}
@@ -1389,7 +1492,7 @@ function TaxPage() {
                       marginTop: 6,
                     }}
                   >
-                    {["0", "1천만", "2천만", "3천만", "4천만"].map((t) => (
+                    {["0", "500만", "1천만", "1500만", "2천만"].map((t) => (
                       <span
                         key={t}
                         style={{
@@ -1407,7 +1510,8 @@ function TaxPage() {
               {/* 범례 (하단) */}
               <div style={{ display: "flex", gap: 14, marginTop: 10 }}>
                 {[
-                  { color: BRAND, label: "사용액" },
+                  { color: "#0064FF", label: "ISA 사용액" },
+                  { color: "#3D8BFF", label: "연금 사용액" },
                   { color: "#D1D5DB", label: "기준값" },
                 ].map((l) => (
                   <div
@@ -1440,7 +1544,7 @@ function TaxPage() {
         >
           <SectionBar />
           <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
-            절세 제안 (총 {TAX_ADVICE.cards.length}개)
+            절세 제안
           </div>
         </div>
 
@@ -1462,7 +1566,7 @@ function TaxPage() {
                 background: "white",
               }}
             >
-              {/* 헤더: 아이콘 + 제목만 */}
+              {/* 헤더: 제목만 */}
               <div
                 style={{
                   display: "flex",
@@ -1471,23 +1575,6 @@ function TaxPage() {
                   marginBottom: 8,
                 }}
               >
-                <div
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 5,
-                    background: BRAND_LIGHT,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 10,
-                    fontWeight: 900,
-                    color: BRAND_DARK,
-                    flexShrink: 0,
-                  }}
-                >
-                  {card.icon}
-                </div>
                 <span style={{ fontSize: 12, fontWeight: 800, color: TEXT }}>
                   {card.title}
                 </span>
@@ -1520,7 +1607,8 @@ function TaxPage() {
         {/* 총 절세 효과 요약 바 */}
         <div
           style={{
-            background: BRAND,
+            background: BRAND_LIGHT,
+            border: `1px solid ${BRAND_MID}`,
             borderRadius: 7,
             padding: "7px 14px",
             display: "flex",
@@ -1528,10 +1616,10 @@ function TaxPage() {
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontSize: 10, fontWeight: 700, color: "white" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: BRAND_DARK }}>
             {TAX_ADVICE.totalLabel}
           </span>
-          <span style={{ fontSize: 11, fontWeight: 900, color: "white" }}>
+          <span style={{ fontSize: 11, fontWeight: 900, color: BRAND_DARK }}>
             {TAX_ADVICE.totalSaving}
           </span>
         </div>
@@ -1559,7 +1647,7 @@ function TaxProductsPage() {
       <PageHeader
         pageNum="③-2"
         title="전략별 추천 상품"
-        subtitle="절세 제안 · 삼성증권 상품 연계 목록"
+        subtitle="삼성증권 상품 연계 목록"
       />
 
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
@@ -1627,23 +1715,6 @@ function TaxProductsPage() {
                   <div
                     style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
-                    <div
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 5,
-                        background: BRAND_LIGHT,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 11,
-                        fontWeight: 900,
-                        color: BRAND_DARK,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {card.icon}
-                    </div>
                     <span
                       style={{ fontSize: 13, fontWeight: 800, color: TEXT }}
                     >
@@ -1675,8 +1746,6 @@ function TaxProductsPage() {
 
 // ── 페이지 6: AI 인사이트 ────────────────────────────────────────
 function AiPage() {
-  const aiParas = INSIGHT.defaultAnswer.split("\n\n");
-
   return (
     <div
       data-pdf-page=""
@@ -1698,7 +1767,7 @@ function AiPage() {
       <div style={{ padding: "28px 40px 80px", wordBreak: "keep-all" }}>
         {/* AI 인사이트 */}
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 20 }}
         >
           <SectionBar />
           <div style={{ fontSize: 15, fontWeight: 800, color: TEXT }}>
@@ -1706,72 +1775,81 @@ function AiPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginBottom: 40 }}>
-          {[
-            {
-              title: "금리 상승 대응 인사이트",
-              body: aiParas[0] ? aiParas[0].slice(0, 200) + "…" : "",
-            },
-            {
-              title: "포트폴리오 최적화 제안",
-              body: aiParas[1] ? aiParas[1].slice(0, 200) + "…" : "",
-            },
-          ].map((card) => (
-            <div
-              key={card.title}
-              style={{
-                flex: 1,
-                border: `1px solid ${BRAND_MID}`,
-                borderRadius: 10,
-                padding: "14px 16px",
-                background: BRAND_LIGHT,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  color: BRAND,
-                  marginBottom: 7,
-                }}
-              >
-                {card.title}
-              </div>
-              <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.75 }}>
-                {card.body}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {aiParas[2] && (
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: "16px 20px",
+            background: BG_ALT,
+            marginBottom: 36,
+          }}
+        >
           <div
             style={{
-              border: `1px solid ${BRAND_MID}`,
-              borderRadius: 10,
-              padding: "14px 16px",
-              background: BRAND_LIGHT,
-              marginBottom: 40,
+              display: "flex",
+              gap: 8,
+              marginBottom: 12,
+              alignItems: "flex-start",
             }}
           >
-            <div
+            <span
               style={{
-                fontSize: 12,
-                fontWeight: 800,
+                fontSize: 14,
+                fontWeight: 900,
                 color: BRAND,
-                marginBottom: 7,
+                flexShrink: 0,
+                lineHeight: 1.5,
               }}
             >
-              리스크 관리 제안
-            </div>
-            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.75 }}>
-              {aiParas[2].slice(0, 200)}…
-            </div>
+              Q.
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: TEXT,
+                fontWeight: 600,
+                lineHeight: 1.65,
+                paddingTop: 1,
+              }}
+            >
+              {INSIGHT.query}
+            </span>
           </div>
-        )}
+          <div
+            style={{
+              borderTop: `1px solid ${BORDER}`,
+              paddingTop: 12,
+              display: "flex",
+              gap: 8,
+              alignItems: "flex-start",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 900,
+                color: TEXT,
+                flexShrink: 0,
+                lineHeight: 1.5,
+              }}
+            >
+              A.
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "#374151",
+                lineHeight: 1.75,
+                paddingTop: 1,
+              }}
+            >
+              {INSIGHT.defaultAnswer}
+            </span>
+          </div>
+        </div>
 
         <div
-          style={{ display: "flex", alignItems: "center", marginBottom: 28 }}
+          style={{ display: "flex", alignItems: "center", marginBottom: 16 }}
         >
           <SectionBar />
           <div style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>
@@ -1779,28 +1857,62 @@ function AiPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8 }}>
-          {INSIGHT.sources.map((src) => (
-            <div
-              key={src.title}
-              style={{
-                background: BG_ALT,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 8,
-                padding: "6px 13px",
-                fontSize: 11,
-                color: MUTED,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span style={{ color: TEXT, fontWeight: 600 }}>{src.title}</span>
-              <span style={{ color: "#D1D5DB" }}>·</span>
-              <span>{src.date}</span>
-            </div>
-          ))}
-        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse" as const }}>
+          <thead>
+            <tr style={{ background: BG_ALT }}>
+              <th
+                style={{
+                  padding: "7px 12px",
+                  textAlign: "left" as const,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: MUTED,
+                  borderBottom: `1px solid ${BORDER}`,
+                }}
+              >
+                파일명
+              </th>
+              <th
+                style={{
+                  padding: "7px 12px",
+                  textAlign: "left" as const,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: MUTED,
+                  borderBottom: `1px solid ${BORDER}`,
+                  width: 110,
+                }}
+              >
+                발행일자
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {INSIGHT.sources.map((src, i) => (
+              <tr
+                key={src.title}
+                style={{
+                  borderBottom: `1px solid ${BORDER}`,
+                  background: i % 2 === 0 ? "white" : BG_ALT,
+                }}
+              >
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 11,
+                    color: TEXT,
+                    fontWeight: 600,
+                  }}
+                >
+                  {src.title}
+                </td>
+                <td style={{ padding: "8px 12px", fontSize: 11, color: MUTED }}>
+                  {src.date}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <PageFooter page={6} total={6} />
