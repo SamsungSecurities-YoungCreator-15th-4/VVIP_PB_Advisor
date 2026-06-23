@@ -196,7 +196,7 @@ export default function Sidebar() {
   const handleTranscribe = async () => {
     if (!uploadedFile || sttStatus === "uploading") return;
     setSttStatus("uploading");
-    const res = await uploadSttConsultation(customer.clientId, uploadedFile);
+    const res = await uploadSttConsultation(customer.name, uploadedFile);
     setTranscript(res.data.transcript, res.source);
     setConsultationId(res.data.consultationId);
     // 추출된 IPS 값만 조율기에 반영(없는 값은 기존 유지).

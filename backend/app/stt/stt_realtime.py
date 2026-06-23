@@ -127,9 +127,8 @@ class RealtimeConversationTranscriber:
                 "실시간 전사 세션이 시작되지 않았습니다. "
                 "start()를 먼저 호출하세요."
             )
-        cancellation_error = self._cancellation_error
-        if cancellation_error is not None:
-            raise cancellation_error
+        if self._cancellation_error:
+            raise self._cancellation_error
         if self._done:
             raise RuntimeError(
                 "이미 종료된 실시간 전사 세션에는 오디오를 쓸 수 없습니다."
@@ -158,9 +157,8 @@ class RealtimeConversationTranscriber:
             except Exception as cleanup_error:
                 logger.warning("Realtime STT session cleanup failed: %s", cleanup_error)
 
-        cancellation_error = self._cancellation_error
-        if cancellation_error is not None:
-            raise cancellation_error
+        if self._cancellation_error:
+            raise self._cancellation_error
 
         logger.info("Realtime STT transcription completed with %s segments", len(self._results))
         return self.results
