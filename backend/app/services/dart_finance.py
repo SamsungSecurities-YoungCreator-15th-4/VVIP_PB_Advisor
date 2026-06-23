@@ -61,7 +61,8 @@ def _parse_amount(raw: str) -> int | None:
     if s in ("", "-"):
         return None
     try:
-        return int(s)
+        # DART 응답에 "123.0" 같은 실수 형태 문자열이 올 수 있어 float 경유로 변환한다.
+        return int(float(s))
     except ValueError:
         return None
 
