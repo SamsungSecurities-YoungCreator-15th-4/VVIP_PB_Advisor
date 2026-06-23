@@ -143,7 +143,30 @@ export default function TaxGauge() {
 
       {isOver ? (
         <div className="flex items-start gap-2 rounded-xl bg-[#FEECEE] p-3">
-          <span className="text-sm">⚠️</span>
+          <svg
+            className="mt-0.5 size-5 shrink-0"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M10 2L1 18h18L10 2z"
+              stroke="#F04452"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <line
+              x1="10"
+              y1="8.5"
+              x2="10"
+              y2="13"
+              stroke="#F04452"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <circle cx="10" cy="15.5" r="0.85" fill="#F04452" />
+          </svg>
           <div>
             <p className="text-[12px] font-extrabold">
               기준선 <b className="text-up">초과</b> — 금융소득종합과세 대상
@@ -172,7 +195,11 @@ export default function TaxGauge() {
       )}
 
       <div className="flex gap-2">
-        <div className="flex-1 rounded-lg border p-2 text-center">
+        <div
+          className={`flex-1 rounded-lg border p-2 text-center ${
+            !isOver ? "border-brand/20 bg-brand/5" : ""
+          }`}
+        >
           <p className="text-[12px] font-bold text-muted-foreground">
             분리과세 시
           </p>
@@ -182,13 +209,13 @@ export default function TaxGauge() {
         </div>
         <div
           className={`flex-1 rounded-lg border p-2 text-center ${
-            isOver ? "border-[#F7B2B8] bg-[#FEF4F5]" : ""
+            isOver ? "border-brand/20 bg-brand/5" : ""
           }`}
         >
           <p className="text-[12px] font-bold text-muted-foreground">
-            종합과세 시 {isOver && "(현 상태)"}
+            종합과세 시
           </p>
-          <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-up">
+          <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-down">
             {comprehensiveRateLabel}
           </p>
         </div>
