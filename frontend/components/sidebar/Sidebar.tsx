@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Loader2,
+  Mic,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -17,10 +18,59 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
-import { PAST_CONSULTATIONS } from "@/lib/mockData";
-import { createClient, uploadSttConsultation } from "@/lib/api";
+import StressTestSection from "@/components/right-panel/StressTestSection";
+import { type Customer, CUSTOMERS, PAST_CONSULTATIONS } from "@/lib/mockData";
+import {
+  type ListedClient,
+  createClient,
+  listClients,
+  uploadSttConsultation,
+} from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
+
+const DEFAULT_CLIENT_TAX_PROFILE = {
+  isaUsedManwon: 0,
+  pensionUsedManwon: 0,
+  realizedLossManwon: 0,
+  marginalRatePct: 38.5,
+  age: 50,
+  horizonYears: 10,
+  nearTermNeedManwon: 0,
+  nearTermNeedYears: null,
+  isaOpened: true,
+} satisfies Pick<
+  Customer,
+  | "isaUsedManwon"
+  | "pensionUsedManwon"
+  | "realizedLossManwon"
+  | "marginalRatePct"
+  | "age"
+  | "horizonYears"
+  | "nearTermNeedManwon"
+  | "nearTermNeedYears"
+  | "isaOpened"
+>;
+
+function toDashboardCustomer(client: ListedClient): Customer {
+  const persona = CUSTOMERS.find((c) => c.name === client.name);
+  const safeClientId = client.clientId || "";
+  const displayId = safeClientId || `client-${client.name || "unknown"}`;
+  const aumEokwon =
+    client.aumEokwon > 0 ? client.aumEokwon : (persona?.aumEokwon ?? 0);
+
+  return {
+    ...(persona ?? DEFAULT_CLIENT_TAX_PROFILE),
+    id: displayId,
+    name: client.name || "Unknown",
+    grade: "VVIP",
+    pbCode: persona?.pbCode ?? `PB-${displayId.slice(0, 6).toUpperCase()}`,
+    aumLabel: aumEokwon > 0 ? `운용자산 ${aumEokwon}억원` : "운용자산 미입력",
+    aumEokwon,
+    clientId: safeClientId || undefined,
+    persisted: true,
+  };
+}
 
 /** 좌측 사이드바: 고객 선택 · 상담 입력 · 상담 내역 · IPS 조율기 · 분석하기 */
 export default function Sidebar() {
@@ -31,6 +81,7 @@ export default function Sidebar() {
     setIps,
     selectCustomer,
     addCustomer,
+    setCustomers,
     transcript,
     transcriptSource,
     sttStatus,
@@ -70,6 +121,22 @@ export default function Sidebar() {
     };
   }, [dropdownOpen]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateClients() {
+      const result = await listClients();
+      if (cancelled || result.source !== "live" || result.data.length === 0) {
+        return;
+      }
+      setCustomers(result.data.map(toDashboardCustomer));
+    }
+
+    void hydrateClients();
+    return () => {
+      cancelled = true;
+    };
+  }, [setCustomers]);
+
   if (!customer) return null;
 
   const handleDropdownToggle = () => {
@@ -98,7 +165,7 @@ export default function Sidebar() {
     }
 
     const persisted = result.status === "live";
-    const id = `cust-${Date.now()}`;
+    const id = result.data.clientId || `cust-${Date.now()}`;
     addCustomer({
       id,
       name,
@@ -155,7 +222,7 @@ export default function Sidebar() {
             className="text-[9px] font-bold leading-none text-muted-foreground"
             style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            고객IPS
+            IPS&Test
           </span>
         </button>
       </div>
@@ -168,7 +235,7 @@ export default function Sidebar() {
         {/* 패널 헤더 */}
         <div className="flex items-center justify-between px-0.5 pb-0.5">
           <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-            고객 IPS
+            IPS&Test
           </span>
           <button
             onClick={() => setIsOpen(false)}
@@ -232,27 +299,44 @@ export default function Sidebar() {
             className="hidden"
             onChange={(e) => setUploadedFile(e.target.files?.[0] ?? null)}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
-          >
-            <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
-              <Upload className="size-4 text-brand" />
-            </span>
-            <span className="block text-[13px] font-bold text-brand-dark">
-              음성 업로드
-            </span>
-            {uploadedFile ? (
-              <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
-                {uploadedFile.name}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+            >
+              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+                <Upload className="size-4 text-brand" />
               </span>
-            ) : (
+              <span className="block text-[13px] font-bold text-brand-dark">
+                음성 업로드
+              </span>
+              {uploadedFile ? (
+                <span className="mt-0.5 block truncate text-[10px] font-semibold text-brand">
+                  {uploadedFile.name}
+                </span>
+              ) : (
+                <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
+                  wav 지원
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+            >
+              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
+                <Mic className="size-4 text-brand" />
+              </span>
+              <span className="block text-[13px] font-bold text-brand-dark">
+                실시간 전사
+              </span>
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                wav 지원
+                실시간 녹음
               </span>
-            )}
-          </button>
+            </button>
+          </div>
 
           {uploadedFile && (
             <Button
@@ -289,7 +373,7 @@ export default function Sidebar() {
             <p className="text-[14px] font-bold">상담 내역</p>
             <DataSourceBadge source={transcriptSource} note={sttNote} />
           </div>
-          <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-0.5">
+          <div className="flex max-h-[150px] flex-col gap-1.5 overflow-y-auto pr-0.5">
             {transcript.map((m, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span
@@ -404,6 +488,8 @@ export default function Sidebar() {
             />
           </IpsRow>
         </Card>
+
+        <StressTestSection />
 
         <Button
           size="lg"

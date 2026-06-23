@@ -1,50 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AccountAllocation from "@/components/tax/AccountAllocation";
 import TaxGauge from "@/components/tax/TaxGauge";
 import TaxWaterfall from "@/components/tax/TaxWaterfall";
-import DataSourceBadge from "@/components/common/DataSourceBadge";
 import { PORTFOLIOS, TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
+import { PRODUCT_LINKS } from "@/lib/productLinks";
 import { useDashboardStore } from "@/lib/store";
-import {
-  type ApiResult,
-  type TaxInsightData,
-  buildTaxResultFromMock,
-  fetchTaxInsight,
-} from "@/lib/api";
 
 /** 중앙 하단: 절세 최적화 시뮬레이터 (절세 효과 / 종합과세 임계선 / 절세 제안) */
 export default function TaxSection() {
-  const { selectedPortfolioId, selectedCustomerId, customers, consultationId } =
+  const { selectedPortfolioId, selectedCustomerId, customers } =
     useDashboardStore();
   const portfolio = PORTFOLIOS.find((p) => p.id === selectedPortfolioId);
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
   const baseLabel = `기준 : ${portfolio?.name ?? "포트폴리오 A"} · ${customer?.aumEokwon ?? 0}억`;
-
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summary, setSummary] = useState<ApiResult<TaxInsightData> | null>(null);
-
-  async function handleSummarize() {
-    if (summaryLoading) return;
-    setSummaryLoading(true);
-    try {
-      // ⚠️ #30(절세 계산) 미머지 — 입력 숫자는 mock(TAX_EFFECT). 요약문만 실 LLM.
-      const taxResult = buildTaxResultFromMock(
-        portfolio?.name ?? "포트폴리오 A",
-        customer?.aumEokwon ?? 0,
-      );
-      const res = await fetchTaxInsight(taxResult, consultationId || undefined);
-      setSummary(res);
-    } finally {
-      setSummaryLoading(false);
-    }
-  }
 
   return (
     <Tabs defaultValue="effect">
@@ -105,48 +79,6 @@ export default function TaxSection() {
             <AccountAllocation />
           </div>
 
-          {/* AI 절세 요약 — POST /tax/insight 실연결 */}
-          <div className="rounded-xl border border-brand/15 bg-brand/5 p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <Sparkles className="size-3.5 text-brand" />
-              <span className="text-[13px] font-extrabold text-brand-dark">
-                AI 절세 요약
-              </span>
-              {summary && (
-                <DataSourceBadge source={summary.source} note={summary.note} />
-              )}
-              {summary?.data.asOf && (
-                <span className="text-[9px] font-semibold text-muted-foreground/70">
-                  기준 {new Date(summary.data.asOf).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
-                </span>
-              )}
-              <Button
-                size="sm"
-                className="ml-auto h-7 font-bold"
-                onClick={handleSummarize}
-                disabled={summaryLoading}
-              >
-                {summaryLoading ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  "요약 생성"
-                )}
-              </Button>
-            </div>
-            {summary ? (
-              <p className="whitespace-pre-line text-[12px] font-medium leading-relaxed text-foreground">
-                {summary.data.summary}
-              </p>
-            ) : (
-              <p className="text-[12px] font-medium text-muted-foreground">
-                요약을 생성하면 위 절세 계산 결과를 PB 설명조로 정리합니다.
-              </p>
-            )}
-            {/* 출처 명시: 계산(#30) 미연결 — 입력 숫자는 임시값. */}
-            <p className="mt-2 text-[10px] font-semibold text-muted-foreground/70">
-              ※ 절세 계산(#30) 연동 전이라 요약의 입력 수치는 임시값입니다.
-            </p>
-          </div>
         </TabsContent>
 
         {/* 탭 2: 종합과세 임계선 */}
@@ -156,43 +88,104 @@ export default function TaxSection() {
 
         {/* 탭 3: 절세 제안 */}
         <TabsContent value="advice">
-          <div className="grid grid-cols-2 gap-2">
-            {TAX_ADVICE.cards.map((card) => (
-              <div
-                key={card.title}
-                className="flex flex-col rounded-xl border p-2.5"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="flex size-5 items-center justify-center rounded-md bg-brand/10 text-[12px] font-extrabold text-brand-dark">
-                    {card.icon}
-                  </span>
-                  <span className="text-[12px] font-extrabold">
-                    {card.title}
-                  </span>
-                </div>
-                <p className="mt-1.5 flex-1 text-[12px] font-semibold leading-snug text-muted-foreground">
-                  {card.body}
-                </p>
-                <p className="mt-1 text-[12px] font-bold text-muted-foreground/60">
-                  {card.tag}
-                </p>
-                <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-up">
-                  {card.saving}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 flex items-center justify-between rounded-xl bg-brand px-3 py-2">
-            <span className="text-[12px] font-bold text-white">
-              {TAX_ADVICE.totalLabel}
-            </span>
-            <span className="text-[12px] font-extrabold tabular-nums text-white">
-              {TAX_ADVICE.totalSaving}
-            </span>
-          </div>
+          <AdviceCards />
         </TabsContent>
       </Card>
     </Tabs>
+  );
+}
+
+type AdviceTab = "제안설명" | "상품추천";
+
+function AdviceCards() {
+  const [tabs, setTabs] = useState<Record<string, AdviceTab>>({});
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        {TAX_ADVICE.cards.map((card) => {
+          const active = tabs[card.title] ?? "제안설명";
+          return (
+            <div key={card.title} className="flex flex-col rounded-xl border p-2.5">
+              {/* 헤더: 아이콘 + 제목 + 세그먼트 */}
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-brand/10 text-[12px] font-extrabold text-brand-dark">
+                  {card.icon}
+                </span>
+                <span className="flex-1 text-[12px] font-extrabold leading-tight">
+                  {card.title}
+                </span>
+                <div className="flex shrink-0 rounded-md bg-muted p-0.5">
+                  {(["제안설명", "상품추천"] as AdviceTab[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTabs((prev) => ({ ...prev, [card.title]: t }))}
+                      className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                        active === t
+                          ? "bg-white text-brand-dark shadow-sm"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 콘텐츠 — 두 탭 모두 h-[108px]으로 고정, 넘치면 스크롤 */}
+              {active === "제안설명" ? (
+                <div className="flex h-[108px] flex-col overflow-y-auto pr-0.5">
+                  <p className="pt-1.5 text-[12px] font-semibold leading-snug text-muted-foreground">
+                    {card.body}
+                  </p>
+                  <div className="mt-auto pt-1">
+                    <p className="text-[12px] font-bold text-muted-foreground/60">
+                      {card.tag}
+                    </p>
+                    {card.saving && (
+                      <p className="text-[12px] font-extrabold tabular-nums text-up">
+                        {card.saving}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[108px] overflow-y-auto pr-0.5">
+                  <div className="flex flex-col gap-1.5">
+                    {card.products.map((p) => {
+                      const url = PRODUCT_LINKS[p.name] ?? "";
+                      return (
+                        <button
+                          key={p.name}
+                          type="button"
+                          disabled={!url}
+                          onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}
+                          className={`flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-1.5 text-left transition-colors ${url ? "cursor-pointer hover:bg-brand/10" : "cursor-default opacity-50"}`}
+                        >
+                          <ExternalLink className="size-3 shrink-0 text-brand" />
+                          <span className="text-[12px] font-extrabold text-brand-dark">
+                            {p.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-brand px-3 py-2">
+        <span className="text-[12px] font-bold text-white">
+          {TAX_ADVICE.totalLabel}
+        </span>
+        <span className="text-[12px] font-extrabold tabular-nums text-white">
+          {TAX_ADVICE.totalSaving}
+        </span>
+      </div>
+    </>
   );
 }
 

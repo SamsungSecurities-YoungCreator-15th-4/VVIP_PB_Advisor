@@ -52,7 +52,11 @@ interface DashboardState {
   sttStatus: SttStatus;
   sttNote?: string;
 
+  helpMode: boolean;
+  toggleHelpMode: () => void;
+
   addCustomer: (c: Customer) => void;
+  setCustomers: (customers: Customer[]) => void;
   selectCustomer: (id: string) => void;
   selectPortfolio: (id: string) => void;
   setIps: (patch: Partial<IpsState>) => void;
@@ -92,8 +96,17 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   consultationId: "",
   sttStatus: "idle",
   sttNote: undefined,
+  helpMode: false,
 
+  toggleHelpMode: () => set((s) => ({ helpMode: !s.helpMode })),
   addCustomer: (c) => set((s) => ({ customers: [...s.customers, c] })),
+  setCustomers: (customers) =>
+    set((s) => ({
+      customers,
+      selectedCustomerId: customers.some((c) => c.id === s.selectedCustomerId)
+        ? s.selectedCustomerId
+        : (customers[0]?.id ?? s.selectedCustomerId),
+    })),
   selectCustomer: (id) => set({ selectedCustomerId: id }),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),

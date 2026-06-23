@@ -17,10 +17,10 @@ export interface MacroIndicator {
 }
 
 export const MACRO_INDICATORS: MacroIndicator[] = [
-  { label: "기준금리", value: "3.50%", change: "0.25", direction: "down" },
+  { label: "미국 기준금리", value: "3.50%", change: "0.25", direction: "down" },
   { label: "미 10Y", value: "4.38%", change: "0.05", direction: "down" },
   { label: "원/달러", value: "1,220", change: "20", direction: "down" },
-  { label: "CPI", value: "3.2%", change: "0.25", direction: "down" },
+  { label: "미국 CPI", value: "3.2%", change: "0.25", direction: "down" },
   { label: "KOSPI", value: "2,790", change: "31", direction: "up" },
   { label: "S&P500", value: "5,640", change: "18", direction: "up" },
 ];
@@ -306,13 +306,14 @@ export const PORTFOLIOS: Portfolio[] = [
 ];
 
 // ── 백테스트 (최근 5년, 100 기준 지수화 더미) ──────────────────
+// 벤치마크(kospi·sp500·msciAcwi)는 실제 시장 흐름의 근사치 — 실 API 연동 전 UI 시안용.
 export const BACKTEST_SERIES = [
-  { year: "2021", current: 100, a: 100, b: 100 },
-  { year: "2022", current: 96, a: 103, b: 92 },
-  { year: "2023", current: 108, a: 116, b: 118 },
-  { year: "2024", current: 118, a: 131, b: 128 },
-  { year: "2025", current: 128, a: 150, b: 156 },
-  { year: "2026", current: 140, a: 176, b: 200 },
+  { year: "2021", current: 100, a: 100, b: 100, kospi: 100, sp500: 100, msciAcwi: 100 },
+  { year: "2022", current: 96,  a: 103, b: 92,  kospi: 76,  sp500: 81,  msciAcwi: 80  },
+  { year: "2023", current: 108, a: 116, b: 118, kospi: 90,  sp500: 104, msciAcwi: 100 },
+  { year: "2024", current: 118, a: 131, b: 128, kospi: 97,  sp500: 134, msciAcwi: 123 },
+  { year: "2025", current: 128, a: 150, b: 156, kospi: 101, sp500: 165, msciAcwi: 148 },
+  { year: "2026", current: 140, a: 176, b: 200, kospi: 108, sp500: 190, msciAcwi: 168 },
 ];
 
 // ── 상관관계 히트맵 (6분류 기준 더미 행렬, 대칭) ────────────────
@@ -334,13 +335,16 @@ export const TAX_EFFECT = {
     "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
   afterTaxReturn: { from: "5.5%", to: "6.1%", delta: "+0.6%p" },
   effectiveTax: { from: "1,620", to: "540만", delta: "−1,080만" },
-  // 세금 흐름 비교 (세전 기대수익 1.15억 기준, 만원)
+  // 세금 흐름 비교 (세전 기대수익 2.59억 기준, afterTaxManwon=만원)
   flow: {
-    pretaxLabel: "세전 기대수익 1.15억 기준",
+    pretaxLabel: "세전 기대수익 2.59억 기준",
     rows: [
-      { label: "일반과세", afterTax: 9900, tax: 1620 },
-      { label: "절세전략", afterTax: 10980, tax: 540 },
+      { label: "기존 자산",      afterTaxManwon: 25100, taxManwon: 795 },
+      { label: "포트폴리오 전환", afterTaxManwon: 25600, taxManwon: 363 },
+      { label: "+ 절세 제안",   afterTaxManwon: 25900, taxManwon: 0   },
     ],
+    totalLabel: "총 절세 효과 (전환 432만 + 제안 363만)",
+    totalSavingManwon: 795,
   },
   // 절세 계좌 배치 활용도
   accounts: [
@@ -384,34 +388,87 @@ export const TAX_ADVICE = {
     {
       icon: "I",
       title: "ISA 계좌 활용",
-      body: "배당주 4,000만원을 ISA로 이전 — 비과세 한도 적용 후 초과분 분리과세 9.9%.",
+      body: "이자·배당 자산 1,200만원을 ISA 잔여 한도로 이전 — 비과세 200만 + 초과분 9.9% 분리과세, 종합과세 합산 제외.",
       tag: "비과세 자산 이전",
-      saving: "+210만원",
+      saving: "+21만원",
+      products: [
+        { name: "삼성증권 ISA 계좌 소개", desc: "" },
+        { name: "삼성증권 중개형 ISA 계좌", desc: "" },
+        { name: "삼성증권 신탁형 ISA 계좌", desc: "" },
+        { name: "삼성증권 일임형 ISA 계좌", desc: "" },
+        { name: "삼성증권 일임형 ISA 모델 포트폴리오", desc: "" },
+      ],
+    },
+    {
+      icon: "연",
+      title: "연금계좌 세액공제",
+      body: "연금저축+IRP 잔여 한도 0만원 납입 시 13.2% 세액공제 — 만 55세 이후 연금 수령.",
+      tag: "부적합·투자기간 3년 < 연금 수령까지 22년",
+      saving: "",
+      products: [
+        { name: "삼성증권 연금저축계좌 소개", desc: "" },
+        { name: "삼성증권 IRP 계좌", desc: "" },
+        { name: "삼성증권 퇴직연금 DB형", desc: "" },
+        { name: "삼성증권 퇴직연금 DC형", desc: "" },
+        { name: "삼성증권 연금저축계좌 ETF/리츠 수수료 이벤트", desc: "" },
+        { name: "삼성증권 연금저축펀드 / TDF", desc: "" },
+        { name: "삼성증권 퇴직연금 원리금보장상품", desc: "" },
+        { name: "삼성증권 퇴직연금 펀드", desc: "" },
+        { name: "타 증권사 퇴직연금 이전 / 가져오기", desc: "" },
+      ],
     },
     {
       icon: "채",
       title: "분리과세 채권",
-      body: "저쿠폰·장기채로 이자소득을 분리과세(14%) 전환해 종합과세 합산에서 제외.",
+      body: "일반채·저쿠폰채 이자 중 종합과세 구간분을 장기채권 분리과세(33%)로 종결해 한계세율 과세를 회피.",
       tag: "분리과세 전환",
-      saving: "+180만원",
+      saving: "+142만원",
+      products: [
+        { name: "개인투자용 국채 3년물", desc: "" },
+        { name: "개인투자용 국채 5년물", desc: "" },
+        { name: "개인투자용 국채 10년물", desc: "" },
+        { name: "개인투자용 국채 20년물", desc: "" },
+      ],
     },
     {
       icon: "배",
       title: "저율과세 배당주",
-      body: "고배당 종목을 저율과세 ETF·우선주로 조정해 배당소득세 부담 완화.",
+      body: "고배당(해외배당·리츠) 중 종합과세 구간 배당을 저배당·자본이득형으로 조정해 추가과세 회피.",
       tag: "저율과세 편입",
-      saving: "+90만원",
+      saving: "+1,419만원",
+      products: [
+        { name: "삼성증권 중개형 ISA 내 국내 고배당주", desc: "" },
+        { name: "삼성증권 중개형 ISA 내 국내상장 해외 배당 ETF", desc: "" },
+        { name: "삼성증권 퇴직연금 DC/IRP 계좌 내 배당 ETF·리츠", desc: "" },
+      ],
+    },
+    {
+      icon: "공",
+      title: "해외주식 양도 250만 공제",
+      body: "해외주식 양도차익을 연 250만원 기본공제 한도까지 실현해 비과세로 차익 확정.",
+      tag: "기본공제 활용",
+      saving: "+55만원",
+      products: [
+        { name: "삼성증권 해외주식", desc: "" },
+        { name: "삼성증권 글로벌 ETF 외", desc: "" },
+        { name: "삼성증권 국내상장ETF vs 해외상장 ETF 비교", desc: "" },
+      ],
     },
     {
       icon: "L",
       title: "Tax-loss Harvesting",
-      body: "평가손실 1,800만원 확정 → 해외주식 양도차익과 상계해 양도세(22%) 절감.",
+      body: "평가손실을 확정해 해외주식 양도차익과 통산 → 통산액의 양도세(22%)만큼 절감.",
       tag: "평가손실 확정",
-      saving: "+396만원",
+      saving: "+704만원",
+      products: [
+        { name: "삼성증권 해외주식", desc: "" },
+        { name: "삼성증권 글로벌 ETF 외", desc: "" },
+        { name: "삼성증권 국내상장ETF vs 해외상장 ETF 비교", desc: "" },
+      ],
     },
   ],
   totalLabel: "알고리즘 제안 적용 시 예상 추가 절감",
-  totalSaving: "+876만원",
+  totalSaving: "+2,341만원",
 };
 
 // ── 시나리오 Test (스트레스 테스트) ─────────────────────────────
