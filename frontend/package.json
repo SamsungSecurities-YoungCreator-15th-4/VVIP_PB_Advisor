@@ -30,7 +30,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/jspdf": "^2.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -41,7 +40,8 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss": ">=8.5.10"
+      "postcss": ">=8.5.10",
+      "dompurify": ">=3.4.11"
     }
   }
 }
