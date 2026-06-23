@@ -136,9 +136,10 @@ const IPS_ROWS = [
   },
 ];
 
+// 스트레스 테스트 시나리오 — 포트폴리오 A 기준 운용자산 18억원 시뮬레이션 추정치
 const SCENARIO_ROWS = [
   {
-    name: "기준 시나리오",
+    name: "현재",
     rate: "3.50%",
     fx: "1,220원",
     pnl: "+9,900만원",
@@ -146,20 +147,36 @@ const SCENARIO_ROWS = [
     action: "변화 없음",
   },
   {
-    name: "금리 상승 시나리오",
+    name: "금리 변동",
     rate: "4.75%",
     fx: "1,420원",
-    pnl: "▲ 0만원",
+    pnl: "-",
     pnlColor: MUTED,
     action: "채권 비중 축소 권장",
   },
   {
-    name: "환율 상승 헤지",
+    name: "환율 변동",
     rate: "현행",
     fx: "1,420원",
-    pnl: "환헤지 비중 상향",
+    pnl: "환헤지 상향",
     pnlColor: BRAND,
     action: "해외 비중 상향 효과",
+  },
+  {
+    name: "금융위기",
+    rate: "0.25%",
+    fx: "1,570원",
+    pnl: "-3,200만원",
+    pnlColor: UP,
+    action: "주식·하이일드 비중 축소",
+  },
+  {
+    name: "러우전쟁",
+    rate: "4.25%",
+    fx: "1,440원",
+    pnl: "-1,100만원",
+    pnlColor: UP,
+    action: "에너지·원자재 분산 검토",
   },
 ];
 
@@ -178,22 +195,21 @@ function PageFooter({ page, total }: { page: number; total: number }) {
         bottom: 24,
         left: 40,
         right: 40,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
         borderTop: `1px solid ${BORDER}`,
         paddingTop: 8,
       }}
     >
-      <span style={{ fontSize: 10, color: MUTED }}>
-        VVIP PB Advisor · 내부 기밀 자료
-      </span>
-      <span style={{ fontSize: 10, color: MUTED }}>
-        Page {page} / {total}
-      </span>
-      <span style={{ fontSize: 10, color: MUTED }}>
-        {getToday()} {BASE_TIME}
-      </span>
+      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 10, color: MUTED }}>
+          VVIP PB Advisor · 내부 기밀 자료
+        </span>
+        <span style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 10, color: MUTED }}>
+          Page {page} / {total}
+        </span>
+        <span style={{ fontSize: 10, color: MUTED }}>
+          {getToday()} {BASE_TIME}
+        </span>
+      </div>
     </div>
   );
 }
@@ -248,10 +264,10 @@ function PageHeader({
       </div>
       <div style={{ textAlign: "right" }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>
-          {customer.name} · {customer.grade}
+          {customer.name}
         </div>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-          {customer.pbCode} · {getToday()}
+          {customer.pbCode}
         </div>
       </div>
     </div>
@@ -413,7 +429,7 @@ function CoverPage() {
             fontWeight: 900,
             color: "white",
             lineHeight: 1.2,
-            marginBottom: 8,
+            marginBottom: 20,
             marginTop: 60,
           }}
         >
@@ -687,25 +703,28 @@ function PortfolioPage() {
       p: current,
       weights: WEIGHTS.current,
       label: "현재 포트폴리오",
-      badge: "현재",
+      badge: "",
       badgeColor: "#6B7280",
       headerColor: "#6B7280",
+      selected: false,
     },
     {
       p: portA,
       weights: WEIGHTS.a,
       label: "포트폴리오 A",
-      badge: "고객 선택",
+      badge: "수익추구형",
       badgeColor: BRAND,
       headerColor: BRAND,
+      selected: true,
     },
     {
       p: portB,
       weights: WEIGHTS.b,
       label: "포트폴리오 B",
-      badge: "",
+      badge: "안정추구형",
       badgeColor: "#2C7BFF",
       headerColor: "#2C7BFF",
+      selected: false,
     },
   ];
 
@@ -789,12 +808,12 @@ function PortfolioPage() {
         </div>
 
         <div style={{ display: "flex", gap: 12, marginBottom: 40 }}>
-          {cols.map(({ p, weights, label, badge, badgeColor }) => (
+          {cols.map(({ p, weights, label, badge, badgeColor, selected }) => (
             <div
               key={p.id}
               style={{
                 flex: 1,
-                border: `1px solid ${BORDER}`,
+                border: selected ? `2px solid ${BRAND}` : `1px solid ${BORDER}`,
                 borderRadius: 10,
                 padding: "13px 14px",
                 background: "white",
@@ -915,6 +934,7 @@ function PortfolioPage() {
                       color: cols[j].headerColor,
                       whiteSpace: "pre-line" as const,
                       lineHeight: 1.4,
+                      background: cols[j].selected ? `${BRAND}0D` : "inherit",
                     }}
                   >
                     {v}
@@ -964,8 +984,8 @@ function PortfolioPage() {
                     textAlign: "left",
                     fontSize: 11,
                     fontWeight: 700,
-                    color: MUTED,
-                    borderBottom: `1px solid ${BORDER}`,
+                    color: TEXT,
+                    borderBottom: `1.5px solid #D1D5DB`,
                   }}
                 >
                   {h}
@@ -978,7 +998,7 @@ function PortfolioPage() {
               <tr
                 key={row.name}
                 style={{
-                  borderBottom: `1px solid ${BORDER}`,
+                  borderBottom: `1px solid #D1D5DB`,
                   background: i % 2 === 0 ? "white" : BG_ALT,
                 }}
               >
@@ -992,10 +1012,10 @@ function PortfolioPage() {
                 >
                   {row.name}
                 </td>
-                <td style={{ padding: "8px 10px", fontSize: 11, color: MUTED }}>
+                <td style={{ padding: "8px 10px", fontSize: 11, color: TEXT }}>
                   {row.rate}
                 </td>
-                <td style={{ padding: "8px 10px", fontSize: 11, color: MUTED }}>
+                <td style={{ padding: "8px 10px", fontSize: 11, color: TEXT }}>
                   {row.fx}
                 </td>
                 <td
@@ -1008,7 +1028,7 @@ function PortfolioPage() {
                 >
                   {row.pnl}
                 </td>
-                <td style={{ padding: "8px 10px", fontSize: 11, color: MUTED }}>
+                <td style={{ padding: "8px 10px", fontSize: 11, color: TEXT }}>
                   {row.action}
                 </td>
               </tr>
