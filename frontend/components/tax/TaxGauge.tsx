@@ -69,7 +69,7 @@ export default function TaxGauge() {
               value={inputVal}
               onChange={handleInputChange}
               onBlur={handleInputBlur}
-              className="w-32 border-b-2 border-brand bg-transparent text-lg font-extrabold tabular-nums outline-none"
+              className="w-32 rounded-md border border-border bg-transparent px-2 py-0.5 text-lg font-extrabold tabular-nums outline-none focus:border-brand"
             />
             <span className="text-[12px] font-bold text-muted-foreground">만원</span>
           </div>
