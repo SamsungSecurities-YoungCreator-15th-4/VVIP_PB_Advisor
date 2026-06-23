@@ -7,6 +7,9 @@
 - LLM(생성형 인사이트): get_llm_client() — AZURE_OPENAI_LLM_DEPLOYMENT(gpt-4o
   배포 ai-insight-llm) + AZURE_OPENAI_LLM_API_VERSION 사용. IPS 추출용
   AZURE_OPENAI_DEPLOYMENT 와는 별개 배포다.
+- 인사이트 요약: get_insight_summary_client() —
+  AZURE_OPENAI_INSIGHT_SUMMARY_DEPLOYMENT(gpt-4.1-mini) +
+  AZURE_OPENAI_INSIGHT_SUMMARY_API_VERSION 사용.
 
 환경변수는 호출 시점에 읽으므로(아래 함수들), env 미설정 환경에서도 import 는
 실패하지 않는다(클라이언트를 실제로 만들 때만 RuntimeError). 키·엔드포인트 값
@@ -48,8 +51,23 @@ def get_llm_deployment() -> str:
     return os.getenv("AZURE_OPENAI_LLM_DEPLOYMENT", "ai-insight-llm")
 
 
+def get_insight_summary_deployment() -> str:
+    """인사이트 짧은 요약용 Azure 배포명(gpt-4.1-mini)."""
+    return os.getenv("AZURE_OPENAI_INSIGHT_SUMMARY_DEPLOYMENT", "gpt-4.1-mini")
+
+
 @lru_cache(maxsize=1)
 def get_llm_client() -> AzureOpenAI:
     """chat completion(gpt-4o)용 Azure 클라이언트. env 미설정 시 RuntimeError."""
     api_version = os.getenv("AZURE_OPENAI_LLM_API_VERSION", "2025-01-01-preview")
+    return build_azure_client(api_version)
+
+
+@lru_cache(maxsize=1)
+def get_insight_summary_client() -> AzureOpenAI:
+    """chat completion(gpt-4.1-mini)용 Azure 클라이언트. env 미설정 시 RuntimeError."""
+    api_version = os.getenv(
+        "AZURE_OPENAI_INSIGHT_SUMMARY_API_VERSION",
+        os.getenv("AZURE_OPENAI_LLM_API_VERSION", "2025-01-01-preview"),
+    )
     return build_azure_client(api_version)

@@ -8,7 +8,12 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.core.azure_openai import get_llm_client, get_llm_deployment
+from app.core.azure_openai import (
+    get_insight_summary_client,
+    get_insight_summary_deployment,
+    get_llm_client,
+    get_llm_deployment,
+)
 
 
 class Generator(ABC):
@@ -48,6 +53,29 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> str:
         chunk_text = chunk.get("chunk") or ""
         blocks.append(f"[근거 {i} · {title}]\n{chunk_text.strip()}")
     return "\n\n".join(blocks)
+
+
+def normalize_insight_summary(text: str, max_chars: int = 50, min_chars: int = 30) -> str:
+    """IPS unique 에 붙일 짧은 요약을 한 줄·최대 길이로 정규화한다."""
+    summary = " ".join(text.split())
+    summary = summary.strip("`\"'“”‘’")
+    if summary.startswith("요약:"):
+        summary = summary.removeprefix("요약:").strip()
+    if len(summary) > max_chars:
+        candidate = summary[:max_chars].rstrip(" ,.;:·-")
+        last_space = candidate.rfind(" ")
+        if last_space >= min_chars:
+            candidate = candidate[:last_space].rstrip(" ,.;:·-")
+        summary = candidate
+    return summary
+
+
+def fallback_insight_summary(answer: str) -> str:
+    """mini 요약 실패 시 answer 첫 문장을 최대 50자로 줄여 반환한다."""
+    summary = normalize_insight_summary(answer)
+    if summary:
+        return summary
+    return "인사이트 요약을 생성하지 못했습니다."
 
 
 class LLMGenerator(Generator):
@@ -98,3 +126,48 @@ class LLMGenerator(Generator):
         if not answer or not answer.strip():
             raise ValueError("LLM 이 빈 answer 를 반환했습니다.")
         return answer.strip()
+
+
+class InsightSummaryGenerator:
+    """AI 인사이트 answer 를 IPS unique 반영용 30~50자 요약으로 압축한다.
+
+    answer 는 이미 검색 근거 기반으로 생성된 텍스트이므로, 요약기는 새 사실·숫자를 만들지
+    않고 화면 반영용 짧은 문장만 만든다. 실패하면 라우터가 fallback_insight_summary()
+    로 답변 원문 기반 요약을 내려준다.
+    """
+
+    _SYSTEM_PROMPT = (
+        "너는 PB 상담 대시보드에서 IPS 구조화 항목 중 Unique에 추가할 짧은 문구를 "
+        "작성하는 보조자다.\n"
+        "반드시 다음 규칙을 지킨다.\n"
+        "1. 입력된 AI 인사이트 답변에 있는 내용만 사용한다.\n"
+        "2. 새로운 사실, 숫자, 투자 권유, 수익 보장 표현을 만들지 않는다.\n"
+        "3. 한국어 한 문장으로 30자 이상 50자 이하로 작성한다.\n"
+        "4. 마크다운, 따옴표, '요약:' 같은 접두사는 쓰지 않는다."
+    )
+
+    def summarize(self, answer: str) -> str:
+        if not answer or not answer.strip():
+            raise ValueError("빈 answer 는 요약할 수 없습니다.")
+
+        user_prompt = (
+            "[AI 인사이트 답변]\n"
+            f"{answer.strip()}\n\n"
+            "위 답변만 근거로 IPS Unique에 붙일 30~50자 한국어 요약 한 문장을 작성하라."
+        )
+        response = get_insight_summary_client().chat.completions.create(
+            model=get_insight_summary_deployment(),
+            messages=[
+                {"role": "system", "content": self._SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0,
+            max_tokens=80,
+            timeout=30.0,
+        )
+        if not response.choices:
+            raise ValueError("요약 LLM 응답에 choices 가 없습니다.")
+        summary = response.choices[0].message.content
+        if not summary or not summary.strip():
+            raise ValueError("요약 LLM 이 빈 summary 를 반환했습니다.")
+        return normalize_insight_summary(summary)
