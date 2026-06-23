@@ -25,17 +25,18 @@ function pctToRatio(value: number): number {
   return value / 100;
 }
 
-function parseNumber(label: string): number | null {
+function parseNumber(label: string | undefined | null): number | null {
+  if (typeof label !== "string") return null;
   const value = Number.parseFloat(label.replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(value) ? value : null;
 }
 
-function parsePercentToRatio(label: string): number | null {
+function parsePercentToRatio(label: string | undefined | null): number | null {
   const value = parseNumber(label);
   return value == null ? null : value / 100;
 }
 
-function parseManwonLabelToWon(label: string): number | null {
+function parseManwonLabelToWon(label: string | undefined | null): number | null {
   const value = parseNumber(label);
   return value == null ? null : value * 10_000;
 }
@@ -82,6 +83,7 @@ export function buildDashboardInsightContext({
   const current = PORTFOLIOS.find((portfolio) => portfolio.id === "current");
   const portfolioA = PORTFOLIOS.find((portfolio) => portfolio.id === "a");
   const portfolioB = PORTFOLIOS.find((portfolio) => portfolio.id === "b");
+  const selectedPortfolioKey = selectedPortfolio?.id ?? "a";
 
   return {
     schema_version: "dashboard_context_v1",
@@ -99,8 +101,8 @@ export function buildDashboardInsightContext({
         }
       : null,
     selected_portfolio: {
-      id: selectedPortfolio.id,
-      name: selectedPortfolio.name,
+      id: selectedPortfolio?.id ?? "",
+      name: selectedPortfolio?.name ?? "",
     },
     ips: {
       goal: ips.goal,
@@ -130,7 +132,7 @@ export function buildDashboardInsightContext({
       },
     },
     tax_optimizer: {
-      selected_portfolio_key: portfolioContextKey(selectedPortfolio.id),
+      selected_portfolio_key: portfolioContextKey(selectedPortfolioKey),
       current: {
         headline: {
           annual_tax_saving: TAX_EFFECT.annualSavingManwon * 10_000,

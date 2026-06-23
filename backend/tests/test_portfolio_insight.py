@@ -220,7 +220,11 @@ def test_rag_dashboard_query_intent_detection():
     assert mod._is_dashboard_summary_query("중앙대시보드 결과 요약해줘")
     assert mod._is_dashboard_summary_query("분석 겨로가 요약해줘")
     assert mod._is_dashboard_summary_query("분석결과 다시 설명해줘")
+    assert mod._is_dashboard_summary_query("백테스트 요약해줘")
+    assert mod._is_dashboard_summary_query("절세 최적화 결과 요약해줘")
     assert not mod._is_dashboard_summary_query("ISA 절세 효과는?")
+    assert not mod._is_dashboard_summary_query("백테스트가 무엇인가요?")
+    assert not mod._is_dashboard_summary_query("절세 최적화의 작동 원리는?")
 
 
 def test_rag_insight_context_accepts_dashboard_payload():
