@@ -1,8 +1,8 @@
-"""POST /clients — 고객(client) 생성.
+"""GET/POST /clients — 고객(client) 조회·생성.
 
-고객 SSOT 는 DB(client 테이블)다. STT 는 고객명으로 client 를 조회해 client_id(FK)를
-채우므로(Option A), 이름이 사실상 조회 키가 된다. 동명이인은 허용하며, 고유성은
-PK(id uuid)가 보장한다.
+고객 SSOT 는 DB(client 테이블)다. STT 는 프론트가 넘긴 client_id(DB client.id)를
+검증해 상담을 저장한다. 고객명은 표시값일 뿐 조회 키로 쓰지 않는다. 동명이인은
+허용하며, 고유성은 PK(id uuid)가 보장한다.
 
 운용자산(AUM)은 client 테이블에 전용 컬럼이 없어 meta.aum_eokwon(억원)으로 저장한다.
 Supabase 호출이 블로킹이라 핸들러는 동기 def 로 둔다(rag.py·tax.py 와 동일).
@@ -82,6 +82,45 @@ class ClientCreateResponse(BaseModel):
     created_at: str
 
 
+class ClientResponse(BaseModel):
+    client_id: str | None
+    name: str | None
+    aum_eokwon: float
+    is_persona: bool
+    created_at: str | None
+
+
+class ClientListResponse(BaseModel):
+    clients: list[ClientResponse]
+
+
+@router.get("", response_model=ClientListResponse)
+def list_clients() -> ClientListResponse:
+    """프론트 고객 선택 목록용 DB client 목록.
+
+    프론트는 이 응답의 client_id 를 STT 업로드·실시간 전사 시작 payload에 그대로
+    사용한다. meta.aum_eokwon 이 없는 기존 seed 페르소나는 0으로 내려 UI 기본값에
+    폴백할 수 있게 한다.
+    """
+    supabase = get_supabase()
+    try:
+        result = (
+            supabase.table("client")
+            .select("id,name,meta,created_at")
+            .order("created_at", desc=False)
+            .execute()
+        )
+        clients = [_client_response_from_row(row) for row in (result.data or [])]
+    except Exception as exc:
+        logger.exception("client list failed")
+        raise HTTPException(
+            status_code=500,
+            detail="고객 목록 조회 중 오류가 발생했습니다.",
+        ) from exc
+
+    return ClientListResponse(clients=clients)
+
+
 @router.post("", response_model=ClientCreateResponse, status_code=status.HTTP_201_CREATED)
 def create_client(request: ClientCreateRequest) -> ClientCreateResponse:
     supabase = get_supabase()
@@ -154,6 +193,26 @@ def _rollback_client(supabase, client_id: str) -> None:
         supabase.table("client").delete().eq("id", client_id).execute()
     except Exception:
         logger.exception("client rollback delete failed (client_id=%s)", client_id)
+
+
+def _client_response_from_row(row: dict) -> ClientResponse:
+    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    raw_aum = meta.get("aum_eokwon", 0)
+    try:
+        aum_eokwon = float(raw_aum)
+    except (TypeError, ValueError):
+        aum_eokwon = 0.0
+
+    created_at_raw = row.get("created_at")
+    created_at = _to_kst_iso(created_at_raw) if created_at_raw else None
+
+    return ClientResponse(
+        client_id=row.get("id") or None,
+        name=row.get("name") or None,
+        aum_eokwon=aum_eokwon,
+        is_persona=bool(meta.get("persona", False)),
+        created_at=created_at,
+    )
 
 
 def _to_kst_iso(created_at: str) -> str:

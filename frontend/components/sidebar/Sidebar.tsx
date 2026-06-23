@@ -19,10 +19,58 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
 import StressTestSection from "@/components/right-panel/StressTestSection";
-import { PAST_CONSULTATIONS } from "@/lib/mockData";
-import { createClient, uploadSttConsultation } from "@/lib/api";
+import { type Customer, CUSTOMERS, PAST_CONSULTATIONS } from "@/lib/mockData";
+import {
+  type ListedClient,
+  createClient,
+  listClients,
+  uploadSttConsultation,
+} from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
+
+const DEFAULT_CLIENT_TAX_PROFILE = {
+  isaUsedManwon: 0,
+  pensionUsedManwon: 0,
+  realizedLossManwon: 0,
+  marginalRatePct: 38.5,
+  age: 50,
+  horizonYears: 10,
+  nearTermNeedManwon: 0,
+  nearTermNeedYears: null,
+  isaOpened: true,
+} satisfies Pick<
+  Customer,
+  | "isaUsedManwon"
+  | "pensionUsedManwon"
+  | "realizedLossManwon"
+  | "marginalRatePct"
+  | "age"
+  | "horizonYears"
+  | "nearTermNeedManwon"
+  | "nearTermNeedYears"
+  | "isaOpened"
+>;
+
+function toDashboardCustomer(client: ListedClient): Customer {
+  const persona = CUSTOMERS.find((c) => c.name === client.name);
+  const safeClientId = client.clientId || "";
+  const displayId = safeClientId || `client-${client.name || "unknown"}`;
+  const aumEokwon =
+    client.aumEokwon > 0 ? client.aumEokwon : (persona?.aumEokwon ?? 0);
+
+  return {
+    ...(persona ?? DEFAULT_CLIENT_TAX_PROFILE),
+    id: displayId,
+    name: client.name || "Unknown",
+    grade: "VVIP",
+    pbCode: persona?.pbCode ?? `PB-${displayId.slice(0, 6).toUpperCase()}`,
+    aumLabel: aumEokwon > 0 ? `운용자산 ${aumEokwon}억원` : "운용자산 미입력",
+    aumEokwon,
+    clientId: safeClientId || undefined,
+    persisted: true,
+  };
+}
 
 /** 좌측 사이드바: 고객 선택 · 상담 입력 · 상담 내역 · IPS 조율기 · 분석하기 */
 export default function Sidebar() {
@@ -33,6 +81,7 @@ export default function Sidebar() {
     setIps,
     selectCustomer,
     addCustomer,
+    setCustomers,
     transcript,
     transcriptSource,
     sttStatus,
@@ -72,6 +121,22 @@ export default function Sidebar() {
     };
   }, [dropdownOpen]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateClients() {
+      const result = await listClients();
+      if (cancelled || result.source !== "live" || result.data.length === 0) {
+        return;
+      }
+      setCustomers(result.data.map(toDashboardCustomer));
+    }
+
+    void hydrateClients();
+    return () => {
+      cancelled = true;
+    };
+  }, [setCustomers]);
+
   if (!customer) return null;
 
   const handleDropdownToggle = () => {
@@ -100,7 +165,7 @@ export default function Sidebar() {
     }
 
     const persisted = result.status === "live";
-    const id = `cust-${Date.now()}`;
+    const id = result.data.clientId || `cust-${Date.now()}`;
     addCustomer({
       id,
       name,
@@ -157,7 +222,7 @@ export default function Sidebar() {
             className="text-[9px] font-bold leading-none text-muted-foreground"
             style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
           >
-            고객IPS&Test
+            IPS&Test
           </span>
         </button>
       </div>
@@ -170,7 +235,7 @@ export default function Sidebar() {
         {/* 패널 헤더 */}
         <div className="flex items-center justify-between px-0.5 pb-0.5">
           <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-            고객 IPS & Stress Test
+            IPS&Test
           </span>
           <button
             onClick={() => setIsOpen(false)}
@@ -235,7 +300,6 @@ export default function Sidebar() {
             onChange={(e) => setUploadedFile(e.target.files?.[0] ?? null)}
           />
           <div className="flex gap-2">
-            {/* 음성 업로드 */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -258,7 +322,6 @@ export default function Sidebar() {
               )}
             </button>
 
-            {/* 실시간 전사 */}
             <button
               type="button"
               className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
