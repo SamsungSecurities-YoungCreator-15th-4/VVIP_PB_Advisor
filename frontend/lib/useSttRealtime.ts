@@ -133,6 +133,7 @@ export function useSttRealtime() {
         // 2) AudioContext + WorkletNode 준비
         const audioCtx = new AudioContext();
         audioCtxRef.current = audioCtx;
+        if (audioCtx.state === "suspended") await audioCtx.resume();
         await audioCtx.audioWorklet.addModule("/pcm-processor.js");
         const workletNode = new AudioWorkletNode(audioCtx, "pcm-processor", {
           processorOptions: { targetSampleRate: 16000 },
@@ -179,6 +180,7 @@ export function useSttRealtime() {
               }
             };
             source.connect(workletNode);
+            workletNode.connect(audioCtx.destination);
             setStatus("recording");
           } else if (event === "partial_transcript") {
             const item = msg.transcript as PartialItem;

@@ -33,6 +33,7 @@ function WaveformCanvas({
 
     const BRAND = "#3B7BF6";
     const MUTED = "#cbd5e1";
+    let dataArray: Uint8Array<ArrayBuffer> | null = null;
 
     const draw = () => {
       const W = canvas.width;
@@ -42,9 +43,12 @@ function WaveformCanvas({
       const analyser = analyserRef.current;
       if (active && analyser && !isPaused) {
         // 녹음 중: 마이크 음량 기반 ECG 심박 애니메이션
-        const data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-        const avgLevel = data.reduce((s, v) => s + v, 0) / data.length / 255;
+        if (!dataArray || dataArray.length !== analyser.frequencyBinCount) {
+          dataArray = new Uint8Array(analyser.frequencyBinCount);
+        }
+        analyser.getByteFrequencyData(dataArray);
+        const data = dataArray;
+        const avgLevel = data.reduce((s: number, v: number) => s + v, 0) / data.length / 255;
         const amp = 0.3 + avgLevel * 0.7; // 음량에 따라 진폭 조절
 
         const t = Date.now() / 1000;
@@ -93,24 +97,34 @@ function WaveformCanvas({
   );
 }
 
-function useElapsedTime(running: boolean) {
+function useElapsedTime(running: boolean, isPaused: boolean) {
   const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef<number | null>(null);
-  const pausedAtRef = useRef<number>(0);
+  const startTimeRef = useRef<number | null>(null);
+  const accumulatedRef = useRef<number>(0);
 
   useEffect(() => {
     if (!running) {
-      startRef.current = null;
-      pausedAtRef.current = 0;
+      startTimeRef.current = null;
+      accumulatedRef.current = 0;
       const tid = setTimeout(() => setElapsed(0), 0);
       return () => clearTimeout(tid);
     }
-    startRef.current = Date.now();
+
+    if (isPaused) {
+      if (startTimeRef.current !== null) {
+        accumulatedRef.current += Date.now() - startTimeRef.current;
+        startTimeRef.current = null;
+      }
+      return;
+    }
+
+    startTimeRef.current = Date.now();
     const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - (startRef.current ?? Date.now())) / 1000));
-    }, 500);
+      const delta = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+      setElapsed(Math.floor((accumulatedRef.current + delta) / 1000));
+    }, 250);
     return () => clearInterval(id);
-  }, [running]);
+  }, [running, isPaused]);
 
   return elapsed;
 }
@@ -132,7 +146,7 @@ export default function SttRecordingModal({
   const isRecording = status === "recording";
   const isConnecting = status === "connecting";
   const isStopping = status === "stopping";
-  const elapsed = useElapsedTime(isRecording);
+  const elapsed = useElapsedTime(isRecording, isPaused);
 
   if (!isConnecting && !isRecording && !isStopping) return null;
 

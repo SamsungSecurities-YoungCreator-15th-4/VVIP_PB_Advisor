@@ -45,7 +45,8 @@ export default function PortfolioSection() {
     const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
     if (!customer) return;
 
-    setCalculating(true);
+    let cancelled = false;
+    const tid = setTimeout(() => { if (!cancelled) setCalculating(true); }, 0);
     fetchPortfolioCalculate({
       aumEokwon: customer.aumEokwon,
       returnPct: ips.returnPct,
@@ -58,12 +59,12 @@ export default function PortfolioSection() {
       consultationId: consultationId || undefined,
       clientId: customer.id,
     }).then((result) => {
-      setPortfolios(result.data.portfolios, result.source, result.note);
+      if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
     }).finally(() => {
-      setCalculating(false);
+      if (!cancelled) setCalculating(false);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCustomerId]);
+    return () => { cancelled = true; clearTimeout(tid); };
+  }, [selectedCustomerId, customers, ips.returnPct, ips.risk, ips.timeYears, ips.liquidity, ips.tax, liveBase.ratePct, liveBase.fxKrw, consultationId, setPortfolios]);
 
   const asOf = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "2-digit", day: "2-digit",

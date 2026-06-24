@@ -139,6 +139,8 @@ export default function MacroTicker() {
       clearTimeout(t);
       clearInterval(id);
     };
+  // load를 dep에 넣으면 매 렌더마다 interval이 재생성되므로 의도적으로 마운트 1회만 실행
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 새로고침 버튼: 클릭 시각 즉시 표시 → 강제 갱신 + 쿨다운

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import LiveClock from "@/components/header/LiveClock";
 import MacroTicker from "@/components/header/MacroTicker";
 import HelpModeToggle from "@/components/header/HelpModeToggle";
@@ -9,7 +10,7 @@ export default function Header() {
     <header className="flex h-14.5 items-center gap-3 rounded-2xl border bg-card px-4 shadow-sm">
       {/* 로고 — 항상 표시 */}
       <div className="flex shrink-0 items-center gap-3 border-r pr-4">
-        <img src="/logo.png" alt="S.upervisor" className="size-9 rounded-lg object-cover" />
+        <Image src="/logo.png" alt="S.upervisor" width={36} height={36} className="rounded-lg object-cover" />
         <div>
           <h1 className="text-[15px] font-extrabold leading-tight">
             S.upervisor

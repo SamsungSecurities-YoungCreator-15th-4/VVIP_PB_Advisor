@@ -96,7 +96,7 @@ export default function BacktestChart() {
   const xKey = hasRealData ? "date" : "year";
   const xTicks = hasRealData
     ? (chartData as { date: string }[])
-        .filter((d) => d.date.endsWith("-01"))
+        .filter((d) => d.date.slice(5, 7) === "01")
         .map((d) => d.date)
     : ["2021", "2022", "2023", "2024", "2025", "2026"];
 
