@@ -4,7 +4,6 @@
  */
 
 import {
-  CUSTOMERS,
   PORTFOLIOS,
   TAX_EFFECT,
   TAX_ADVICE,
@@ -13,6 +12,7 @@ import {
   BASE_TIME,
   IPS_DEFAULT,
 } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
 
 // ── 상수 ────────────────────────────────────────────────────────
 const W = 794;
@@ -27,7 +27,13 @@ const MUTED = "#6B7280";
 const BORDER = "#E5E7EB";
 const BG_ALT = "#FAFAFA";
 
-const customer = CUSTOMERS[0];
+/** 현재 대시보드에서 선택된 고객(없으면 첫 고객)을 store 에서 읽는다. */
+function useSelectedCustomer() {
+  const customers = useDashboardStore((s) => s.customers);
+  const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
+  return customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+}
+
 const current = PORTFOLIOS.find((p) => p.id === "current")!;
 const portA = PORTFOLIOS.find((p) => p.id === "a")!;
 const portB = PORTFOLIOS.find((p) => p.id === "b")!;
@@ -264,6 +270,7 @@ function PageHeader({
   title: string;
   subtitle: string;
 }) {
+  const customer = useSelectedCustomer();
   return (
     <div
       style={{
@@ -351,6 +358,7 @@ function AssetBar({
 
 // ── 페이지 1: 표지 ───────────────────────────────────────────────
 function CoverPage() {
+  const customer = useSelectedCustomer();
   const today = getToday();
   return (
     <div
@@ -1090,6 +1098,7 @@ function PortfolioPage() {
 
 // ── 페이지 4: 절세 최적화 전략 ──────────────────────────────────
 function TaxPage() {
+  const customer = useSelectedCustomer();
   // 계좌별 사용액 계산 (AccountAllocation 동일 로직)
   const accountRows = ACCOUNT_PDF.filter((acct) => acct.key !== "general").map(
     (acct) => {
