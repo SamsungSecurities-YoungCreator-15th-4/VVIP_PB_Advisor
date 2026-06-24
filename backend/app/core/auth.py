@@ -1,7 +1,10 @@
 """FastAPI auth dependency — Supabase JWT 로컬 검증 후 pb_id(auth.users UUID) 반환.
 
-PyJWT(HS256)로 로컬 검증해 네트워크 왕복을 제거한다.
-SUPABASE_JWT_SECRET 이 비어있으면 supabase.auth.get_user() 폴백.
+PyJWT 로 로컬 검증해 네트워크 왕복을 (캐시된 공개키 기준) 제거한다. Supabase 가
+서명키를 비대칭(ES256/JWKS)으로 전환하면서 토큰 헤더의 alg 에 따라 분기한다.
+  - ES256/RS256 등 비대칭 → JWKS 공개키(SUPABASE_JWKS_URL)로 검증
+  - HS256(레거시 공유 시크릿) → SUPABASE_JWT_SECRET 로 검증(전환기 토큰 호환)
+둘 다 불가하면 supabase.auth.get_user() 원격 검증으로 폴백한다.
 
 사용 방법:
     from app.core.auth import get_current_pb_id
@@ -13,11 +16,12 @@ SUPABASE_JWT_SECRET 이 비어있으면 supabase.auth.get_user() 폴백.
 """
 
 import logging
+from functools import lru_cache
 
 import jwt  # PyJWT
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
+from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError, PyJWKClient
 
 from app.core.config import settings
 from app.db.supabase import get_supabase
@@ -27,7 +31,16 @@ _bearer = HTTPBearer(auto_error=False)
 
 # Supabase Auth JWT audience (Supabase 발급 JWT 표준값)
 _JWT_AUDIENCE = "authenticated"
-_JWT_ALGORITHM = "HS256"
+_HS_ALGORITHM = "HS256"
+# JWKS 로 검증할 비대칭 알고리즘 허용 목록.
+# 헤더 alg 를 그대로 신뢰하지 않고 이 목록으로 제한해 alg-confusion 공격을 막는다.
+_ASYMMETRIC_ALGORITHMS = ("ES256", "RS256")
+
+
+@lru_cache(maxsize=1)
+def _jwks_client(url: str) -> PyJWKClient:
+    """JWKS 공개키 클라이언트(내부적으로 키를 캐싱). url 별 단일 인스턴스."""
+    return PyJWKClient(url)
 
 
 def get_current_pb_id(
@@ -35,10 +48,11 @@ def get_current_pb_id(
 ) -> str:
     """Authorization: Bearer <token> 헤더에서 pb_id(UUID)를 추출·반환한다.
 
-    검증 전략:
-    1) SUPABASE_JWT_SECRET 이 설정돼 있으면 PyJWT 로 로컬 검증(네트워크 0회)
-    2) 시크릿이 없으면 supabase.auth.get_user(token) 으로 서버 사이드 검증(폴백)
-    두 경우 모두 실패 시 401 반환.
+    검증 전략(토큰 헤더 alg 기준 분기):
+    1) ES256/RS256(비대칭) → JWKS 공개키로 로컬 검증
+    2) HS256(레거시) → SUPABASE_JWT_SECRET 로 로컬 검증
+    3) 위가 모두 불가/실패 → supabase.auth.get_user(token) 원격 검증 폴백
+    최종 실패 시 401 반환.
     """
     if credentials is None:
         raise HTTPException(
@@ -47,7 +61,9 @@ def get_current_pb_id(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = credentials.credentials
-    pb_id = _verify_jwt_local(token) if settings.supabase_jwt_secret else _verify_jwt_remote(token)
+    pb_id = _verify_jwt_local(token)
+    if pb_id is None:
+        pb_id = _verify_jwt_remote(token)
     if pb_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,12 +74,41 @@ def get_current_pb_id(
 
 
 def _verify_jwt_local(token: str) -> str | None:
-    """PyJWT 로 HS256 서명·만료시간·audience 를 로컬에서 검증하고 sub(UUID)를 반환."""
+    """토큰 헤더의 alg 에 따라 서명·만료·audience 를 로컬 검증하고 sub(UUID)를 반환."""
+    try:
+        alg = jwt.get_unverified_header(token).get("alg")
+    except (DecodeError, InvalidTokenError) as exc:
+        logger.debug("JWT header parse error: %s", exc)
+        return None
+
+    if alg in _ASYMMETRIC_ALGORITHMS:
+        return _verify_jwt_asymmetric(token, alg)
+    if alg == _HS_ALGORITHM and settings.supabase_jwt_secret:
+        return _decode_sub(token, settings.supabase_jwt_secret, [_HS_ALGORITHM])
+    # 검증 수단 없음(예: HS256 인데 시크릿 미설정) → 원격 폴백에 맡긴다.
+    return None
+
+
+def _verify_jwt_asymmetric(token: str, alg: str) -> str | None:
+    """JWKS 공개키(kid 매칭)로 비대칭 서명 토큰을 검증한다."""
+    if not settings.supabase_jwks_url:
+        logger.debug("SUPABASE_JWKS_URL 미설정 — 비대칭 토큰 로컬 검증 불가")
+        return None
+    try:
+        signing_key = _jwks_client(settings.supabase_jwks_url).get_signing_key_from_jwt(token)
+        return _decode_sub(token, signing_key.key, [alg])
+    except Exception as exc:  # PyJWKClientError 등 네트워크/키 조회 실패 포함
+        logger.debug("JWKS verification failed: %s", exc)
+        return None
+
+
+def _decode_sub(token: str, key, algorithms: list[str]) -> str | None:
+    """서명·만료·audience 를 검증하고 sub(UUID)를 반환. 실패 시 None."""
     try:
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=[_JWT_ALGORITHM],
+            key,
+            algorithms=algorithms,
             audience=_JWT_AUDIENCE,
         )
         sub = payload.get("sub")
