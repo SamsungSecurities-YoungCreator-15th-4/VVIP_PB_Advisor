@@ -29,6 +29,7 @@ from .assets import (
     OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS,
     STOCK_ASSETS,
 )
+from .tax_parser import extract_korean_money_candidates
 from .semantic_common import (
     create_structured_completion,
     env_enabled,
@@ -316,47 +317,10 @@ def _matching_percent_precision(evidence: str, value_pct: float) -> Optional[int
 
 
 def _parse_korean_money_candidates(text: str) -> List[float]:
-    """evidence 안의 원화 표현 후보를 원 단위로 변환한다.
+    """공통 한국식 금액 파서를 사용해 evidence 속 금액 후보를 반환한다."""
 
-    1억 5천만원, 3천만원, 900만원, 25000000원 같은 표현을 지원한다.
-    """
+    return extract_korean_money_candidates(text)
 
-    compact = text.replace(",", "")
-    candidates: List[float] = []
-
-    composite_pattern = re.compile(
-        r"(?:(?P<jo>[0-9]+(?:\.[0-9]+)?)\s*조)?\s*"
-        r"(?:(?P<eok>[0-9]+(?:\.[0-9]+)?)\s*억)?\s*"
-        r"(?:(?P<cheonman>[0-9]+(?:\.[0-9]+)?)\s*천\s*만)?\s*"
-        r"(?:(?P<man>[0-9]+(?:\.[0-9]+)?)\s*만)?\s*원"
-    )
-    for match in composite_pattern.finditer(compact):
-        if not any(match.group(name) for name in ("jo", "eok", "cheonman", "man")):
-            continue
-        total = 0.0
-        if match.group("jo"):
-            total += float(match.group("jo")) * 1_000_000_000_000
-        if match.group("eok"):
-            total += float(match.group("eok")) * 100_000_000
-        if match.group("cheonman"):
-            total += float(match.group("cheonman")) * 10_000_000
-        if match.group("man"):
-            total += float(match.group("man")) * 10_000
-        candidates.append(total)
-
-    for number, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*(조|억|천만|만)\s*원?", compact):
-        multiplier = {
-            "조": 1_000_000_000_000,
-            "억": 100_000_000,
-            "천만": 10_000_000,
-            "만": 10_000,
-        }[unit]
-        candidates.append(float(number) * multiplier)
-
-    for number in re.findall(r"(?<![0-9.])([0-9]{4,})\s*원", compact):
-        candidates.append(float(number))
-
-    return candidates
 
 
 def _money_matches_evidence(evidence: str, value: float) -> bool:
@@ -884,6 +848,122 @@ def evaluate_unique_constraints(
 
     return not violations, violations
 
+
+def validate_unique_constraint_consistency(
+    unique_profile: Optional[Dict[str, Any]],
+) -> List[str]:
+    """시뮬레이션 전에 명백히 모순인 Unique 제약만 검출한다.
+
+    현재 비중이 있어야 판단할 수 있는 increase/decrease는 여기서 막지 않고
+    기존 후보 평가 단계에서 처리한다.
+    """
+
+    constraints = list((unique_profile or {}).get("semantic_constraints") or [])
+    if not constraints:
+        return []
+
+    conflicts: List[str] = []
+    grouped: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    for constraint in constraints:
+        subject_type = str(constraint.get("subject_type") or "")
+        subject = str(constraint.get("subject") or "")
+        if not _constraint_subject_assets(constraint):
+            continue
+
+        state = grouped.setdefault(
+            (subject_type, subject),
+            {
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "targets": [],
+                "excluded": False,
+            },
+        )
+        operator = constraint.get("operator")
+        value = constraint.get("value_ratio")
+
+        if operator == "exclude":
+            state["excluded"] = True
+            state["maximum"] = 0.0
+        elif operator == "minimum" and value is not None:
+            state["minimum"] = max(float(state["minimum"]), float(value))
+        elif operator == "maximum" and value is not None:
+            state["maximum"] = min(float(state["maximum"]), float(value))
+        elif operator == "target" and value is not None:
+            target = float(value)
+            if not any(
+                abs(target - existing) <= _EPSILON
+                for existing in state["targets"]
+            ):
+                state["targets"].append(target)
+
+    excluded_assets = get_excluded_assets(unique_profile)
+    if excluded_assets >= set(ASSET_TICKERS):
+        conflicts.append(
+            "모든 자산이 투자 제외 대상으로 지정되어 추천 후보를 만들 수 없습니다."
+        )
+
+    required_by_exact_asset: Dict[str, float] = {}
+
+    for (subject_type, subject), state in grouped.items():
+        label = f"{subject_type}:{subject}"
+        minimum = float(state["minimum"])
+        maximum = float(state["maximum"])
+        targets = list(state["targets"])
+
+        if minimum > maximum + _EPSILON:
+            conflicts.append(
+                f"{label}의 최소 비중 {minimum:.2%}가 "
+                f"최대 비중 {maximum:.2%}보다 큽니다."
+            )
+
+        if len(targets) > 1:
+            formatted = ", ".join(
+                f"{value:.2%}" for value in sorted(targets)
+            )
+            conflicts.append(
+                f"{label}에 서로 다른 목표 비중이 동시에 지정되었습니다: "
+                f"{formatted}."
+            )
+
+        target = targets[0] if len(targets) == 1 else None
+        if target is not None and not (
+            minimum - _EPSILON <= target <= maximum + _EPSILON
+        ):
+            conflicts.append(
+                f"{label}의 목표 비중 {target:.2%}가 허용 범위 "
+                f"{minimum:.2%}~{maximum:.2%} 밖입니다."
+            )
+
+        subject_assets = _constraint_subject_assets(
+            {"subject_type": subject_type, "subject": subject}
+        )
+        positive_requirement = max(minimum, target or 0.0)
+        if (
+            subject_assets
+            and subject_assets.issubset(excluded_assets)
+            and positive_requirement > _EPSILON
+        ):
+            conflicts.append(
+                f"{label}은 전부 제외된 자산으로 구성되지만 "
+                f"{positive_requirement:.2%} 이상의 비중을 동시에 요구합니다."
+            )
+
+        if subject_type == "asset" and subject in ASSET_TICKERS:
+            required_by_exact_asset[subject] = max(
+                minimum,
+                target or 0.0,
+            )
+
+    exact_asset_minimum_sum = sum(required_by_exact_asset.values())
+    if exact_asset_minimum_sum > 1.0 + _EPSILON:
+        conflicts.append(
+            "개별 자산의 최소/목표 비중 합계가 "
+            f"{exact_asset_minimum_sum:.2%}로 100%를 초과합니다."
+        )
+
+    return list(dict.fromkeys(conflicts))
 
 def build_unique_constraint_warnings(request: Any) -> List[str]:
     profile = getattr(request, "unique_profile", {}) or {}

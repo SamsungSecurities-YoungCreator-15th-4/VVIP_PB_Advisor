@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
+from .tax_parser import extract_korean_money_candidates
 from .semantic_common import (
     create_structured_completion,
     env_enabled,
@@ -127,33 +128,8 @@ def _evidence_exists(text: str, evidence: Any) -> bool:
 
 
 def _money_candidates(text: str) -> List[float]:
-    compact = text.replace(",", "")
-    values: List[float] = []
-    composite_pattern = re.compile(
-        r"(?:(?P<jo>[0-9]+(?:\.[0-9]+)?)\s*조)?\s*"
-        r"(?:(?P<eok>[0-9]+(?:\.[0-9]+)?)\s*억)?\s*"
-        r"(?:(?P<cheonman>[0-9]+(?:\.[0-9]+)?)\s*천\s*만)?\s*"
-        r"(?:(?P<man>[0-9]+(?:\.[0-9]+)?)\s*만)?\s*원"
-    )
-    for match in composite_pattern.finditer(compact):
-        if not any(match.group(name) for name in ("jo", "eok", "cheonman", "man")):
-            continue
-        total = 0.0
-        if match.group("jo"):
-            total += float(match.group("jo")) * 1_000_000_000_000
-        if match.group("eok"):
-            total += float(match.group("eok")) * 100_000_000
-        if match.group("cheonman"):
-            total += float(match.group("cheonman")) * 10_000_000
-        if match.group("man"):
-            total += float(match.group("man")) * 10_000
-        values.append(total)
-    for number, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*(조|억|천만|만)\s*원?", compact):
-        multiplier = {"조": 1_000_000_000_000, "억": 100_000_000, "천만": 10_000_000, "만": 10_000}[unit]
-        values.append(float(number) * multiplier)
-    for number in re.findall(r"(?<![0-9.])([0-9]{4,})\s*원", compact):
-        values.append(float(number))
-    return values
+    return extract_korean_money_candidates(text)
+
 
 
 def _money_supported(evidence: str, value: float) -> bool:
@@ -332,7 +308,7 @@ def _parse_tax_fallback(profile: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def enrich_tax_profile_with_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
-    """기존 tax_profile 사실을 절대 덮어쓰지 않고 빈 fact만 LLM으로 보완한다."""
+    """기존 tax_profile 사실을 덮어쓰지 않고 빈 fact만 LLM으로 보완한다."""
 
     result = copy.deepcopy(profile)
     if not _should_call_fallback(result):
@@ -350,12 +326,29 @@ def enrich_tax_profile_with_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in (fallback.get("facts") or {}).items():
         if key in facts and facts[key] is not None:
             if facts[key] != value:
-                conflicts.append({"field": key, "deterministic": facts[key], "llm": value, "selected": "deterministic"})
+                conflicts.append(
+                    {
+                        "field": key,
+                        "deterministic": facts[key],
+                        "llm": value,
+                        "selected": "deterministic",
+                    }
+                )
             continue
         facts[key] = value
         applied[key] = value
 
     result["facts"] = facts
+
+    # fallback 적용 전 상태가 routes에 남지 않도록 다시 계산한다.
+    from .tax_parser import _build_routes
+
+    all_mentions = [
+        *(result.get("tax_mentions") or []),
+        *(result.get("cost_mentions") or []),
+    ]
+    result["routes"] = _build_routes(all_mentions, facts)
+
     result["llm_fallback"] = {
         "status": fallback.get("status"),
         "version": fallback.get("version"),
@@ -375,3 +368,4 @@ def enrich_tax_profile_with_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
         "원문 검증을 통과한 허용 tax fact만 빈 필드에 보완합니다."
     ).strip()
     return result
+

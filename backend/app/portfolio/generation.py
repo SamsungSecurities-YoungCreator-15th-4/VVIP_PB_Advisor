@@ -15,6 +15,7 @@ from .unique_semantic import (
     build_unique_constraint_warnings,
     evaluate_unique_constraints,
     get_excluded_assets,
+    validate_unique_constraint_consistency,
 )
 
 # ============================================================
@@ -328,6 +329,15 @@ def find_recommended_portfolios(
         "risk_contribution": 0,
     }
 
+    unique_constraint_conflicts = validate_unique_constraint_consistency(
+        request.unique_profile
+    )
+    if unique_constraint_conflicts:
+        raise ValueError(
+            "Unique 의미 제약이 서로 충돌합니다: "
+            + " ".join(unique_constraint_conflicts)
+        )
+
     raw_available_assets = [
         asset for asset in ASSET_TICKERS.keys() if asset in returns.columns
     ]
@@ -354,7 +364,7 @@ def find_recommended_portfolios(
             base_weights=base_weights,
             total_asset=request.total_asset,
             unique_need_amount=request.unique_need_amount,
-            unique_asset=request.unique_asset,
+            unique_asset=effective_unique_asset,
         )
         semantic_passed, _semantic_violations = evaluate_unique_constraints(
             candidate_weights=final_weights,
