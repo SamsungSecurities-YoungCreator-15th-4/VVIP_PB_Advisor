@@ -177,7 +177,11 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
     await websocket.accept()
     # 인증: 브라우저 WebSocket 은 Authorization 헤더를 못 실으므로 토큰을
     # 쿼리파라미터(?token=<JWT>)로 받아 검증한다. 실패 시 정책위반(1008)으로 종료.
-    pb_id = resolve_pb_id(websocket.query_params.get("token"))
+    # resolve_pb_id 는 JWKS 조회·원격 폴백 등 동기 네트워크가 있어 블로킹이므로,
+    # async 핸들러의 이벤트 루프를 막지 않도록 스레드풀에서 실행한다.
+    pb_id = await run_in_threadpool(
+        resolve_pb_id, websocket.query_params.get("token")
+    )
     if pb_id is None:
         await websocket.close(code=1008, reason="유효하지 않은 토큰입니다.")
         return
