@@ -38,6 +38,12 @@ interface DashboardState {
   /** 활성 위기 시나리오 버튼. null이면 슬라이더(금리·환율) 모드.
    *  버튼과 슬라이더는 상호 배타 — 둘은 따로 동작한다. */
   activeScenario: "crisis_2008" | "crisis_ru_war" | null;
+  /** 분석하기로 "확정"된 스트레스 입력. 슬라이더·위기버튼은 pending(scenario/activeScenario)
+   *  이고, 분석하기를 눌러야 여기로 커밋된다. 평가손익·6대 지표는 이 applied 값으로만 계산. */
+  appliedScenario: { ratePct: number; fxKrw: number };
+  appliedActiveScenario: "crisis_2008" | "crisis_ru_war" | null;
+  /** 분석하기를 누를 때마다 +1. 같은 값이어도 재계산을 강제하는 토큰. */
+  analysisNonce: number;
   /** 실시간 현재값 (금리·환율) — 슬라이더 기준점·델타 계산의 기준.
    *  백엔드 /api/macro-indicators 로드 전엔 목 기준값으로 시작한다. */
   liveBase: { ratePct: number; fxKrw: number };
@@ -65,9 +71,15 @@ interface DashboardState {
   setIps: (patch: Partial<IpsState>) => void;
   setScenario: (patch: Partial<DashboardState["scenario"]>) => void;
   resetScenario: () => void;
-  /** 위기 버튼 토글 — 누르면 슬라이더는 기준값으로 초기화(상호 배타).
-   *  같은 버튼을 다시 누르면 해제된다. */
-  activateScenario: (key: "crisis_2008" | "crisis_ru_war") => void;
+  /** 위기 프리셋 — 백엔드 시나리오를 켜고, 슬라이더는 그 시대 금리·환율로 이동(표시용).
+   *  분석하기 시 백엔드엔 시나리오 충격벡터가 전송되고, 슬라이더 값은 표시 컨텍스트다.
+   *  슬라이더를 직접 조정하면(setScenario) activeScenario가 해제돼 슬라이더 모드로 전환된다. */
+  applyCrisisPreset: (
+    key: "crisis_2008" | "crisis_ru_war",
+    slider: { ratePct: number; fxKrw: number },
+  ) => void;
+  /** 분석하기 — 현재 pending(scenario/activeScenario)을 applied로 커밋하고 nonce++. */
+  runAnalysis: () => void;
   /** 실시간 현재값 주입 — 최초 1회는 슬라이더(scenario)도 실시간 값으로 맞춘다. */
   setLiveBase: (base: { ratePct: number; fxKrw: number }) => void;
   setOtherIncome: (manwon: number) => void;
@@ -93,6 +105,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   },
   scenario: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
   activeScenario: null,
+  appliedScenario: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
+  appliedActiveScenario: null,
+  analysisNonce: 0,
   liveBase: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
   liveBaseLoaded: false,
   otherIncomeManwon: TAX_THRESHOLD.otherIncomeDefault,
@@ -122,17 +137,23 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     set((s) => ({ scenario: { ...s.scenario, ...patch }, activeScenario: null })),
   resetScenario: () =>
     set((s) => ({ scenario: { ...s.liveBase }, activeScenario: null })),
-  // 위기 버튼 토글 — 누르면 슬라이더를 기준값으로 초기화한다.
-  activateScenario: (key) =>
+  // 위기 프리셋 — 시나리오를 켜고 슬라이더를 그 시대 값으로 이동(원자적, setScenario 안 거침).
+  applyCrisisPreset: (key, slider) =>
+    set({ activeScenario: key, scenario: { ...slider } }),
+  // 분석하기 — pending을 applied로 커밋(평가손익·6대 지표는 이때만 갱신).
+  runAnalysis: () =>
     set((s) => ({
-      activeScenario: s.activeScenario === key ? null : key,
-      scenario: { ...s.liveBase },
+      appliedScenario: { ...s.scenario },
+      appliedActiveScenario: s.activeScenario,
+      analysisNonce: s.analysisNonce + 1,
     })),
   setLiveBase: (base) =>
     set((s) => ({
       liveBase: base,
       // 최초 로드 시에만 슬라이더를 실시간 값으로 스냅 (이후엔 사용자 조작 보존)
       scenario: s.liveBaseLoaded ? s.scenario : { ...base },
+      // applied도 최초 1회 같이 스냅 — 로드 직후 pending≠applied로 오인(가짜 '변경됨') 방지
+      appliedScenario: s.liveBaseLoaded ? s.appliedScenario : { ...base },
       liveBaseLoaded: true,
     })),
   setOtherIncome: (manwon) => set({ otherIncomeManwon: Math.max(0, manwon) }),

@@ -37,19 +37,23 @@ export interface UseStressedResult {
 }
 
 export function useStressedPortfolios(): UseStressedResult {
-  const scenario = useDashboardStore((s) => s.scenario);
+  // 분석하기로 "확정"된 입력만 본다. 슬라이더/위기버튼(pending)이 바뀌어도
+  // 분석하기를 누르기 전까지는 재계산하지 않는다(게이팅).
+  const appliedScenario = useDashboardStore((s) => s.appliedScenario);
+  const appliedActiveScenario = useDashboardStore((s) => s.appliedActiveScenario);
+  const analysisNonce = useDashboardStore((s) => s.analysisNonce);
   const liveBase = useDashboardStore((s) => s.liveBase);
-  const activeScenario = useDashboardStore((s) => s.activeScenario);
   const customers = useDashboardStore((s) => s.customers);
   const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
 
   const customer = customers.find((c) => c.id === selectedCustomerId);
   const aumEokwon = customer?.aumEokwon ?? 50;
 
-  // 충격 델타는 실시간 현재값(liveBase) 기준.
-  const rateDeltaBp = Math.round((scenario.ratePct - liveBase.ratePct) * 100);
-  const fxDelta = Math.round(scenario.fxKrw - liveBase.fxKrw);
-  const hasScenario = activeScenario != null || rateDeltaBp !== 0 || fxDelta !== 0;
+  // 충격 델타는 확정값(applied) − 실시간 현재값(liveBase) 기준.
+  const rateDeltaBp = Math.round((appliedScenario.ratePct - liveBase.ratePct) * 100);
+  const fxDelta = Math.round(appliedScenario.fxKrw - liveBase.fxKrw);
+  const hasScenario =
+    appliedActiveScenario != null || rateDeltaBp !== 0 || fxDelta !== 0;
 
   const [byId, setById] = useState<Record<string, StressedPair>>({});
   const [loading, setLoading] = useState(true);
@@ -63,8 +67,8 @@ export function useStressedPortfolios(): UseStressedResult {
       setLoading(true);
 
       // 위기 버튼이 켜져 있으면 시나리오 모드, 아니면 슬라이더 모드(상호배타).
-      const mode: StressMode = activeScenario
-        ? { kind: "scenario", scenario: activeScenario }
+      const mode: StressMode = appliedActiveScenario
+        ? { kind: "scenario", scenario: appliedActiveScenario }
         : {
             kind: "slider",
             rateShock: rateDeltaBp / 10000, // bp → 소수 (100bp = 0.01)
@@ -101,7 +105,8 @@ export function useStressedPortfolios(): UseStressedResult {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [rateDeltaBp, fxDelta, activeScenario, aumEokwon, liveBase.fxKrw]);
+    // analysisNonce: 분석하기를 누를 때마다 재계산 강제(같은 값이어도).
+  }, [rateDeltaBp, fxDelta, appliedActiveScenario, analysisNonce, aumEokwon, liveBase.fxKrw]);
 
   return { byId, loading, failed, aumEokwon, hasScenario };
 }

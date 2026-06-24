@@ -88,6 +88,7 @@ export default function Sidebar() {
     setTranscript,
     setConsultationId,
     setSttStatus,
+    runAnalysis,
   } = useDashboardStore();
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -478,6 +479,7 @@ export default function Sidebar() {
 
         <Button
           size="lg"
+          onClick={runAnalysis}
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
           분석하기
