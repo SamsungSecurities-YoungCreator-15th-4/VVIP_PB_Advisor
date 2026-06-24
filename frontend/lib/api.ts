@@ -238,16 +238,9 @@ export type {
   StressMetricsOptions,
 } from "./api/stress";
 
-export {
-  createClient,
-  listClients,
-  getPreviousDashboard,
-  saveFirstDashboardSnapshot,
-} from "./api/clients";
+export { createClient, listClients } from "./api/clients";
 export type {
   CreatedClient,
   CreateClientResult,
   ListedClient,
-  DashboardSnapshot,
-  SaveFirstDashboardSnapshotInput,
 } from "./api/clients";
