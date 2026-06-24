@@ -35,6 +35,9 @@ interface DashboardState {
   selectedPortfolioId: string;
   ips: IpsState;
   scenario: { ratePct: number; fxKrw: number };
+  /** 활성 위기 시나리오 버튼. null이면 슬라이더(금리·환율) 모드.
+   *  버튼과 슬라이더는 상호 배타 — 둘은 따로 동작한다. */
+  activeScenario: "crisis_2008" | "crisis_ru_war" | null;
   /** 실시간 현재값 (금리·환율) — 슬라이더 기준점·델타 계산의 기준.
    *  백엔드 /api/macro-indicators 로드 전엔 목 기준값으로 시작한다. */
   liveBase: { ratePct: number; fxKrw: number };
@@ -62,6 +65,9 @@ interface DashboardState {
   setIps: (patch: Partial<IpsState>) => void;
   setScenario: (patch: Partial<DashboardState["scenario"]>) => void;
   resetScenario: () => void;
+  /** 위기 버튼 토글 — 누르면 슬라이더는 기준값으로 초기화(상호 배타).
+   *  같은 버튼을 다시 누르면 해제된다. */
+  activateScenario: (key: "crisis_2008" | "crisis_ru_war") => void;
   /** 실시간 현재값 주입 — 최초 1회는 슬라이더(scenario)도 실시간 값으로 맞춘다. */
   setLiveBase: (base: { ratePct: number; fxKrw: number }) => void;
   setOtherIncome: (manwon: number) => void;
@@ -86,6 +92,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     unique: IPS_DEFAULT.unique,
   },
   scenario: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
+  activeScenario: null,
   liveBase: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
   liveBaseLoaded: false,
   otherIncomeManwon: TAX_THRESHOLD.otherIncomeDefault,
@@ -110,9 +117,17 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectCustomer: (id) => set({ selectedCustomerId: id }),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),
+  // 슬라이더를 직접 조정하면 위기 버튼은 해제된다(상호 배타).
   setScenario: (patch) =>
-    set((s) => ({ scenario: { ...s.scenario, ...patch } })),
-  resetScenario: () => set((s) => ({ scenario: { ...s.liveBase } })),
+    set((s) => ({ scenario: { ...s.scenario, ...patch }, activeScenario: null })),
+  resetScenario: () =>
+    set((s) => ({ scenario: { ...s.liveBase }, activeScenario: null })),
+  // 위기 버튼 토글 — 누르면 슬라이더를 기준값으로 초기화한다.
+  activateScenario: (key) =>
+    set((s) => ({
+      activeScenario: s.activeScenario === key ? null : key,
+      scenario: { ...s.liveBase },
+    })),
   setLiveBase: (base) =>
     set((s) => ({
       liveBase: base,

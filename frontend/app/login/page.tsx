@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { getSupabase } from "@/lib/supabaseClient";
 
 function FloatInput({
   id,
@@ -54,13 +56,28 @@ function FloatInput({
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // TODO: Supabase 인증 연동
+    setError(null);
+    setSubmitting(true);
+    // ID 입력란을 이메일로 사용한다(Supabase Auth 는 이메일+비밀번호).
+    const { error: signInError } = await getSupabase().auth.signInWithPassword({
+      email: id.trim(),
+      password,
+    });
+    setSubmitting(false);
+    if (signInError) {
+      setError("아이디(이메일) 또는 비밀번호가 올바르지 않습니다.");
+      return;
+    }
+    router.push("/");
   }
 
   return (
@@ -100,11 +117,18 @@ export default function LoginPage() {
             }
           />
 
+          {error && (
+            <p className="text-[13px] font-medium text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+
           <button
             type="submit"
-            className="mt-3 w-full rounded-xl bg-brand py-4 text-[17px] font-bold text-white transition-opacity hover:opacity-90 active:opacity-80"
+            disabled={submitting}
+            className="mt-3 w-full rounded-xl bg-brand py-4 text-[17px] font-bold text-white transition-opacity hover:opacity-90 active:opacity-80 disabled:opacity-50"
           >
-            Sign in
+            {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
       </div>

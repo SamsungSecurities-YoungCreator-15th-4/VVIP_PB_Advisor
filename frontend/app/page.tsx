@@ -4,6 +4,7 @@ import PortfolioSection from "@/components/portfolio/PortfolioSection";
 import BacktestChart from "@/components/portfolio/BacktestChart";
 import TaxSection from "@/components/tax/TaxSection";
 import RightPanel from "@/components/right-panel/RightPanel";
+import AuthGuard from "@/components/common/AuthGuard";
 
 /**
  * PB 대시보드 초안.
@@ -12,17 +13,19 @@ import RightPanel from "@/components/right-panel/RightPanel";
  */
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col gap-3 p-3.5">
-      <Header />
-      <div className="flex items-stretch gap-3 overflow-x-auto">
-        <Sidebar />
-        <main className="flex min-w-0 flex-1 flex-col gap-3">
-          <PortfolioSection />
-          <BacktestChart />
-          <TaxSection />
-        </main>
-        <RightPanel />
+    <AuthGuard>
+      <div className="flex min-h-screen flex-col gap-3 p-3.5">
+        <Header />
+        <div className="flex items-stretch gap-3 overflow-x-auto">
+          <Sidebar />
+          <main className="flex min-w-0 flex-1 flex-col gap-3">
+            <PortfolioSection />
+            <BacktestChart />
+            <TaxSection />
+          </main>
+          <RightPanel />
+        </div>
       </div>
-    </div>
+    </AuthGuard>
   );
 }
