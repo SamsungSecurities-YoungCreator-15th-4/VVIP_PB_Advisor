@@ -15,7 +15,7 @@ import {
 } from "./mockData";
 import type { DataSource } from "./api";
 
-interface IpsState {
+export interface IpsState {
   returnPct: number;
   risk: "안정형" | "균형형" | "공격형";
   timeYears: number;

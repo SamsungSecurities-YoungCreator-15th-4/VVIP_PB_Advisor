@@ -11,6 +11,7 @@ export interface RagInsightRequest {
   context?: {
     risk_profile?: string | null;
     selected_portfolio?: string | null;
+    dashboard?: Record<string, unknown> | null;
   };
 }
 
@@ -25,6 +26,7 @@ export interface RagCitation {
 
 export interface RagInsightResponse {
   answer: string;
+  summary: string;
   citations: RagCitation[];
   as_of: string; // ISO datetime
 }

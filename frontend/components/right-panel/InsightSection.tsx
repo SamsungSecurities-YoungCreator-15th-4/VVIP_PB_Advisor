@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
 import { INSIGHT, PORTFOLIOS } from "@/lib/mockData";
+import { buildDashboardInsightContext } from "@/lib/dashboardInsightContext";
 import {
   type ApiResult,
   type InsightCitation,
@@ -17,11 +18,23 @@ import { useDashboardStore } from "@/lib/store";
 
 /** 우측 하단: AI 인사이트 검색(RAG /rag/insight 실연결) + 결과 + 요약 + 출처/인용 */
 export default function InsightSection() {
-  const { ips, consultationId, selectedPortfolioId } = useDashboardStore();
+  const {
+    customers,
+    ips,
+    consultationId,
+    liveBase,
+    otherIncomeManwon,
+    scenario,
+    selectedCustomerId,
+    selectedPortfolioId,
+  } = useDashboardStore();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiResult<InsightData> | null>(null);
 
+  const selectedCustomer =
+    customers.find((customer) => customer.id === selectedCustomerId) ??
+    customers[0];
   const portfolioName = PORTFOLIOS.find(
     (p) => p.id === selectedPortfolioId,
   )?.name;
@@ -36,6 +49,14 @@ export default function InsightSection() {
         consultationId: consultationId || undefined,
         riskProfile: ips.risk,
         selectedPortfolio: portfolioName,
+        dashboard: buildDashboardInsightContext({
+          selectedCustomer,
+          selectedPortfolioId,
+          ips,
+          scenario,
+          liveBase,
+          otherIncomeManwon,
+        }),
       });
       setResult(res);
     } finally {
@@ -53,7 +74,9 @@ export default function InsightSection() {
     ? "검색 전 예시입니다. 질의하면 실데이터로 갱신됩니다."
     : result.note;
   const isEmpty = !showInitial && result.source === "empty";
-  const summary = answer.split("\n\n")[0] ?? answer;
+  const summary = showInitial
+    ? answer.split("\n\n")[0] ?? answer
+    : result.data.summary || answer.split("\n\n")[0] || answer;
 
   return (
     <Card className="flex flex-1 flex-col gap-0 overflow-hidden p-3.5">
