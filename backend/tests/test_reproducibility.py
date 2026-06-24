@@ -30,7 +30,11 @@ from app.rag.generate import (
     fallback_insight_summary,
     normalize_insight_summary,
 )
-from app.services.ips import build_ips_snapshot_payload, flatten_ips_json
+from app.services.ips import (
+    build_ips_snapshot_payload,
+    fill_missing_ips_values,
+    flatten_ips_json,
+)
 from app.services.transcript import transcript_to_raw_note
 from app.stt.stt_record import (
     extract_customer_text,
@@ -123,6 +127,32 @@ class TestIpsDeterminism:
         # 이미 평탄화된 입력을 다시 평탄화해도 동일(멱등).
         flat = flatten_ips_json(RAW_IPS_NESTED)
         assert flatten_ips_json(flat) == flat
+
+    def test_fill_missing_ips_values_uses_initial_only_for_missing_fields(self):
+        extracted = {
+            "Goal": "상담에서 새로 확인한 목표",
+            "Asset": None,
+            "Return": 0,
+            "Risk": "",
+            "Time": 3,
+            "Tax": None,
+            "Liquidity": "높음",
+            "Legal": " ",
+            "Unique": "해외 배당주 선호",
+        }
+        initial = flatten_ips_json(RAW_IPS_NESTED)
+
+        merged = fill_missing_ips_values(extracted, initial)
+
+        assert merged["Goal"] == "상담에서 새로 확인한 목표"
+        assert merged["Asset"] == initial["Asset"]
+        assert merged["Return"] == 0
+        assert merged["Risk"] == initial["Risk"]
+        assert merged["Time"] == 3
+        assert merged["Tax"] == initial["Tax"]
+        assert merged["Liquidity"] == "높음"
+        assert merged["Legal"] == initial["Legal"]
+        assert merged["Unique"] == "해외 배당주 선호"
 
 
 class TestTranscriptDeterminism:
