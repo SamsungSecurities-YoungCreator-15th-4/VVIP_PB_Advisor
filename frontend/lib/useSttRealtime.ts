@@ -84,11 +84,14 @@ function mapPartialItem(
 export function useSttRealtime() {
   const [status, setStatus] = useState<SttRealtimeStatus>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const workletRef = useRef<AudioWorkletNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const isPausedRef = useRef(false);
   const isActiveRef = useRef(false);
   const partialsRef = useRef<PartialItem[]>([]);
   const speakerMapRef = useRef<Map<string, "PB" | "고객">>(new Map());
@@ -97,8 +100,10 @@ export function useSttRealtime() {
 
   const cleanup = useCallback(() => {
     isActiveRef.current = false;
+    isPausedRef.current = false;
     workletRef.current?.disconnect();
     workletRef.current = null;
+    analyserRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     audioCtxRef.current?.close().catch(() => {});
@@ -162,10 +167,14 @@ export function useSttRealtime() {
           const event = msg.event as string;
 
           if (event === "started") {
-            // 4) 오디오 그래프 연결 — WorkletNode가 PCM 청크를 WS로 전달
+            // 4) 오디오 그래프 연결 — analyser(시각화용) + WorkletNode(PCM→WS)
             const source = audioCtx.createMediaStreamSource(stream);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            analyserRef.current = analyser;
+            source.connect(analyser);
             workletNode.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
+              if (!isPausedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(e.data);
               }
             };
@@ -233,20 +242,39 @@ export function useSttRealtime() {
   const stop = useCallback(() => {
     if (status !== "recording") return;
     setStatus("stopping");
-    // 오디오 먼저 중단 — 이후 청크가 WS로 가지 않도록
+    setIsPaused(false);
+    isPausedRef.current = false;
     workletRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    // finish 신호 → 서버가 후처리 후 "completed" 반환
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ event: "finish" }));
+    }
+  }, [status]);
+
+  const pause = useCallback(() => {
+    if (status !== "recording" || isPausedRef.current) return;
+    isPausedRef.current = true;
+    setIsPaused(true);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ event: "pause" }));
+    }
+  }, [status]);
+
+  const resume = useCallback(() => {
+    if (status !== "recording" || !isPausedRef.current) return;
+    isPausedRef.current = false;
+    setIsPaused(false);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ event: "resume" }));
     }
   }, [status]);
 
   const reset = useCallback(() => {
     cleanup();
     setStatus("idle");
+    setIsPaused(false);
     setErrorMsg(null);
   }, [cleanup]);
 
-  return { status, errorMsg, start, stop, reset };
+  return { status, errorMsg, isPaused, analyserRef, start, stop, pause, resume, reset };
 }

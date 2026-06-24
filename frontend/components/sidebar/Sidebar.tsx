@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
 import StressTestSection from "@/components/right-panel/StressTestSection";
+import SttRecordingModal from "@/components/sidebar/SttRecordingModal";
 import { type Customer, CUSTOMERS, PAST_CONSULTATIONS } from "@/lib/mockData";
 import {
   type ListedClient,
@@ -105,8 +106,12 @@ export default function Sidebar() {
   const {
     status: realtimeStatus,
     errorMsg: realtimeError,
+    isPaused: realtimePaused,
+    analyserRef: realtimeAnalyser,
     start: startRealtime,
     stop: stopRealtime,
+    pause: pauseRealtime,
+    resume: resumeRealtime,
   } = useSttRealtime();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -203,7 +208,11 @@ export default function Sidebar() {
   const handleTranscribe = async () => {
     if (!uploadedFile || sttStatus === "uploading") return;
     setSttStatus("uploading");
-    const res = await uploadSttConsultation(customer.name, uploadedFile);
+    if (!customer.clientId) {
+      setSttStatus("error", "고객 ID가 없습니다. 고객을 다시 선택해 주세요.");
+      return;
+    }
+    const res = await uploadSttConsultation(customer.clientId, uploadedFile);
     setTranscript(res.data.transcript, res.source);
     setConsultationId(res.data.consultationId);
     // 추출된 IPS 값만 조율기에 반영(없는 값은 기존 유지).
@@ -232,6 +241,14 @@ export default function Sidebar() {
 
   return (
     <>
+      <SttRecordingModal
+        status={realtimeStatus}
+        isPaused={realtimePaused}
+        analyserRef={realtimeAnalyser}
+        onPause={pauseRealtime}
+        onResume={resumeRealtime}
+        onStop={stopRealtime}
+      />
       <aside className="flex w-[300px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
         {/* 패널 헤더 */}
         <div className="flex items-center px-0.5 pb-0.5">
