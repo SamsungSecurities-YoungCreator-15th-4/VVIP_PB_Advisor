@@ -219,11 +219,13 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
             _get_client_by_id, supabase, client_id, pb_id=pb_id
         )
         if not client:
+            # 응답에 client_id 를 반영하지 않는다(열거 단서 축소). 진단은 서버 로그.
+            logger.info("Realtime STT: client not found or not owned by PB: %s", client_id)
             await _send_realtime_json(
                 websocket,
                 {
                     "event": "error",
-                    "detail": f"고객 정보를 찾을 수 없습니다: {client_id}",
+                    "detail": "고객 정보를 찾을 수 없습니다.",
                 },
                 send_lock,
             )
@@ -580,9 +582,10 @@ def get_initial_ips(
     result = _select_initial_ips_snapshot(supabase, client_id)
     snapshot = _first_row(result.data)
     if not snapshot:
+        logger.info("Initial IPS snapshot not found: %s", client_id)
         raise HTTPException(
             status_code=404,
-            detail=f"최초 IPS 정보를 찾을 수 없습니다: {client_id}",
+            detail="최초 IPS 정보를 찾을 수 없습니다.",
         )
 
     try:
@@ -727,9 +730,13 @@ def _get_client_by_id(supabase, client_id: str, *, pb_id: str | None = None) -> 
 
 
 def _client_not_found(client_id: str) -> HTTPException:
+    # 응답 본문에 client_id 를 반영하지 않는다(존재 여부 열거 단서 축소). 소유권
+    # 불일치(타 PB 고객)도 같은 404·같은 메시지로 응답해 구분되지 않게 한다.
+    # 진단용 식별자는 서버 로그에만 남긴다.
+    logger.info("Client not found or not owned by requesting PB: %s", client_id)
     return HTTPException(
         status_code=404,
-        detail=f"고객 정보를 찾을 수 없습니다: {client_id}",
+        detail="고객 정보를 찾을 수 없습니다.",
     )
 
 
