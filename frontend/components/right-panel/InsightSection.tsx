@@ -74,7 +74,9 @@ export default function InsightSection() {
     ? "검색 전 예시입니다. 질의하면 실데이터로 갱신됩니다."
     : result.note;
   const isEmpty = !showInitial && result.source === "empty";
-  const summary = answer.split("\n\n")[0] ?? answer;
+  const summary = showInitial
+    ? answer.split("\n\n")[0] ?? answer
+    : result.data.summary || answer.split("\n\n")[0] || answer;
 
   return (
     <Card className="flex flex-1 flex-col gap-0 overflow-hidden p-3.5">

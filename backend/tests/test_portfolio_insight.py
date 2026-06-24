@@ -24,6 +24,8 @@ if _BACKEND_DIR not in sys.path:
 _mock_azure = types.ModuleType("app.core.azure_openai")
 _mock_azure.get_llm_client = MagicMock(return_value=MagicMock())
 _mock_azure.get_llm_deployment = MagicMock(return_value="gpt-4o")
+_mock_azure.get_insight_summary_client = MagicMock(return_value=MagicMock())
+_mock_azure.get_insight_summary_deployment = MagicMock(return_value="gpt-4.1-mini")
 _mock_azure.build_azure_client = MagicMock(return_value=MagicMock())
 # 이미 실제 모듈이 로드된 경우에는 mock으로 덮어쓰지 않는다.
 if "app.core.azure_openai" not in sys.modules:

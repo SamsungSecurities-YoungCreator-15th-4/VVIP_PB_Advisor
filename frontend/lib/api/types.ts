@@ -26,6 +26,7 @@ export interface RagCitation {
 
 export interface RagInsightResponse {
   answer: string;
+  summary: string;
   citations: RagCitation[];
   as_of: string; // ISO datetime
 }
