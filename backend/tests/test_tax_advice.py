@@ -3,11 +3,7 @@
 순수 파이썬 모듈이라 외부 의존 없이 실행됨:
     python backend/tests/test_tax_advice.py   또는   pytest backend/tests/test_tax_advice.py
 """
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app", "portfolio_logic"))
-import tax_advice as T  # noqa: E402
+from app.portfolio import tax_advice as T
 
 # 종합과세 구간에 드는 포트폴리오 (채권·배당·해외성장 혼합)
 PORTFOLIO = [

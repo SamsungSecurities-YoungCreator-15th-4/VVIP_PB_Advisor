@@ -24,6 +24,8 @@ if _BACKEND_DIR not in sys.path:
 _mock_azure = types.ModuleType("app.core.azure_openai")
 _mock_azure.get_llm_client = MagicMock(return_value=MagicMock())
 _mock_azure.get_llm_deployment = MagicMock(return_value="gpt-4o")
+_mock_azure.get_insight_summary_client = MagicMock(return_value=MagicMock())
+_mock_azure.get_insight_summary_deployment = MagicMock(return_value="gpt-4.1-mini")
 _mock_azure.build_azure_client = MagicMock(return_value=MagicMock())
 # 이미 실제 모듈이 로드된 경우에는 mock으로 덮어쓰지 않는다.
 if "app.core.azure_openai" not in sys.modules:
@@ -212,6 +214,43 @@ def test_portfolio_insight_request_schema():
     print("✅ PortfolioInsightRequest 스키마 파싱·직렬화 정상")
 
 
+def test_rag_dashboard_query_intent_detection():
+    """RAG 인사이트가 대시보드 요약성 질의를 별도 분기로 감지한다."""
+    import importlib  # noqa: PLC0415
+    mod = importlib.import_module("app.routers.rag")
+
+    assert mod._is_dashboard_summary_query("중앙대시보드 결과 요약해줘")
+    assert mod._is_dashboard_summary_query("분석 겨로가 요약해줘")
+    assert mod._is_dashboard_summary_query("분석결과 다시 설명해줘")
+    assert mod._is_dashboard_summary_query("백테스트 요약해줘")
+    assert mod._is_dashboard_summary_query("절세 최적화 결과 요약해줘")
+    assert not mod._is_dashboard_summary_query("ISA 절세 효과는?")
+    assert not mod._is_dashboard_summary_query("백테스트가 무엇인가요?")
+    assert not mod._is_dashboard_summary_query("절세 최적화의 작동 원리는?")
+
+
+def test_rag_insight_context_accepts_dashboard_payload():
+    """RAG 요청 context.dashboard 가 중앙 대시보드 스냅샷 extra 필드를 보존한다."""
+    import importlib  # noqa: PLC0415
+    mod = importlib.import_module("app.routers.rag")
+
+    req = mod.InsightRequest(
+        consultation_id="00000000-0000-0000-0000-000000000000",
+        query="중앙대시보드 결과 요약해줘",
+        context={
+            "risk_profile": "균형형",
+            "dashboard": {
+                "schema_version": "dashboard_context_v1",
+                "current": {"metrics": {"expected_return": 0.048}},
+            },
+        },
+    )
+    dashboard = req.context.dashboard.model_dump()
+    assert dashboard["schema_version"] == "dashboard_context_v1"
+    assert dashboard["current"]["metrics"]["expected_return"] == 0.048
+    print("✅ Rag InsightRequest: dashboard context extra 필드 보존")
+
+
 if __name__ == "__main__":
     test_guardrail_detector_catches_new_number()
     test_guardrail_detector_allows_input_numbers()
@@ -220,4 +259,6 @@ if __name__ == "__main__":
     test_fallback_returns_string()
     test_fallback_includes_portfolio_labels()
     test_portfolio_insight_request_schema()
+    test_rag_dashboard_query_intent_detection()
+    test_rag_insight_context_accepts_dashboard_payload()
     print("\n모든 테스트 통과 ✅")

@@ -6,12 +6,14 @@ OpenAI·supabase 호출이 블로킹이므로 핸들러는 동기 def 로 작성
 """
 
 import logging
+import re
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.rag.generate import (
     ExtractiveGenerator,
@@ -21,6 +23,10 @@ from app.rag.generate import (
     fallback_insight_summary,
 )
 from app.rag.retrieval import embed_query, search_chunks
+from app.services.portfolio_insight import (
+    fallback_portfolio_summary,
+    summarize_portfolio_dashboard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,16 @@ KST = ZoneInfo("Asia/Seoul")
 _generator: Generator = LLMGenerator()
 _fallback_generator: Generator = ExtractiveGenerator()
 _summary_generator = InsightSummaryGenerator()
+
+_DASHBOARD_QUERY_PATTERNS = (
+    r"(?:중앙)?대시보드.*(?:결과|요약|설명|다시)",
+    r"분석(?:결과|겨로가).*(?:요약|설명|다시)",
+    r"(?:분석|결과).*다시.*설명",
+    r"(?:분석|결과).*요약",
+    r"현재/?vs?a/?vs?b.*(?:결과|요약|설명)",
+    r"(?:5년)?백테스트.*(?:결과|요약|다시)",
+    r"절세(?:최적화|시뮬레이터).*(?:결과|요약|다시)",
+)
 
 
 def _generate_answer(query: str, chunks: list[dict]) -> str:
@@ -55,9 +71,34 @@ def _generate_summary(answer: str) -> str:
         return fallback_insight_summary(answer)
 
 
+def _normalize_intent_text(text: str) -> str:
+    return "".join(text.lower().split())
+
+
+def _is_dashboard_summary_query(query: str) -> bool:
+    normalized = _normalize_intent_text(query)
+    return any(re.search(pattern, normalized) for pattern in _DASHBOARD_QUERY_PATTERNS)
+
+
+def _generate_dashboard_answer(dashboard: dict[str, Any]) -> str:
+    """중앙 대시보드 스냅샷을 근거로 요약한다. 실패 시 템플릿으로 폴백한다."""
+    try:
+        return summarize_portfolio_dashboard(dashboard)
+    except Exception:
+        logger.exception("대시보드 인사이트 LLM 실패 — 템플릿 폴백으로 응답합니다.")
+        return fallback_portfolio_summary(dashboard)
+
+
+class DashboardContext(BaseModel):
+    """프론트 중앙 대시보드 상태 스냅샷. 화면 추가 필드는 그대로 통과시킨다."""
+
+    model_config = ConfigDict(extra="allow")
+
+
 class InsightContext(BaseModel):
     risk_profile: str | None = None
     selected_portfolio: str | None = None
+    dashboard: DashboardContext | None = None
 
 
 class InsightRequest(BaseModel):
@@ -88,6 +129,25 @@ def create_insight(request: InsightRequest) -> InsightResponse:
     query = request.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="query 는 빈 문자열일 수 없습니다.")
+
+    dashboard_payload = (
+        request.context.dashboard.model_dump(exclude_none=True)
+        if request.context and request.context.dashboard
+        else None
+    )
+    if _is_dashboard_summary_query(query):
+        if not dashboard_payload:
+            raise HTTPException(
+                status_code=400,
+                detail="중앙 대시보드 요약 질의에는 context.dashboard 가 필요합니다.",
+            )
+        answer = _generate_dashboard_answer(dashboard_payload)
+        return InsightResponse(
+            answer=answer,
+            summary=_generate_summary(answer),
+            citations=[],
+            as_of=datetime.now(KST),
+        )
 
     query_embedding = embed_query(query)
     chunks = search_chunks(query_embedding)

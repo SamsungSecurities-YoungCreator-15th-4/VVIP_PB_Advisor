@@ -22,6 +22,7 @@ export interface InsightCitation {
 
 export interface InsightData {
   answer: string;
+  summary: string;
   citations: InsightCitation[];
   asOf?: string; // ISO datetime
 }
@@ -30,6 +31,7 @@ export interface InsightData {
 function mockInsight(): InsightData {
   return {
     answer: INSIGHT.defaultAnswer,
+    summary: INSIGHT.defaultAnswer.split("\n\n")[0] ?? INSIGHT.defaultAnswer,
     citations: INSIGHT.sources.map((s) => ({ title: s.title, date: s.date })),
   };
 }
@@ -37,6 +39,7 @@ function mockInsight(): InsightData {
 function mapResponse(res: RagInsightResponse): InsightData {
   return {
     answer: res.answer ?? "",
+    summary: res.summary ?? "",
     citations: (res.citations ?? []).map((c) => ({
       title: c.title ?? "",
       date: c.published_date ?? null,
@@ -52,6 +55,7 @@ export interface FetchInsightOptions {
   consultationId?: string;
   riskProfile?: string | null;
   selectedPortfolio?: string | null;
+  dashboard?: Record<string, unknown> | null;
 }
 
 export async function fetchRagInsight(
@@ -66,6 +70,7 @@ export async function fetchRagInsight(
     context: {
       risk_profile: options.riskProfile ?? null,
       selected_portfolio: options.selectedPortfolio ?? null,
+      dashboard: options.dashboard ?? null,
     },
   };
 
@@ -76,7 +81,7 @@ export async function fetchRagInsight(
     if (err instanceof ApiError && err.status === 404) {
       // 임계값 미달 — 정상 빈결과. 폴백(mock)이 아니라 "관련 문서 없음".
       return empty<InsightData>(
-        { answer: "", citations: [] },
+        { answer: "", summary: "", citations: [] },
         "관련 문서를 찾지 못했습니다(유사도 임계값 미달).",
       );
     }

@@ -16,8 +16,8 @@ import pytest
 # only these unit tests do not need the network package itself.
 sys.modules.setdefault("yfinance", types.SimpleNamespace(download=lambda *a, **k: None))
 
-from app.portfolio_logic import portfolio_logic as portfolio_module  # noqa: E402
-from app.portfolio_logic.portfolio_logic import (  # noqa: E402
+from app.portfolio import portfolio_logic as portfolio_module  # noqa: E402
+from app.portfolio.portfolio_logic import (  # noqa: E402
     BENCHMARK_CONFIGS,
     DEFAULT_RANDOM_SEED,
     MIN_BETA_OBSERVATIONS,
@@ -35,7 +35,7 @@ from app.portfolio_logic.portfolio_logic import (  # noqa: E402
     generate_random_weights,
     resolve_external_financial_income_krw,
 )
-from app.portfolio_logic.tax_advice import calc_combined_tax_saving  # noqa: E402
+from app.portfolio.tax_advice import calc_combined_tax_saving  # noqa: E402
 
 
 def _returns(
@@ -913,9 +913,10 @@ def test_pr106_gemini_review_range_failure_is_graceful(
             "forced simulation failure"
         )
 
+    # 분할 이후 build_portfolio_response 는 responses 모듈에서 이 함수를 직접
+    # 바인딩하므로, '사용되는 곳'(responses)에 패치해야 한다.
     monkeypatch.setattr(
-        portfolio_module,
-        "calculate_monte_carlo_metric_ranges",
+        "app.portfolio.responses.calculate_monte_carlo_metric_ranges",
         raise_simulation_error,
     )
 
