@@ -47,7 +47,7 @@ def run_uploaded_wav_pipeline(
 
 def run_stt_pipeline(audio_file_path: str) -> tuple[list[dict], dict]:
     from app.stt.stt_record import (  # noqa: PLC0415
-        extract_customer_text,
+        extract_ips_source_text,
         extract_goal_rrttllu,
         map_speaker_roles,
         transcribe_with_diarization,
@@ -57,8 +57,8 @@ def run_stt_pipeline(audio_file_path: str) -> tuple[list[dict], dict]:
     validate_env()
     transcript = transcribe_with_diarization(audio_file_path)
     mapped_transcript = map_speaker_roles(transcript)
-    customer_text = extract_customer_text(mapped_transcript)
-    ips_json = extract_goal_rrttllu(customer_text)
+    source_text, source_label = extract_ips_source_text(mapped_transcript)
+    ips_json = extract_goal_rrttllu(source_text, source_label=source_label)
 
     return mapped_transcript, ips_json
 

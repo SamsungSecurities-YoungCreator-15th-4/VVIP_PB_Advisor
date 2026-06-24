@@ -38,6 +38,7 @@ from app.services.ips import (
 from app.services.transcript import transcript_to_raw_note
 from app.stt.stt_record import (
     extract_customer_text,
+    extract_ips_source_text,
     format_ticks_as_mmss,
     map_speaker_roles,
 )
@@ -216,6 +217,22 @@ class TestSttDeterminism:
         out = extract_customer_text(mapped)
         assert "어떤 목적이실까요" not in out  # PB 발화
         assert "자산 운용 상담받고 싶어요" in out  # 고객 발화
+
+    def test_extract_ips_source_text_falls_back_to_all_speech(self):
+        single_speaker_transcript = [
+            {
+                "speaker_label": "Guest-1",
+                "text": "자산 20억을 5년 정도 운용하고 싶습니다.",
+                "offset_ticks": 0,
+            }
+        ]
+        mapped = map_speaker_roles(single_speaker_transcript)
+
+        assert extract_customer_text(mapped) == ""
+        source_text, source_label = extract_ips_source_text(mapped)
+
+        assert source_label == "전체 화자 발화"
+        assert "PB: 자산 20억을 5년 정도 운용하고 싶습니다." in source_text
 
 
 class TestRagGeneratorDeterminism:
