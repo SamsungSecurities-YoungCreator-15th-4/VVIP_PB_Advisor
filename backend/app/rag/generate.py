@@ -46,6 +46,33 @@ class ExtractiveGenerator(Generator):
         return "\n".join(lines)
 
 
+def strip_markdown(text: str) -> str:
+    """LLM answer 에서 화면에 그대로 노출되면 안 되는 마크다운 기호를 제거한다.
+
+    프론트는 answer 를 일반 텍스트로 렌더하므로 ``**굵게**``·``## 제목``·``` `code` ```
+    같은 기호가 그대로 보인다. 모델에 마크다운 금지를 지시하지만(프롬프트 규칙),
+    모델이 새어 보내는 경우를 대비한 방어적 후처리다. 내용(텍스트)은 보존하고 기호만 없앤다.
+    """
+    if not text:
+        return text
+    # 줄머리 ATX 헤더(## 제목)·인용(> )·리스트 불릿(- / * ) 기호만 제거(내용 보존).
+    lines = []
+    for line in text.split("\n"):
+        line = re.sub(r"^\s{0,3}#{1,6}\s+", "", line)
+        line = re.sub(r"^\s{0,3}>\s?", "", line)
+        line = re.sub(r"^(\s*)[*+-]\s+", r"\1", line)
+        lines.append(line)
+    text = "\n".join(lines)
+    # 굵게/기울임 강조 기호 제거(**, __, *, _) — 안쪽 텍스트는 그대로 둔다.
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"__(.+?)__", r"\1", text)
+    text = re.sub(r"\*(\S(?:.*?\S)?)\*", r"\1", text)
+    text = re.sub(r"(?<![\w])_(\S(?:.*?\S)?)_(?![\w])", r"\1", text)
+    # 인라인 코드 백틱 제거.
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    return text.strip()
+
+
 def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> str:
     """검색된 청크를 LLM 프롬프트용 근거 블록으로 묶는다(원문 그대로, 가공 없음)."""
     blocks = []
@@ -130,15 +157,48 @@ def _normalize_summary_as_noun_phrase(text: str) -> str:
     return " ".join(summary.split()).strip(" ,.;:·-")
 
 
+# answer 앞머리에 붙는 도입 인사말 패턴 — 폴백 요약이 이런 문장을 집지 않게 거른다.
+_PREAMBLE_MARKERS = (
+    "요약해",
+    "요약하면",
+    "정리해",
+    "정리하면",
+    "설명해",
+    "안내해",
+    "말씀드리",
+    "알려드리",
+    "다음과 같습니다",
+    "아래와 같습니다",
+)
+
+
+def _is_substantive_sentence(sentence: str) -> bool:
+    """실질 정보가 담긴 문장이면 True. 도입 인사말·번호머리·짧은 조각은 거른다."""
+    # 'N.'·'N)' 같은 리스트 번호 머리를 떼고 내용만 본다(번호가 문장으로 잘리는 것 방지).
+    stripped = re.sub(r"^\s*\d+[.)]\s*", "", sentence).strip().rstrip(" .。!?！？")
+    if len(stripped) < 5:  # '1', '미국' 같은 토막은 실질 문장으로 보지 않는다.
+        return False
+    if stripped.endswith("드리겠습니다"):
+        return False
+    return not any(marker in stripped for marker in _PREAMBLE_MARKERS)
+
+
 def fallback_insight_summary(answer: str) -> str:
-    """mini 요약 실패 시 answer 첫 문장을 50자 이내 명사형으로 줄여 반환한다."""
+    """mini 요약 실패 시 answer 의 첫 '실질' 문장을 50자 이내 명사형으로 줄여 반환한다.
+
+    answer 가 '~요약해 드리겠습니다' 같은 도입 인사말로 시작하면 그 문장은 건너뛰고
+    실제 정보가 담긴 첫 문장을 고른다(도입부가 그대로 요약으로 노출되는 것을 막는다).
+    """
     sentences = [
         sentence.strip()
         for sentence in re.split(r"(?<=[.?!])\s+", answer.strip())
         if sentence.strip()
     ]
-    first_sentence = sentences[0] if sentences else answer
-    summary = normalize_insight_summary(first_sentence)
+    substantive = [s for s in sentences if _is_substantive_sentence(s)]
+    chosen = (substantive or sentences or [answer])[0]
+    # 고른 문장 앞 리스트 번호 머리는 요약에 들어가지 않게 떼고 정규화한다.
+    chosen = re.sub(r"^\s*\d+[.)]\s*", "", chosen)
+    summary = normalize_insight_summary(chosen)
     if summary:
         return summary
     return "인사이트 요약 생성 실패"
@@ -164,7 +224,11 @@ class LLMGenerator(Generator):
         "2. 근거에서 답을 찾을 수 없으면 '제공된 자료로는 확인되지 않습니다'라고 답한다.\n"
         "3. 수치·계산·사실은 근거에서 그대로 인용하고, 너는 설명·요약·정리만 한다.\n"
         "4. 한국어로, PB가 고객에게 설명하듯 정중하고 명확하게 쓴다.\n"
-        "5. 단정적 수익 보장이나 투자 권유 표현은 피하고 자료 근거 설명에 한정한다."
+        "5. 단정적 수익 보장이나 투자 권유 표현은 피하고 자료 근거 설명에 한정한다.\n"
+        "6. '요약해 드리겠습니다', '안내해 드리겠습니다' 같은 도입 인사말이나 "
+        "'추가 정보가 필요하시면 말씀해 주십시오' 같은 맺음말 없이 곧바로 핵심 내용만 쓴다.\n"
+        "7. 마크다운 기호를 쓰지 않는다. **굵게**, ## 제목, 백틱(`), 별표·하이픈 불릿 "
+        "없이 일반 문장과 줄바꿈으로만 작성한다."
     )
 
     def generate(self, query: str, chunks: list[dict[str, Any]]) -> str:
