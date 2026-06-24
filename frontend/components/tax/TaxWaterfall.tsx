@@ -19,15 +19,11 @@ const TAX_COLORS = ["#F04452", "#F4A8AE", "transparent"];
  * ① 세금 흐름 비교 — 기존 자산 / 포트폴리오 전환 / + 절세 제안을
  * 가로 누적 바로 비교한다. afterTaxManwon·taxManwon 기준.
  */
-export default function TaxWaterfall({
-  portfolioName,
-}: {
-  portfolioName?: string;
-}) {
+export default function TaxWaterfall() {
   const { rows, pretaxLabel, totalLabel, totalSavingManwon } = TAX_EFFECT.flow;
 
   const data = rows.map((r, i) => ({
-    name: i === 1 && portfolioName ? portfolioName : r.label,
+    name: i === 1 ? "제안 포트폴리오" : r.label,
     afterTax: r.afterTaxManwon,
     tax: r.taxManwon,
   }));

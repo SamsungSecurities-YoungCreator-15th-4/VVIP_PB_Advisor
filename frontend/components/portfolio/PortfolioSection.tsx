@@ -48,7 +48,7 @@ export default function PortfolioSection() {
             pf={pf}
             isSelected={selectedPortfolioId === pf.id}
             onSelect={() => selectPortfolio(pf.id)}
-            selectable={pf.id !== "current"}
+            selectable={true}
           />
         ))}
       </div>

@@ -80,7 +80,7 @@ export default function TaxSection() {
           </div>
 
           <div className="grid grid-cols-2 items-start gap-4">
-            <TaxWaterfall portfolioName={baseLabel} />
+            <TaxWaterfall />
             <AccountAllocation />
           </div>
         </TabsContent>

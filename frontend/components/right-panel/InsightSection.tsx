@@ -92,7 +92,7 @@ export default function InsightSection() {
             <span className="text-[13px] font-extrabold tracking-wide text-brand-dark">
               분석 결과
             </span>
-            {result?.data.asOf && (
+            {result?.data?.asOf && (
               <span className="ml-auto text-[9px] font-semibold text-muted-foreground/70">
                 기준{" "}
                 {new Date(result.data.asOf).toLocaleString("ko-KR", {
