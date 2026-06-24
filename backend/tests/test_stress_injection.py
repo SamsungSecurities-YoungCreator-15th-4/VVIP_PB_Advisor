@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.portfolio_logic.portfolio_logic import (
+from app.portfolio.portfolio_logic import (
     ASSET_DURATION_YEARS,
     TRADING_DAYS,
     PortfolioRequest,

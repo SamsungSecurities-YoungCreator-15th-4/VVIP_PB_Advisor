@@ -7,7 +7,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from app.portfolio_logic.portfolio_logic import (  # noqa: E402
+from app.portfolio.portfolio_logic import (  # noqa: E402
     ASSET_TICKERS,
     CRISIS_SCENARIO_SHOCKS,
     resolve_scenario_shocks,

@@ -6,7 +6,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app", "portfolio_logic"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app", "portfolio"))
 import tax_advice as T  # noqa: E402
 
 # 종합과세 구간에 드는 포트폴리오 (채권·배당·해외성장 혼합)
