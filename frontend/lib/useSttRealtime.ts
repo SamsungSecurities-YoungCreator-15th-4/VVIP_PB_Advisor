@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useDashboardStore } from "@/lib/store";
+import { getSupabase } from "@/lib/supabaseClient";
 import type { ConsultMessage } from "@/lib/mockData";
 import type {
   ConsultationResponse,
@@ -141,7 +142,22 @@ export function useSttRealtime() {
         workletRef.current = workletNode;
 
         // 3) WebSocket 연결
-        const ws = new WebSocket(WS_ENDPOINT);
+        // 브라우저 WebSocket 은 Authorization 헤더를 못 실으므로, 로그인 세션의
+        // access_token 을 쿼리파라미터(?token=)로 전달한다(백엔드가 이 토큰으로 PB 인증).
+        // 토큰이 없으면 서버가 즉시 1008 로 끊으므로, 마이크를 잡은 상태에서 미리 정리한다.
+        const {
+          data: { session },
+        } = await getSupabase().auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          setErrorMsg("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+          setStatus("error");
+          cleanup();
+          return;
+        }
+        const ws = new WebSocket(
+          `${WS_ENDPOINT}?token=${encodeURIComponent(token)}`,
+        );
         ws.binaryType = "arraybuffer";
         wsRef.current = ws;
 
