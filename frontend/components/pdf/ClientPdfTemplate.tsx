@@ -1915,8 +1915,8 @@ function DiversificationPage() {
         {/* 상관관계 설명 박스 */}
         <div
           style={{
-            background: BRAND_LIGHT,
-            border: `1px solid ${BRAND_MID}`,
+            background: BG_ALT,
+            border: `1px solid ${BORDER}`,
             borderRadius: 10,
             padding: "14px 18px",
             marginBottom: 22,
@@ -2125,7 +2125,7 @@ function DiversificationPage() {
                   paddingTop: 6,
                 }}
               >
-                ◆ {c.note}
+                {c.note}
               </div>
             </div>
           ))}

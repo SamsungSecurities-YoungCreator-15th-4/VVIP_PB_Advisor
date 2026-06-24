@@ -180,6 +180,16 @@ const SCENARIO_ROWS = [
   },
 ];
 
+// 거시지표 한국어 레이블 (ClientPdfTemplate 동일)
+const MACRO_DESC: Record<string, string> = {
+  기준금리: "미국 기준금리",
+  "미 10Y": "미국 장기금리",
+  "원/달러": "원/달러 환율",
+  KOSPI: "국내 주식 (KOSPI)",
+  "S&P500": "미국 주식 (S&P500)",
+  CPI: "미국 CPI",
+};
+
 // ── 날짜 유틸 ────────────────────────────────────────────────────
 function getToday() {
   const d = new Date();
@@ -591,43 +601,63 @@ function MarketIpsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 48 }}>
-          {MACRO_INDICATORS.map((m) => (
-            <div
-              key={m.label}
-              style={{
-                flex: 1,
-                background: BRAND_LIGHT,
-                borderRadius: 10,
-                padding: "11px 13px",
-                border: `1px solid ${BRAND_MID}`,
-              }}
-            >
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 5 }}>
-                {m.label}
-              </div>
+        <div
+          style={{
+            display: "flex",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            overflow: "hidden",
+            marginBottom: 48,
+          }}
+        >
+          {MACRO_INDICATORS.map((m, idx) => {
+            const isUp = m.direction === "up";
+            return (
               <div
+                key={m.label}
                 style={{
-                  fontSize: 17,
-                  fontWeight: 900,
-                  color: TEXT,
-                  lineHeight: 1.1,
+                  flex: 1,
+                  padding: "12px 10px",
+                  borderRight:
+                    idx < MACRO_INDICATORS.length - 1
+                      ? `1px solid ${BORDER}`
+                      : "none",
+                  background: "white",
                 }}
               >
-                {m.value}
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: MUTED,
+                    fontWeight: 600,
+                    marginBottom: 5,
+                  }}
+                >
+                  {MACRO_DESC[m.label] ?? m.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 900,
+                    color: TEXT,
+                    lineHeight: 1.1,
+                    marginBottom: 5,
+                  }}
+                >
+                  {m.value}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: isUp ? UP : BRAND,
+                  }}
+                >
+                  {isUp ? "▲" : "▼"} {m.change}
+                </div>
               </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  marginTop: 4,
-                  color: m.direction === "up" ? UP : BRAND,
-                }}
-              >
-                {m.direction === "up" ? "▲" : "▼"} {m.change}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div
