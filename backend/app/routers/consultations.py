@@ -346,9 +346,8 @@ def _save_stt_consultation_result(
     customer_name = client["name"]
     try:
         raw_note = transcript_to_raw_note(pipeline_result.transcript_json)
-        extracted_ips_json = flatten_ips_json(pipeline_result.ips_json)
         initial_ips_json = _get_initial_ips_json(supabase, client["id"])
-        ips_json = fill_missing_ips_values(extracted_ips_json, initial_ips_json)
+        ips_json = fill_missing_ips_values(pipeline_result.ips_json, initial_ips_json)
     except ValueError as exc:
         logger.exception("Invalid IPS extraction result")
         raise HTTPException(

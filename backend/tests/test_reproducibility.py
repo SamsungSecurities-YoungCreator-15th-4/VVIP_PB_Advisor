@@ -154,6 +154,28 @@ class TestIpsDeterminism:
         assert merged["Legal"] == initial["Legal"]
         assert merged["Unique"] == "해외 배당주 선호"
 
+    def test_fill_missing_ips_values_fills_omitted_keys_before_validation(self):
+        extracted = {
+            "Goal": "상담에서 새로 확인한 목표",
+            "RRTTLLU": {
+                "Risk": "공격형",
+                "Unique": "해외 배당주 선호",
+            },
+        }
+        initial = flatten_ips_json(RAW_IPS_NESTED)
+
+        merged = fill_missing_ips_values(extracted, initial)
+
+        assert merged["Goal"] == "상담에서 새로 확인한 목표"
+        assert merged["Asset"] == initial["Asset"]
+        assert merged["Return"] == initial["Return"]
+        assert merged["Risk"] == "공격형"
+        assert merged["Time"] == initial["Time"]
+        assert merged["Tax"] == initial["Tax"]
+        assert merged["Liquidity"] == initial["Liquidity"]
+        assert merged["Legal"] == initial["Legal"]
+        assert merged["Unique"] == "해외 배당주 선호"
+
 
 class TestTranscriptDeterminism:
     def test_raw_note_is_deterministic(self):
