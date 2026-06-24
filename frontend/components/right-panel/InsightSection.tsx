@@ -10,6 +10,8 @@ import { INSIGHT, PORTFOLIOS } from "@/lib/mockData";
 import { buildDashboardInsightContext } from "@/lib/dashboardInsightContext";
 import {
   type InsightCitation,
+  detectFinancialQuery,
+  fetchDartInsight,
   fetchRagInsight,
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
@@ -45,19 +47,24 @@ export default function InsightSection() {
     if (!q || loading) return;
     setLoading(true);
     try {
-      const res = await fetchRagInsight(q, {
-        consultationId: consultationId || undefined,
-        riskProfile: ips.risk,
-        selectedPortfolio: portfolioName,
-        dashboard: buildDashboardInsightContext({
-          selectedCustomer,
-          selectedPortfolioId,
-          ips,
-          scenario,
-          liveBase,
-          otherIncomeManwon,
-        }),
-      });
+      // "<회사명> 재무제표/실적/매출…" 류 기업 재무 질의는 RAG 코퍼스에 없으므로
+      // DART 전자공시 실시간 조회(/dart/insight)로 라우팅한다. 그 외는 기존 RAG.
+      const financial = detectFinancialQuery(q);
+      const res = financial
+        ? await fetchDartInsight(financial.corpName)
+        : await fetchRagInsight(q, {
+            consultationId: consultationId || undefined,
+            riskProfile: ips.risk,
+            selectedPortfolio: portfolioName,
+            dashboard: buildDashboardInsightContext({
+              selectedCustomer,
+              selectedPortfolioId,
+              ips,
+              scenario,
+              liveBase,
+              otherIncomeManwon,
+            }),
+          });
       setInsightResult(res);
     } finally {
       setLoading(false);
