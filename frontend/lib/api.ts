@@ -13,8 +13,25 @@ import type {
   StressedPortfolio,
   StressScenario,
 } from "./types";
+import { supabase } from "./supabaseClient";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+/**
+ * 현재 Supabase 세션의 access_token 을 Authorization 헤더로 만들어 반환한다.
+ * 로그인 전(세션 없음)에는 빈 객체 → 기존처럼 헤더 없이 호출(401 은 백엔드가 판단).
+ */
+async function authHeader(): Promise<Record<string, string>> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
 
 /** 텍스트 API 기본 타임아웃(ms). STT 등 긴 작업은 호출부에서 늘려 넘긴다. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
@@ -54,6 +71,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const { json, form, timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = options;
 
   const headers = new Headers(init.headers);
+  // 로그인 세션이 있으면 access_token 을 Bearer 로 첨부(이미 지정된 경우는 존중).
+  if (!headers.has("Authorization")) {
+    const auth = await authHeader();
+    if (auth.Authorization) headers.set("Authorization", auth.Authorization);
+  }
   let body: BodyInit | undefined;
   if (form) {
     body = form; // Content-Type 은 설정하지 않는다(boundary 자동).
@@ -109,7 +131,9 @@ const MARKET_API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function getMarketJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${MARKET_API_BASE_URL}${path}`);
+  const res = await fetch(`${MARKET_API_BASE_URL}${path}`, {
+    headers: await authHeader(),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
