@@ -74,8 +74,9 @@ def logout(
             detail="인증 서버와 통신할 수 없습니다.",
         ) from exc
 
-    # 204: 폐기 성공. 401: 이미 만료/무효 토큰 → 멱등적으로 로그아웃 성공 취급.
-    if resp.status_code in (status.HTTP_204_NO_CONTENT, status.HTTP_401_UNAUTHORIZED):
+    # 2xx(204 표준, 일부 GoTrue 버전·설정은 200): 폐기 성공.
+    # 401: 이미 만료/무효 토큰 → 멱등적으로 로그아웃 성공 취급.
+    if resp.is_success or resp.status_code == status.HTTP_401_UNAUTHORIZED:
         return None
 
     logger.warning(
