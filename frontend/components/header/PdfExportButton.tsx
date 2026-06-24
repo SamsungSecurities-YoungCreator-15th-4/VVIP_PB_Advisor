@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PdfPreviewModal from "@/components/pdf/PdfPreviewModal";
-import { CUSTOMERS } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
 
 // SSR 비활성화 — new Date() hydration mismatch 방지
 const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), {
@@ -27,8 +27,7 @@ const isDev = process.env.NODE_ENV === "development";
 
 type PdfType = "pb" | "client";
 
-function getFileName(type: PdfType): string {
-  const name = CUSTOMERS[0].name;
+function getFileName(type: PdfType, name: string): string {
   const date = new Date()
     .toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })
     .replace(/\. /g, "")
@@ -40,6 +39,12 @@ function getFileName(type: PdfType): string {
 export default function PdfExportButton() {
   const [preview, setPreview] = useState<PdfType | null>(null);
   const [exporting, setExporting] = useState<PdfType | null>(null);
+
+  // 파일명은 PDF 표지·헤더와 동일하게 현재 선택된 고객을 따른다.
+  const customers = useDashboardStore((s) => s.customers);
+  const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
+  const selectedCustomer =
+    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 
   const pbRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<HTMLDivElement>(null);
@@ -74,7 +79,7 @@ export default function PdfExportButton() {
         }
       }
 
-      pdf.save(getFileName(type));
+      pdf.save(getFileName(type, selectedCustomer.name));
     } finally {
       setExporting(null);
     }

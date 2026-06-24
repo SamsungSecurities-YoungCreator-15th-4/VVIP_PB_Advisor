@@ -5,7 +5,6 @@
 
 import {
   MACRO_INDICATORS,
-  CUSTOMERS,
   PORTFOLIOS,
   TAX_EFFECT,
   TAX_ADVICE,
@@ -14,8 +13,15 @@ import {
   BASE_TIME,
 } from "@/lib/mockData";
 import { DISPLAY_GROUPS } from "@/lib/assetMapping";
+import { useDashboardStore } from "@/lib/store";
 
-const C = CUSTOMERS[0];
+/** 현재 대시보드에서 선택된 고객(없으면 첫 고객)을 store 에서 읽는다. */
+function useSelectedCustomer() {
+  const customers = useDashboardStore((s) => s.customers);
+  const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
+  return customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+}
+
 const portCurrent = PORTFOLIOS.find((p) => p.id === "current")!;
 const portA = PORTFOLIOS.find((p) => p.id === "a")!;
 
@@ -136,6 +142,7 @@ function SectionBar() {
 // ── Page 1: 표지 ────────────────────────────────────────────────
 
 function CoverPage() {
+  const C = useSelectedCustomer();
   return (
     <div
       data-pdf-page=""
@@ -1116,6 +1123,7 @@ function PortfolioPage() {
 // ── Page 4: 절세 최적화 전략 (PB용 동일) ────────────────────────
 
 function TaxPage() {
+  const C = useSelectedCustomer();
   const accountRows = ACCOUNT_PDF.filter((acct) => acct.key !== "general").map(
     (acct) => {
       const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
