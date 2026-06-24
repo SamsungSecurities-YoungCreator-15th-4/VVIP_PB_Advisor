@@ -26,6 +26,7 @@ from .models import AnalysisRequest
 from .tax_parser import (
     apply_tax_profile_to_ips_payload,
     parse_tax_text,
+    parse_money_krw,
 )
 from .utils import (
     canonicalize_asset_key,
@@ -117,7 +118,7 @@ def parse_stt_asset_to_krw(value: Any) -> float:
     if not text_value:
         return 0.0
     if re.search(r"[조억만천원]", text_value):
-        return parse_amount_krw(text_value)
+        return parse_money_krw(text_value) or 0.0
 
     numeric = safe_float(text_value.replace(",", ""), default=np.nan)
     if not np.isfinite(numeric):
@@ -275,7 +276,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
     for pattern in patterns:
         match = re.search(pattern, window, flags=re.IGNORECASE)
         if match:
-            return parse_amount_krw(match.group(1))
+            return parse_money_krw(match.group(1)) or 0.0
     return None
 
 def contains_negative_account_signal(text: str, keywords: List[str]) -> bool:

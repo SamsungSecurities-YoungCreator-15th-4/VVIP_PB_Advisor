@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -678,7 +679,7 @@ def _account_facts(text: str, key: str, aliases: Sequence[str], now_year: int) -
 
 
 def _extract_facts(text: str, mentions: List[Dict[str, Any]]) -> Dict[str, Any]:
-    now_year = datetime.now().year
+    now_year = datetime.now(ZoneInfo("Asia/Seoul")).year
     facts: Dict[str, Any] = {}
 
     facts.update(_account_facts(text, "isa", ("ISA", "개인종합자산관리계좌"), now_year))
@@ -720,16 +721,27 @@ def _extract_facts(text: str, mentions: List[Dict[str, Any]]) -> Dict[str, Any]:
         facts["overseas_realized_gain_krw"] = realized_gain
 
     history_segment = re.search(
-        r"(?:최근\s*3\s*년|최근\s*3개년|3년).{0,40}?금융소득종합과세.{0,30}?(?:이력|대상)?(?:은|는|이|가)?\s*(있음|있다|존재|없음|없다|없|무)",
+        r"(?:최근\s*3\s*년|최근\s*3개년|3년).{0,40}?"
+        r"금융소득종합과세.{0,30}?(?:이력|대상)?"
+        r"(?:은|는|이|가)?\s*"
+        r"(?P<status>"
+        r"있(?:음|다|습니다)?|"
+        r"존재(?:함|한다|합니다)?|"
+        r"유(?:함|하다|합니다)?|"
+        r"대상(?:임|이다|입니다)?|"
+        r"해당(?:함|한다|합니다)?|"
+        r"없(?:음|다|습니다)?|"
+        r"미해당|비대상|무"
+        r")",
         text,
         flags=re.IGNORECASE,
     )
     if history_segment:
-        facts["isa_recent_3yr_comprehensive_taxed"] = history_segment.group(1) in {
-            "있음",
-            "있다",
-            "존재",
-        }
+        history_status = history_segment.group("status")
+        facts["isa_recent_3yr_comprehensive_taxed"] = not bool(
+            re.match(r"^(?:없|미해당|비대상|무)", history_status)
+        )
+
 
     transfer_topics = {"gift_tax", "inheritance_tax", "business_succession", "pre_inheritance_gift"}
     if any(item["topic"] in transfer_topics for item in mentions):
@@ -832,7 +844,7 @@ def apply_tax_profile_to_ips_payload(
         if value is None:
             return
         current = result.get(key)
-        if current is None or current == "" or current == 0 or current == 0.0:
+        if current is None or current == "":
             result[key] = value
 
     set_if_missing("external_financial_income_krw", facts.get("external_financial_income_krw"))
