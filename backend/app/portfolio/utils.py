@@ -6,6 +6,7 @@
 
 import logging
 import re
+import threading
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -34,6 +35,9 @@ logger = logging.getLogger(__name__)
 # 4. 기본 유틸
 # ============================================================
 
+# FastAPI 의 sync 엔드포인트는 스레드풀에서 병렬 실행되므로, 전역 가변 store 의
+# 쓰기(추가·LRU 삭제)는 락으로 직렬화한다(dict changed size during iteration 방지).
+_SESSION_STORE_LOCK = threading.Lock()
 SESSION_REQUEST_STORE: Dict[str, Dict[str, Any]] = {}
 
 
@@ -215,10 +219,11 @@ def attach_benchmark_returns(
 
 
 def save_session_request(session_id: str, payload: Dict[str, Any]) -> None:
-    SESSION_REQUEST_STORE[session_id] = payload
-    while len(SESSION_REQUEST_STORE) > MAX_SESSION_REQUEST_STORE_SIZE:
-        oldest_key = next(iter(SESSION_REQUEST_STORE))
-        SESSION_REQUEST_STORE.pop(oldest_key, None)
+    with _SESSION_STORE_LOCK:
+        SESSION_REQUEST_STORE[session_id] = payload
+        while len(SESSION_REQUEST_STORE) > MAX_SESSION_REQUEST_STORE_SIZE:
+            oldest_key = next(iter(SESSION_REQUEST_STORE))
+            SESSION_REQUEST_STORE.pop(oldest_key, None)
 
 
 def public_http_exception(exc: Exception) -> HTTPException:
