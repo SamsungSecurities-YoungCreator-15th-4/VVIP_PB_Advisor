@@ -5,7 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Dict, Optional, Literal, Any, Union
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from .assets import (
@@ -31,7 +31,6 @@ from .api_contracts import (
     PortfolioStressTestResponseContract,
 )
 from .utils import (
-    SESSION_REQUEST_STORE,
     canonicalize_weights,
     normalize_weights,
     get_default_current_weights,
@@ -411,20 +410,6 @@ def api_tax_optimizer(request: AnalysisRequest):
         raise public_http_exception(e)
 
 
-@router.get("/api/sessions/{session_id}/request")
-def api_get_saved_request(session_id: str):
-    """
-    1회차 상담 request 조회.
-    현재는 서버 메모리 저장이라 서버 재시작 시 사라짐.
-    """
-    saved = SESSION_REQUEST_STORE.get(session_id)
-    if saved is None:
-        raise HTTPException(status_code=404, detail="해당 session_id의 저장된 request가 없습니다.")
-
-    return {
-        "session_id": session_id,
-        "request": saved,
-    }
 
 
 # ============================================================
