@@ -327,7 +327,7 @@ def format_all_speech_as_ips_source(mapped_transcript: list[dict]) -> str:
     """단일 화자/화자 오인식 fallback 용 전체 발화 텍스트를 만든다."""
     lines = []
     for item in mapped_transcript:
-        text = item.get("text", "")
+        text = (item.get("text") or "").strip()
         if not text:
             continue
         utterance_time = item.get("utterance_time", "00:00")
@@ -350,7 +350,9 @@ def extract_goal_rrttllu(source_text: str, *, source_label: str = "고객 발화
     logger.info("4/5 Goal + RRTTLLU JSON 구조화 시작")
 
     if not source_text.strip():
-        raise ValueError("고객 발화가 비어 있어 Goal/RRTTLLU를 추출할 수 없습니다.")
+        raise ValueError(
+            f"{source_label}가 비어 있어 Goal/RRTTLLU를 추출할 수 없습니다."
+        )
 
     client = get_openai_client()
 
