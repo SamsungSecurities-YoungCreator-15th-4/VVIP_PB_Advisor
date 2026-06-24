@@ -32,7 +32,7 @@ from app.stt.stt_record import (  # noqa: E402
     MAPPED_TRANSCRIPT_OUTPUT_FILE,
     SPEECH_KEY,
     SPEECH_REGION,
-    extract_customer_text,
+    extract_ips_source_text,
     extract_goal_rrttllu,
     map_speaker_roles,
     save_json,
@@ -354,25 +354,12 @@ def transcribe_microphone_realtime_with_diarization(
 
 def build_realtime_pipeline_result(
     transcript: list[dict],
-    *,
-    fallback_to_all_speech: bool = False,
 ) -> tuple[list[dict], dict]:
     """실시간 전사 결과에 기존 STT 후처리 파이프라인을 적용한다."""
     mapped_transcript = map_speaker_roles(transcript)
-    customer_text = extract_customer_text(mapped_transcript)
-    if fallback_to_all_speech and not customer_text.strip():
-        customer_text = _format_all_speech_as_customer_text(mapped_transcript)
-    goal_rrttllu = extract_goal_rrttllu(customer_text)
+    source_text, source_label = extract_ips_source_text(mapped_transcript)
+    goal_rrttllu = extract_goal_rrttllu(source_text, source_label=source_label)
     return mapped_transcript, goal_rrttllu
-
-
-def _format_all_speech_as_customer_text(mapped_transcript: list[dict]) -> str:
-    """로컬 단일 마이크 테스트에서 전체 발화를 고객 입력으로 간주한다."""
-    return "\n".join(
-        f"[{item.get('utterance_time', '00:00')}] {item['text']}"
-        for item in mapped_transcript
-        if item.get("text")
-    )
 
 
 def run_realtime_chunks_pipeline(
@@ -468,10 +455,7 @@ if __name__ == "__main__":
         mic_transcript = transcribe_microphone_realtime_with_diarization(
             listen_seconds=args.listen_seconds
         )
-        mapped, rrttllu = build_realtime_pipeline_result(
-            mic_transcript,
-            fallback_to_all_speech=True,
-        )
+        mapped, rrttllu = build_realtime_pipeline_result(mic_transcript)
         output = Path(args.output_dir)
         save_json(mapped, output / MAPPED_TRANSCRIPT_OUTPUT_FILE)
         save_json(rrttllu, output / GOAL_RRTTLLU_OUTPUT_FILE)
