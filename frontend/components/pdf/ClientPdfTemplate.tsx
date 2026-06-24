@@ -8,7 +8,6 @@ import {
   PORTFOLIOS,
   TAX_EFFECT,
   TAX_ADVICE,
-  IPS_DEFAULT,
   CORRELATION_MATRIX,
   BASE_TIME,
 } from "@/lib/mockData";
@@ -21,9 +20,6 @@ function useSelectedCustomer() {
   const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
   return customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 }
-
-const portCurrent = PORTFOLIOS.find((p) => p.id === "current")!;
-const portA = PORTFOLIOS.find((p) => p.id === "a")!;
 
 // 절세 계좌 배치 — 기준값(한도) 및 차트 최대값
 // 출처: 조세특례제한법 §91의18(ISA), 소득세법 §59의3(연금·IRP)
@@ -143,6 +139,12 @@ function SectionBar() {
 
 function CoverPage() {
   const C = useSelectedCustomer();
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const selectedPortfolioName =
+    (storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS).find(
+      (p) => p.id === selectedPortfolioId,
+    )?.name ?? "포트폴리오 A";
   return (
     <div
       data-pdf-page=""
@@ -192,22 +194,12 @@ function CoverPage() {
             marginBottom: 32,
           }}
         >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 9,
-              background: "rgba(255,255,255,0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              fontWeight: 900,
-              color: "white",
-            }}
-          >
-            S
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt=""
+            style={{ width: 36, height: 36, borderRadius: 9, objectFit: "cover" }}
+          />
           <div>
             <div
               style={{
@@ -303,7 +295,7 @@ function CoverPage() {
           {[
             { label: "보고서 일자", value: getTodayShort() },
             { label: "기준 시각", value: `${BASE_TIME} 기준` },
-            { label: "선택 포트폴리오", value: "포트폴리오 A" },
+            { label: "선택 포트폴리오", value: selectedPortfolioName },
             {
               label: "예상 연간 절세",
               value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원`,
@@ -403,60 +395,62 @@ const MACRO_DESC: Record<
 const CLIENT_MACROS = MACRO_INDICATORS;
 
 function MarketIpsPage() {
+  const customer = useSelectedCustomer();
+  const ips = useDashboardStore((s) => s.ips);
   const IPS_ITEMS = [
     {
       tag: "Goal",
       label: "투자 목적",
       value: "자녀 전세자금\n+ 장기 증여",
-      sub: "3년 내 자금 활용 가능성 고려한 운용 계획",
+      sub: ips.goal,
     },
     {
       tag: "Asset",
       label: "운용 자산",
-      value: IPS_DEFAULT.assetLabel,
+      value: customer.aumLabel,
       sub: "전체 운용 가능 자산 기준. 비상자금 3억원은 별도",
     },
     {
       tag: "Return",
       label: "목표 수익률",
-      value: `연 ${IPS_DEFAULT.returnPct}%\n(세후 기준)`,
+      value: `연 ${ips.returnPct}%\n(세후 기준)`,
       sub: "변동성 최소화하면서 세후 8%를 목표",
     },
     {
       tag: "Risk",
       label: "위험 성향",
-      value: IPS_DEFAULT.risk,
+      value: ips.risk,
       sub: "급격한 손실(MDD -15% 이내)을 허용하지 않는 안정적 운용 선호",
     },
     {
       tag: "Time",
       label: "투자 기간",
-      value: `${IPS_DEFAULT.timeYears}년`,
+      value: `${ips.timeYears}년`,
       sub: "장기 운용 기준이나 유동성 필요 시 단기 자금은 별도 운용",
     },
     {
       tag: "Tax",
       label: "세금 상황",
       value: "종합과세\n대상",
-      sub: IPS_DEFAULT.tax,
+      sub: ips.tax,
     },
     {
       tag: "Liquidity",
       label: "유동성 필요",
-      value: IPS_DEFAULT.liquidity,
+      value: ips.liquidity,
       sub: "비상자금 3억원 외 3년 내 자금 활용 가능성 고려",
     },
     {
       tag: "Legal",
       label: "법적 제약",
       value: "증여세법\n대비",
-      sub: IPS_DEFAULT.legal,
+      sub: ips.legal,
     },
     {
       tag: "Unique",
       label: "특별 사항",
       value: "배당주·장기채\n선호",
-      sub: IPS_DEFAULT.unique,
+      sub: ips.unique,
     },
   ];
 
@@ -741,6 +735,10 @@ const METRIC_CARDS = [
 ];
 
 function PortfolioPage() {
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const displayPortfolios = storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS;
+  const portCurrent = displayPortfolios.find((p) => p.id === "current") ?? PORTFOLIOS.find((p) => p.id === "current")!;
+  const portA = displayPortfolios.find((p) => p.id === "a") ?? PORTFOLIOS.find((p) => p.id === "a")!;
   const cur = portCurrent.metrics;
   const a = portA.metrics;
 

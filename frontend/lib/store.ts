@@ -7,13 +7,15 @@ import { create } from "zustand";
 import {
   type ConsultMessage,
   type Customer,
+  type Portfolio,
   CONSULT_LOG,
   CUSTOMERS,
   IPS_DEFAULT,
+  PORTFOLIOS,
   SCENARIO_BASE,
   TAX_THRESHOLD,
 } from "./mockData";
-import type { DataSource } from "./api";
+import type { ApiResult, DataSource, InsightData } from "./api";
 
 export interface IpsState {
   returnPct: number;
@@ -35,9 +37,6 @@ interface DashboardState {
   selectedPortfolioId: string;
   ips: IpsState;
   scenario: { ratePct: number; fxKrw: number };
-  /** 활성 위기 시나리오 버튼. null이면 슬라이더(금리·환율) 모드.
-   *  버튼과 슬라이더는 상호 배타 — 둘은 따로 동작한다. */
-  activeScenario: "crisis_2008" | "crisis_ru_war" | null;
   /** 실시간 현재값 (금리·환율) — 슬라이더 기준점·델타 계산의 기준.
    *  백엔드 /api/macro-indicators 로드 전엔 목 기준값으로 시작한다. */
   liveBase: { ratePct: number; fxKrw: number };
@@ -55,6 +54,24 @@ interface DashboardState {
   sttStatus: SttStatus;
   sttNote?: string;
 
+  // ── 포트폴리오 계산 결과 ──
+  portfolios: Portfolio[];
+  portfolioSource: DataSource;
+  portfolioNote?: string;
+  setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
+
+  // ── 스트레스 테스트 결과 ──
+  stressedPortfolios: Portfolio[];
+  isStressMode: boolean;
+  stressAnalyzing: boolean;
+  setStressedPortfolios: (portfolios: Portfolio[]) => void;
+  setStressAnalyzing: (v: boolean) => void;
+  clearStressMode: () => void;
+
+  // ── AI 인사이트 결과 ──
+  insightResult: ApiResult<InsightData> | null;
+  setInsightResult: (result: ApiResult<InsightData>) => void;
+
   helpMode: boolean;
   toggleHelpMode: () => void;
 
@@ -65,9 +82,6 @@ interface DashboardState {
   setIps: (patch: Partial<IpsState>) => void;
   setScenario: (patch: Partial<DashboardState["scenario"]>) => void;
   resetScenario: () => void;
-  /** 위기 버튼 토글 — 누르면 슬라이더는 기준값으로 초기화(상호 배타).
-   *  같은 버튼을 다시 누르면 해제된다. */
-  activateScenario: (key: "crisis_2008" | "crisis_ru_war") => void;
   /** 실시간 현재값 주입 — 최초 1회는 슬라이더(scenario)도 실시간 값으로 맞춘다. */
   setLiveBase: (base: { ratePct: number; fxKrw: number }) => void;
   setOtherIncome: (manwon: number) => void;
@@ -92,10 +106,28 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     unique: IPS_DEFAULT.unique,
   },
   scenario: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
-  activeScenario: null,
   liveBase: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
   liveBaseLoaded: false,
   otherIncomeManwon: TAX_THRESHOLD.otherIncomeDefault,
+
+  // 초기 포트폴리오는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
+  portfolios: PORTFOLIOS,
+  portfolioSource: "fallback" as DataSource,
+  portfolioNote: "포트폴리오를 계산 중입니다.",
+  setPortfolios: (portfolios, source, note) =>
+    set({ portfolios, portfolioSource: source, portfolioNote: note }),
+
+  stressedPortfolios: [],
+  isStressMode: false,
+  stressAnalyzing: false,
+  setStressedPortfolios: (portfolios) =>
+    set({ stressedPortfolios: portfolios, isStressMode: true }),
+  setStressAnalyzing: (v) => set({ stressAnalyzing: v }),
+  clearStressMode: () =>
+    set({ stressedPortfolios: [], isStressMode: false }),
+
+  insightResult: null,
+  setInsightResult: (result) => set({ insightResult: result }),
 
   // 초기 상담 전사는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
   transcript: CONSULT_LOG,
@@ -117,17 +149,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectCustomer: (id) => set({ selectedCustomerId: id }),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),
-  // 슬라이더를 직접 조정하면 위기 버튼은 해제된다(상호 배타).
   setScenario: (patch) =>
-    set((s) => ({ scenario: { ...s.scenario, ...patch }, activeScenario: null })),
-  resetScenario: () =>
-    set((s) => ({ scenario: { ...s.liveBase }, activeScenario: null })),
-  // 위기 버튼 토글 — 누르면 슬라이더를 기준값으로 초기화한다.
-  activateScenario: (key) =>
-    set((s) => ({
-      activeScenario: s.activeScenario === key ? null : key,
-      scenario: { ...s.liveBase },
-    })),
+    set((s) => ({ scenario: { ...s.scenario, ...patch } })),
+  resetScenario: () => set((s) => ({ scenario: { ...s.liveBase } })),
   setLiveBase: (base) =>
     set((s) => ({
       liveBase: base,

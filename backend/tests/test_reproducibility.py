@@ -29,6 +29,7 @@ from app.rag.generate import (
     ExtractiveGenerator,
     fallback_insight_summary,
     normalize_insight_summary,
+    strip_markdown,
 )
 from app.services.ips import (
     build_ips_snapshot_payload,
@@ -38,6 +39,9 @@ from app.services.ips import (
 from app.services.transcript import transcript_to_raw_note
 from app.stt.stt_record import (
     extract_customer_text,
+    extract_goal_rrttllu,
+    extract_ips_source_text,
+    format_all_speech_as_ips_source,
     format_ticks_as_mmss,
     map_speaker_roles,
 )
@@ -217,6 +221,37 @@ class TestSttDeterminism:
         assert "어떤 목적이실까요" not in out  # PB 발화
         assert "자산 운용 상담받고 싶어요" in out  # 고객 발화
 
+    def test_extract_ips_source_text_falls_back_to_all_speech(self):
+        single_speaker_transcript = [
+            {
+                "speaker_label": "Guest-1",
+                "text": "자산 20억을 5년 정도 운용하고 싶습니다.",
+                "offset_ticks": 0,
+            }
+        ]
+        mapped = map_speaker_roles(single_speaker_transcript)
+
+        assert extract_customer_text(mapped) == ""
+        source_text, source_label = extract_ips_source_text(mapped)
+
+        assert source_label == "전체 화자 발화"
+        assert "PB: 자산 20억을 5년 정도 운용하고 싶습니다." in source_text
+
+    def test_format_all_speech_skips_empty_text(self):
+        source_text = format_all_speech_as_ips_source(
+            [
+                {"speaker_role": "PB", "text": None, "utterance_time": "00:00"},
+                {"speaker_role": "고객", "text": "   ", "utterance_time": "00:01"},
+                {"speaker_role": "고객", "text": " 목표 5% ", "utterance_time": "00:02"},
+            ]
+        )
+
+        assert source_text == "[00:02] 고객: 목표 5%"
+
+    def test_extract_goal_rrttllu_empty_source_uses_label(self):
+        with pytest.raises(ValueError, match="전체 화자 발화가 비어 있어"):
+            extract_goal_rrttllu("", source_label="전체 화자 발화")
+
 
 class TestRagGeneratorDeterminism:
     def test_extractive_generate_is_deterministic(self):
@@ -246,12 +281,52 @@ class TestRagGeneratorDeterminism:
         assert a == b
         assert 0 < len(a) <= 50
         assert "제공된 자료" not in a
+        assert not a.endswith(("습니다", "입니다", "됩니다"))
+
+    def test_strip_markdown_removes_emphasis_headers_and_bullets(self):
+        raw = (
+            "## 미국 금리 동향\n"
+            "- 미국 10년물 금리는 **4%** 아래로 하락했습니다.\n"
+            "1. `국채` 금리 전망\n"
+            "```python\nprint('hello')\n```"
+        )
+        out = strip_markdown(raw)
+        for marker in ("**", "##", "`"):
+            assert marker not in out
+        # 내용(텍스트)은 보존된다(코드펜스 안쪽 코드 포함).
+        assert "미국 금리 동향" in out
+        assert "4%" in out
+        assert "국채" in out
+        assert "print('hello')" in out
+
+    def test_fallback_skips_preamble_and_list_number(self):
+        answer = (
+            "현재 금리에 대한 주요 내용을 요약해 드리겠습니다. "
+            "1. 한국 국채 10년물 금리는 2.9~3.2%로 예상됩니다."
+        )
+        summary = fallback_insight_summary(answer)
+        # 도입 인사말·리스트 번호가 요약으로 새어 나오지 않는다.
+        assert "드리겠습니다" not in summary
+        assert not summary.lstrip().startswith("1")
+        assert "금리" in summary
+        assert 0 < len(summary) <= 50
 
     def test_normalize_insight_summary_removes_prefix_and_bounds_length(self):
         raw = "요약: " + "절세와 유동성 니즈를 함께 고려한 보수적 상담 포인트입니다" * 2
         summary = normalize_insight_summary(raw)
         assert not summary.startswith("요약:")
         assert len(summary) <= 50
+
+    def test_normalize_insight_summary_converts_sentence_to_noun_phrase(self):
+        assert normalize_insight_summary("금리가 상승했습니다.") == "금리 상승"
+        assert (
+            normalize_insight_summary("요약: 유동성 니즈가 확인됩니다.")
+            == "유동성 니즈 확인"
+        )
+        assert normalize_insight_summary("상승세를 보입니다.") == "상승세 보임"
+        assert normalize_insight_summary("금리 인하가 예상됩니다.") == "금리 인하 예상"
+        assert normalize_insight_summary("시장 변동성이 높입니다.") == "시장 변동성 높임"
+        assert normalize_insight_summary("세금 부담을 줄입니다.") == "세금 부담 줄임"
 
 
 class TestRagSearchTransformDeterminism:

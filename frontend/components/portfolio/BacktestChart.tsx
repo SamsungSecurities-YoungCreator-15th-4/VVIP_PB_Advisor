@@ -38,37 +38,113 @@ const BENCHMARK_COLOR = "#DC2626";
 const pctFmt = (v: number) => {
   if (Number.isNaN(v)) return "";
   const ret = v - 100;
-  return `${ret >= 0 ? "+" : ""}${ret}%`;
+  return `${ret >= 0 ? "+" : ""}${ret.toFixed(1)}%`;
 };
 
 /** 중앙 중단: 현재/A/B 백테스트 다중 선그래프 (최근 5년, 누적 수익률 표시) */
 export default function BacktestChart() {
   const [benchmark, setBenchmark] = useState<Benchmark>("KOSPI");
-  const benchKey = BENCHMARK_KEY[benchmark];
   const helpMode = useDashboardStore((s) => s.helpMode);
+  const portfolios         = useDashboardStore((s) => s.portfolios);
+  const stressedPortfolios = useDashboardStore((s) => s.stressedPortfolios);
+  const isStressMode       = useDashboardStore((s) => s.isStressMode);
+  const portfolioSource    = useDashboardStore((s) => s.portfolioSource);
+
+  const displayPortfolios = isStressMode && stressedPortfolios.length > 0
+    ? stressedPortfolios
+    : portfolios;
+
+  const benchKey = BENCHMARK_KEY[benchmark];
+  const hasRealData =
+    portfolioSource === "live" &&
+    displayPortfolios.some((p) => (p.backtest?.length ?? 0) > 0);
+
+  // 실데이터: 포트폴리오별 date → value 맵 구성 후 날짜 기준으로 병합
+  const pfByDate = new Map<string, Record<string, number>>();
+  if (hasRealData) {
+    for (const pf of displayPortfolios) {
+      for (const pt of pf.backtest ?? []) {
+        const row = pfByDate.get(pt.date) ?? {};
+        row[pf.id] = pt.value;
+        pfByDate.set(pt.date, row);
+      }
+    }
+    // 벤치마크: 포트폴리오 A 기준 (세 포트폴리오 모두 동일 벤치마크 사용)
+    const benchSource = displayPortfolios.find((p) => p.id === "a")?.benchmarks;
+    if (benchSource) {
+      const allBenchSeries: Record<string, typeof benchSource.kospi> = {
+        kospi: benchSource.kospi,
+        sp500: benchSource.sp500,
+        msciAcwi: benchSource.msciAcwi,
+      };
+      for (const [key, series] of Object.entries(allBenchSeries)) {
+        for (const pt of series ?? []) {
+          const row = pfByDate.get(pt.date) ?? {};
+          row[key] = pt.value;
+          pfByDate.set(pt.date, row);
+        }
+      }
+    }
+  }
+
+  const chartData: Record<string, number | string>[] = hasRealData
+    ? Array.from(pfByDate.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, vals]) => ({ date, ...vals }))
+    : BACKTEST_SERIES;
+
+  const xKey = hasRealData ? "date" : "year";
+  const xTicks = hasRealData
+    ? (() => {
+        // 연도가 바뀌는 첫 데이터 포인트만 틱으로 선택 — 1월 영업일 전체를 잡으면
+        // 라벨이 겹치므로 연도당 정확히 하나만 표시한다.
+        const ticks: string[] = [];
+        let lastYear = "";
+        for (const d of chartData as { date: string }[]) {
+          const year = d.date.slice(0, 4);
+          if (year !== lastYear) {
+            ticks.push(d.date);
+            lastYear = year;
+          }
+        }
+        return ticks;
+      })()
+    : ["2021", "2022", "2023", "2024", "2025", "2026"];
 
   return (
     <Card className="gap-0 p-3">
       <div className="mb-1 flex items-center justify-between">
-        <HelpTooltip text={BACKTEST_HELP}>
-          <p className="cursor-default text-[14px] font-bold">
-            <span
-              className={
-                helpMode
-                  ? "rounded border border-brand/40 bg-brand/[0.06] px-1"
-                  : ""
-              }
-            >
-              백테스트
-            </span>{" "}
-            <span className="text-[12px] font-semibold text-muted-foreground">
-              최근 5년
-            </span>
-            <span className="ml-1.5 text-[11px] font-semibold text-muted-foreground/60">
-              (누적 수익률, 2021년 기준)
-            </span>
-          </p>
-        </HelpTooltip>
+        <div className="flex items-center gap-2">
+          <HelpTooltip text={BACKTEST_HELP}>
+            <p className="cursor-default text-[14px] font-bold">
+              <span
+                className={
+                  helpMode
+                    ? "rounded border border-brand/40 bg-brand/[0.06] px-1"
+                    : ""
+                }
+              >
+                백테스트
+              </span>{" "}
+              <span className="text-[12px] font-semibold text-muted-foreground">
+                최근 5년
+              </span>
+              <span className="ml-1.5 text-[11px] font-semibold text-muted-foreground/60">
+                (누적 수익률, 2021년 기준)
+              </span>
+            </p>
+          </HelpTooltip>
+          {hasRealData ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
+              <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
+              연동 완료
+            </div>
+          ) : (
+            <div className="rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+              ⚠ 데모
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {/* 현재/A/B 범례 */}
           {LINES.map((l) => (
@@ -84,7 +160,7 @@ export default function BacktestChart() {
             </span>
           ))}
 
-          {/* 벤치마크 세그먼트 컨트롤 — 가장 오른쪽 */}
+          {/* 벤치마크 세그먼트 컨트롤 */}
           <div className="flex items-center gap-1.5">
             <span
               className="h-0.75 w-3.5 rounded-sm"
@@ -112,28 +188,28 @@ export default function BacktestChart() {
       <div className="h-60">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={BACKTEST_SERIES}
+            data={chartData}
             margin={{ top: 8, right: 8, bottom: 0, left: 16 }}
           >
             <CartesianGrid vertical={false} stroke="#F1F3F5" />
             <XAxis
-              dataKey="year"
+              dataKey={xKey}
               tickLine={false}
               axisLine={false}
               tick={{ fontSize: 12, fill: "#B0B8C1", fontWeight: 600 }}
-              ticks={["2021", "2022", "2023", "2024", "2025", "2026"]}
+              ticks={xTicks}
+              tickFormatter={hasRealData ? (v: string) => v.slice(0, 4) : undefined}
             />
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip
               formatter={(value, name) => {
-                if (name === benchKey)
-                  return [
-                    value != null ? `${pctFmt(Number(value))} (${value})` : "-",
-                    benchmark,
-                  ];
+                const label =
+                  name === benchKey
+                    ? benchmark
+                    : (LINES.find((l) => l.key === name)?.name ?? String(name));
                 return [
                   value != null ? `${pctFmt(Number(value))} (${value})` : "-",
-                  LINES.find((l) => l.key === name)?.name ?? String(name),
+                  label,
                 ];
               }}
               itemSorter={(item) => {

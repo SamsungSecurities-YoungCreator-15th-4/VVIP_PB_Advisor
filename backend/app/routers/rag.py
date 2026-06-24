@@ -12,7 +12,9 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth import get_current_pb_id
 from pydantic import BaseModel, ConfigDict
 
 from app.rag.generate import (
@@ -21,6 +23,7 @@ from app.rag.generate import (
     InsightSummaryGenerator,
     LLMGenerator,
     fallback_insight_summary,
+    strip_markdown,
 )
 from app.rag.retrieval import embed_query, search_chunks
 from app.services.portfolio_insight import (
@@ -124,7 +127,10 @@ class InsightResponse(BaseModel):
 
 
 @router.post("/insight", response_model=InsightResponse)
-def create_insight(request: InsightRequest) -> InsightResponse:
+def create_insight(
+    request: InsightRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> InsightResponse:
     # TODO: consultation_id 존재 검증 — consultation 테이블 조회는 다음 단계에서 추가.
     query = request.query.strip()
     if not query:
@@ -141,7 +147,7 @@ def create_insight(request: InsightRequest) -> InsightResponse:
                 status_code=400,
                 detail="중앙 대시보드 요약 질의에는 context.dashboard 가 필요합니다.",
             )
-        answer = _generate_dashboard_answer(dashboard_payload)
+        answer = strip_markdown(_generate_dashboard_answer(dashboard_payload))
         return InsightResponse(
             answer=answer,
             summary=_generate_summary(answer),
@@ -154,7 +160,7 @@ def create_insight(request: InsightRequest) -> InsightResponse:
     if not chunks:
         raise HTTPException(status_code=404, detail="관련 문서 없음(임계값 미달)")
 
-    answer = _generate_answer(query, chunks)
+    answer = strip_markdown(_generate_answer(query, chunks))
     summary = _generate_summary(answer)
     return InsightResponse(
         answer=answer,

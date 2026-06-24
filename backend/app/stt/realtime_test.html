@@ -36,6 +36,7 @@
         margin-bottom: 16px;
       }
 
+      input,
       select,
       button {
         height: 40px;
@@ -49,6 +50,10 @@
       button {
         cursor: pointer;
         font-weight: 700;
+      }
+
+      input {
+        width: 300px;
       }
 
       button.primary {
@@ -116,12 +121,13 @@
 
       <div class="toolbar">
         <label>
-          고객
-          <select id="customerName">
-            <option value="김성삼">김성삼</option>
-            <option value="이사조">이사조</option>
-            <option value="박기업">박기업</option>
-          </select>
+          client_id
+          <input
+            id="clientId"
+            type="text"
+            placeholder="DB client.id UUID"
+            autocomplete="off"
+          />
         </label>
         <button id="playButton" class="primary">재생</button>
         <button id="pauseButton" disabled>Pause</button>
@@ -146,7 +152,7 @@
       const playButton = document.getElementById("playButton");
       const pauseButton = document.getElementById("pauseButton");
       const finishButton = document.getElementById("finishButton");
-      const customerName = document.getElementById("customerName");
+      const clientId = document.getElementById("clientId");
       const statusNode = document.getElementById("status");
       const transcriptNode = document.getElementById("transcript");
       const logNode = document.getElementById("log");
@@ -243,6 +249,13 @@
           return;
         }
 
+        const selectedClientId = clientId.value.trim();
+        if (!selectedClientId) {
+          setStatus("시작 실패: client_id를 입력하세요");
+          log("missing client_id");
+          return;
+        }
+
         setStatus("마이크 권한 요청 중");
         await setupAudio();
 
@@ -252,7 +265,7 @@
         ws.onopen = () => {
           ws.send(
             JSON.stringify({
-              customer_name: customerName.value,
+              client_id: selectedClientId,
               sample_rate: SAMPLE_RATE,
               bits_per_sample: 16,
               channels: 1,
