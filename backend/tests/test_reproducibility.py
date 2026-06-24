@@ -29,6 +29,7 @@ from app.rag.generate import (
     ExtractiveGenerator,
     fallback_insight_summary,
     normalize_insight_summary,
+    strip_markdown,
 )
 from app.services.ips import (
     build_ips_snapshot_payload,
@@ -281,6 +282,34 @@ class TestRagGeneratorDeterminism:
         assert 0 < len(a) <= 50
         assert "제공된 자료" not in a
         assert not a.endswith(("습니다", "입니다", "됩니다"))
+
+    def test_strip_markdown_removes_emphasis_headers_and_bullets(self):
+        raw = (
+            "## 미국 금리 동향\n"
+            "- 미국 10년물 금리는 **4%** 아래로 하락했습니다.\n"
+            "1. `국채` 금리 전망\n"
+            "```python\nprint('hello')\n```"
+        )
+        out = strip_markdown(raw)
+        for marker in ("**", "##", "`"):
+            assert marker not in out
+        # 내용(텍스트)은 보존된다(코드펜스 안쪽 코드 포함).
+        assert "미국 금리 동향" in out
+        assert "4%" in out
+        assert "국채" in out
+        assert "print('hello')" in out
+
+    def test_fallback_skips_preamble_and_list_number(self):
+        answer = (
+            "현재 금리에 대한 주요 내용을 요약해 드리겠습니다. "
+            "1. 한국 국채 10년물 금리는 2.9~3.2%로 예상됩니다."
+        )
+        summary = fallback_insight_summary(answer)
+        # 도입 인사말·리스트 번호가 요약으로 새어 나오지 않는다.
+        assert "드리겠습니다" not in summary
+        assert not summary.lstrip().startswith("1")
+        assert "금리" in summary
+        assert 0 < len(summary) <= 50
 
     def test_normalize_insight_summary_removes_prefix_and_bounds_length(self):
         raw = "요약: " + "절세와 유동성 니즈를 함께 고려한 보수적 상담 포인트입니다" * 2

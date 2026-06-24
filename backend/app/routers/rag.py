@@ -23,6 +23,7 @@ from app.rag.generate import (
     InsightSummaryGenerator,
     LLMGenerator,
     fallback_insight_summary,
+    strip_markdown,
 )
 from app.rag.retrieval import embed_query, search_chunks
 from app.services.portfolio_insight import (
@@ -146,7 +147,7 @@ def create_insight(
                 status_code=400,
                 detail="중앙 대시보드 요약 질의에는 context.dashboard 가 필요합니다.",
             )
-        answer = _generate_dashboard_answer(dashboard_payload)
+        answer = strip_markdown(_generate_dashboard_answer(dashboard_payload))
         return InsightResponse(
             answer=answer,
             summary=_generate_summary(answer),
@@ -159,7 +160,7 @@ def create_insight(
     if not chunks:
         raise HTTPException(status_code=404, detail="관련 문서 없음(임계값 미달)")
 
-    answer = _generate_answer(query, chunks)
+    answer = strip_markdown(_generate_answer(query, chunks))
     summary = _generate_summary(answer)
     return InsightResponse(
         answer=answer,
