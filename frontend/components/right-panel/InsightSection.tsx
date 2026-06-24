@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
+import HelpTooltip from "@/components/common/HelpTooltip";
 import { INSIGHT, PORTFOLIOS } from "@/lib/mockData";
+
+const INSIGHT_HELP =
+  "질문을 입력하면 AI가 답합니다. ① 일반 질의(금리·세무·하우스뷰)는 사내 문서를 검색해 " +
+  "출처와 함께 답하고, ② '삼성전자 재무제표'처럼 회사명을 넣으면 DART 전자공시에서 최신 재무를 " +
+  "가져오며, ③ '분석 결과 요약'처럼 물으면 현재 대시보드를 요약합니다. 모든 수치는 출처가 " +
+  "추적되고 AI가 임의로 지어내지 않습니다.";
 import { buildDashboardInsightContext } from "@/lib/dashboardInsightContext";
 import {
   type InsightCitation,
@@ -29,6 +36,7 @@ export default function InsightSection() {
     selectedPortfolioId,
     insightResult,
     setInsightResult,
+    helpMode,
   } = useDashboardStore();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -89,7 +97,19 @@ export default function InsightSection() {
     <Card className="flex flex-col gap-0 p-3.5">
       {/* 헤더 */}
       <div className="mb-2.5 flex shrink-0 items-center justify-between">
-        <p className="text-[14px] font-bold">AI 인사이트</p>
+        <HelpTooltip text={INSIGHT_HELP}>
+          <p className="cursor-default text-[14px] font-bold">
+            <span
+              className={
+                helpMode
+                  ? "rounded border border-brand/40 bg-brand/[0.06] px-1"
+                  : ""
+              }
+            >
+              AI 인사이트
+            </span>
+          </p>
+        </HelpTooltip>
         <DataSourceBadge source={source} note={note} />
       </div>
 
