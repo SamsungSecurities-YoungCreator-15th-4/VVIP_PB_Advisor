@@ -17,8 +17,13 @@ import {
 import { type ApiResult, fallback, live } from "./result";
 import type { ConsultationResponse, IpsJson, TranscriptItem } from "./types";
 
-/** STT 처리 타임아웃(ms). 텍스트 API 보다 훨씬 길게. */
-const STT_TIMEOUT_MS = 180_000;
+/**
+ * STT 처리 타임아웃(ms). 텍스트 API 보다 훨씬 길게.
+ * 업로드 전체 흐름 = 파일 업로드 + Azure 전사(~실시간보다 빠르나 수분) + IPS(gpt-4o)
+ * 추출 + 저장. 5분짜리 샘플(294s 오디오)도 측정상 전사 ~143s + 부가단계로 180s 를
+ * 넘겨, 기존 180s 에서 잘렸다. 수분 길이 상담을 커버하도록 600s 로 둔다.
+ */
+const STT_TIMEOUT_MS = 600_000;
 
 /** store.ips 에 적용 가능한 IPS 부분 패치(추출된 값만). */
 export interface IpsPatch {
