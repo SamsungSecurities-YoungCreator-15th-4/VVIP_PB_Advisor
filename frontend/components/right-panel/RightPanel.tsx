@@ -23,7 +23,7 @@ export default function RightPanel() {
 
   const handleConfirm = () => {
     if (!summary) return;
-    const prev = ips.unique.trim();
+    const prev = (ips.unique ?? "").trim();
     setIps({ unique: prev ? `${prev}\n${summary}` : summary });
     setConfirmOpen(false);
   };

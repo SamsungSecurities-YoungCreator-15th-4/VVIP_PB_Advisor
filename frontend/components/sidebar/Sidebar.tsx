@@ -551,7 +551,7 @@ export default function Sidebar() {
           </IpsRow>
           <IpsRow k="Unique" sub="특수" last alignTop>
             <textarea
-              value={ips.unique}
+              value={ips.unique ?? ""}
               onChange={(e) => setIps({ unique: e.target.value })}
               rows={5}
               className="w-full resize-none rounded-md border border-input bg-white px-3 py-1.5 text-[13px] font-medium text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
