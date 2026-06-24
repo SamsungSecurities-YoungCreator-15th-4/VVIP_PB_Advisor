@@ -31,7 +31,6 @@ function WaveformCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const BAR_COUNT = 36;
     const BRAND = "#3B7BF6";
     const MUTED = "#cbd5e1";
 
@@ -101,10 +100,10 @@ function useElapsedTime(running: boolean) {
 
   useEffect(() => {
     if (!running) {
-      setElapsed(0);
       startRef.current = null;
       pausedAtRef.current = 0;
-      return;
+      const tid = setTimeout(() => setElapsed(0), 0);
+      return () => clearTimeout(tid);
     }
     startRef.current = Date.now();
     const id = setInterval(() => {
