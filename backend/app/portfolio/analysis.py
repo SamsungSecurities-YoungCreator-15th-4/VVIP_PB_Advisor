@@ -236,6 +236,8 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "risk_profile": request.risk_profile,
             "client_risk_level": CLIENT_RISK_LEVEL[request.risk_profile],
             "investment_horizon_years": request.investment_horizon_years,
+            "tax_text": request.tax_text,
+            "tax_profile": request.tax_profile,
             "tax_sensitivity": request.tax_sensitivity,
             "liquidity_need": request.liquidity_need,
             "risk_free_rate": request.risk_free_rate,
@@ -257,6 +259,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "marginal_income_tax_rate": request.marginal_income_tax_rate,
             "overseas_stock_realized_gain_rate": request.overseas_stock_realized_gain_rate,
             "overseas_realized_loss": request.overseas_realized_loss,
+            "overseas_realized_gain_krw": request.overseas_realized_gain_krw,
             "other_financial_income": request.other_financial_income,
             "external_financial_income_krw": resolve_external_financial_income_krw(
                 request

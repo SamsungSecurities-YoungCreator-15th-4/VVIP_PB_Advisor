@@ -23,6 +23,10 @@ from .assets import (
     UNIQUE_ASSETS,
 )
 from .models import AnalysisRequest
+from .tax_parser import (
+    apply_tax_profile_to_ips_payload,
+    parse_tax_text,
+)
 from .utils import (
     canonicalize_asset_key,
     normalize_weights,
@@ -81,7 +85,7 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     normalized = text_value.replace(",", "")[:_MAX_TEXT_PARSE_LEN]
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]++(?:\.[0-9]++)?)\s*+([억만천])", normalized):
+    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", normalized):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
 
@@ -94,6 +98,31 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
 
     return default
 
+
+
+
+def parse_stt_asset_to_krw(value: Any) -> float:
+    """STT Asset 계약을 원 단위로 변환한다.
+
+    숫자/단위 없는 숫자 문자열은 억원 단위다.
+    명시적 단위 문자열("18억", "2,000만 원")은 그대로 해석한다.
+    내부 AnalysisRequest.total_asset에는 이 함수를 적용하지 않는다.
+    """
+    if value is None or isinstance(value, bool):
+        return 0.0
+    if isinstance(value, (int, float)):
+        return safe_float(value, 0.0) * 100_000_000
+
+    text_value = str(value).strip()
+    if not text_value:
+        return 0.0
+    if re.search(r"[조억만천원]", text_value):
+        return parse_amount_krw(text_value)
+
+    numeric = safe_float(text_value.replace(",", ""), default=np.nan)
+    if not np.isfinite(numeric):
+        return 0.0
+    return float(numeric * 100_000_000)
 
 
 def stringify_unique_value(value: Any) -> str:
@@ -184,7 +213,7 @@ def calculate_account_age_years_from_start_year(start_year: Optional[int]) -> fl
 
 def parse_relative_years_from_text(text: str) -> Optional[float]:
     match = re.search(
-        r"([0-9]++(?:\.[0-9]++)?)\s*+년\s*+(?:후|뒤|내|안|이내)",
+        r"([0-9]+(?:\.[0-9]+)?)\s*년\s*(?:후|뒤|내|안|이내)",
         text[:_MAX_TEXT_PARSE_LEN],
     )
     if match:
@@ -207,13 +236,13 @@ def parse_explicit_money_amount_krw(value: Any) -> float:
 
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]++(?:\.[0-9]++)?)\s*+([억만천])", text_value):
+    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", text_value):
         matched_unit = True
         total += float(number_text) * KOREAN_MONEY_UNITS[unit]
     if matched_unit:
         return float(total)
 
-    won_match = re.search(r"([0-9]++(?:\.[0-9]++)?)\s*+원", text_value)
+    won_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*원", text_value)
     if won_match:
         return safe_float(won_match.group(1), 0.0)
 
@@ -221,24 +250,33 @@ def parse_explicit_money_amount_krw(value: Any) -> float:
 
 
 def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[float]:
-    window = find_keyword_window(text, keywords, radius=120)
+    """올해 납입액을 단위까지 포함해 추출한다.
+
+    기존 구현은 "900만 원"에서 숫자 그룹 "900"만 parse_amount_krw로 넘겨
+    900원으로 처리할 수 있었다. 금액 전체("900만 원")를 캡처한다.
+    """
+    window = find_keyword_window(text, keywords, radius=140)
     if not window:
         return None
 
-    if re.search(r"(?:올해|금년|당해).{0,30}(?:납입|입금).{0,30}(?:없|무|0원|0\s*원)", window):
-        return 0.0
-    if re.search(r"(?:납입|입금).{0,30}(?:없|무|0원|0\s*원)", window):
-        return 0.0
-
-    current_year_match = re.search(
-        r"(?:올해|금년|당해).{0,40}([0-9]++(?:\.[0-9]++)?)\s*+[억만천]?\s*+(?:원)?\s*+(?:납입|입금)",
+    if re.search(
+        r"(?:올해|금년|당해).{0,30}(?:납입|입금).{0,30}(?:없|무|0\s*원)",
         window,
+    ):
+        return 0.0
+    if re.search(r"(?:납입|입금).{0,30}(?:없|무|0\s*원)", window):
+        return 0.0
+
+    money = r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:조|억|만|천)?\s*원?)"
+    patterns = (
+        rf"(?:올해|금년|당해).{{0,45}}?{money}.{{0,15}}?(?:납입|입금)",
+        rf"{money}.{{0,15}}?(?:올해|금년|당해).{{0,15}}?(?:납입|입금)",
     )
-    if current_year_match:
-        return parse_amount_krw(current_year_match.group(1))
-
+    for pattern in patterns:
+        match = re.search(pattern, window, flags=re.IGNORECASE)
+        if match:
+            return parse_amount_krw(match.group(1))
     return None
-
 
 def contains_negative_account_signal(text: str, keywords: List[str]) -> bool:
     window = find_keyword_window(text, keywords, radius=80)
@@ -495,12 +533,12 @@ def apply_unique_profile_to_ips_payload(
 
     result["unique_profile"] = {
         **profile,
-        **result.get("unique_profile", {}),
+        **(result.get("unique_profile") or {}),
     }
     result["unique_items"] = result.get("unique_items") or profile["items"]
     result["client_context"] = {
         **profile.get("client_context", {}),
-        **result.get("client_context", {}),
+        **(result.get("client_context") or {}),
     }
 
     if safe_float(result.get("unique_need_amount")) <= 0:
@@ -815,6 +853,20 @@ def normalize_analysis_request_payload(
                 unique_value,
                 adapter_warnings,
             )
+
+        tax_value = (
+            normalized_ips.get("tax_text")
+            or normalized_ips.get("Tax")
+            or normalized_ips.get("tax")
+        )
+        if tax_value is None and isinstance(rrttllu_payload, dict):
+            tax_value = rrttllu_payload.get("Tax")
+        if tax_value is not None:
+            normalized_ips = apply_tax_profile_to_ips_payload(
+                normalized_ips,
+                tax_value,
+            )
+
         normalized_payload["ips"] = normalized_ips
         return AnalysisRequest(**normalized_payload), {
             "source": "analysis_request",
@@ -825,13 +877,15 @@ def normalize_analysis_request_payload(
 
     flat_ips = extract_flat_ips_payload(payload)
 
-    total_asset = parse_amount_krw(flat_ips.get("Asset"))
+    total_asset = parse_stt_asset_to_krw(flat_ips.get("Asset"))
     if total_asset <= 0:
         raise ValueError("IPS의 Asset 값을 총자산으로 해석할 수 없습니다.")
 
     investment_horizon = int(max(parse_amount_krw(flat_ips.get("Time")), 1))
     unique_value = flat_ips.get("Unique")
     unique_profile = extract_unique_profile(unique_value)
+    tax_value = flat_ips.get("Tax")
+    tax_profile = parse_tax_text(tax_value)
     unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
     if unique_need_amount <= 0:
         adapter_warnings.append(
@@ -868,7 +922,9 @@ def normalize_analysis_request_payload(
             ),
             "risk_profile": normalize_risk_profile_value(flat_ips.get("Risk")),
             "investment_horizon_years": investment_horizon,
-            "tax_sensitivity": normalize_tax_sensitivity_value(flat_ips.get("Tax")),
+            "tax_text": stringify_unique_value(tax_value),
+            "tax_profile": tax_profile,
+            "tax_sensitivity": None,
             "liquidity_need": normalize_liquidity_value(flat_ips.get("Liquidity")),
             "current_weights": current_weights_from_portfolio,
             "risk_free_rate": safe_float(
@@ -894,6 +950,11 @@ def normalize_analysis_request_payload(
             ),
             "overseas_realized_loss": safe_float(
                 payload.get("overseas_realized_loss"), 0.0
+            ),
+            "overseas_realized_gain_krw": (
+                safe_float(payload.get("overseas_realized_gain_krw"), 0.0)
+                if payload.get("overseas_realized_gain_krw") is not None
+                else None
             ),
             "other_financial_income": safe_float(
                 payload.get("other_financial_income"), 0.0
@@ -955,6 +1016,11 @@ def normalize_analysis_request_payload(
             ),
         },
     }
+
+    analysis_payload["ips"] = apply_tax_profile_to_ips_payload(
+        analysis_payload["ips"],
+        tax_value,
+    )
 
     return AnalysisRequest(**analysis_payload), {
         "source": "consultation_ips_adapter",
