@@ -19,11 +19,14 @@ import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
 import StressTestSection from "@/components/right-panel/StressTestSection";
 import SttRecordingModal from "@/components/sidebar/SttRecordingModal";
-import { type Customer, CUSTOMERS, PAST_CONSULTATIONS } from "@/lib/mockData";
+import { type Customer, CUSTOMERS } from "@/lib/mockData";
 import {
+  type ConsultationSummaryItem,
   type ListedClient,
   createClient,
   listClients,
+  listConsultations,
+  loadConsultationDetail,
   uploadSttConsultation,
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
@@ -97,6 +100,10 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useAutoCollapse(1024);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pastList, setPastList] = useState<ConsultationSummaryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newAum, setNewAum] = useState("");
@@ -222,6 +229,38 @@ export default function Sidebar() {
     } else {
       setSttStatus("error", res.note);
     }
+  };
+
+  // 지난 상담 모달 열기 → 선택 고객의 상담 목록(GET /consultations) 조회.
+  const openHistory = async () => {
+    setHistoryOpen(true);
+    setHistoryError(null);
+    if (!customer.clientId) {
+      setPastList([]);
+      setHistoryError("고객 ID가 없습니다. 고객을 다시 선택해 주세요.");
+      return;
+    }
+    setHistoryLoading(true);
+    const res = await listConsultations(customer.clientId);
+    setPastList(res.data);
+    if (res.source !== "live") setHistoryError(res.note ?? "불러오지 못했습니다.");
+    setHistoryLoading(false);
+  };
+
+  // 특정 상담 불러오기 → 전사·IPS·consultationId 를 STT 업로드와 동일하게 store 에 반영.
+  const loadPast = async (consultationId: string) => {
+    if (!customer.clientId || loadingId) return;
+    setLoadingId(consultationId);
+    const res = await loadConsultationDetail(customer.clientId, consultationId);
+    if (res.source === "live") {
+      setTranscript(res.data.transcript, "live");
+      setConsultationId(res.data.consultationId);
+      if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
+      setHistoryOpen(false);
+    } else {
+      setHistoryError(res.note ?? "상담 내역을 불러오지 못했습니다.");
+    }
+    setLoadingId(null);
   };
 
   // 사이드바가 닫혔을 때: 하나의 패널임을 시각적으로 표현하는 좁은 카드 스트립
@@ -467,7 +506,7 @@ export default function Sidebar() {
             variant="outline"
             size="sm"
             className="mt-2 w-full border-muted font-bold text-foreground/60 hover:text-foreground/60"
-            onClick={() => setHistoryOpen(true)}
+            onClick={openHistory}
           >
             <RotateCcw />
             지난 상담기록 불러오기
@@ -653,22 +692,39 @@ export default function Sidebar() {
               </button>
             </div>
             <div className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto">
-              {PAST_CONSULTATIONS.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-xl border px-3 py-2"
-                >
-                  <span className="text-[13px] font-semibold">{c.title}</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 shrink-0 text-[11px] font-bold"
-                    onClick={() => setHistoryOpen(false)}
+              {historyLoading ? (
+                <p className="px-1 py-2 text-[12px] font-medium text-muted-foreground">
+                  불러오는 중...
+                </p>
+              ) : historyError ? (
+                <p className="px-1 py-2 text-[12px] font-medium text-amber-600">
+                  {historyError}
+                </p>
+              ) : pastList.length === 0 ? (
+                <p className="px-1 py-2 text-[12px] font-medium text-muted-foreground">
+                  지난 상담 기록이 없습니다.
+                </p>
+              ) : (
+                pastList.map((c) => (
+                  <div
+                    key={c.consultationId}
+                    className="flex items-center justify-between rounded-xl border px-3 py-2"
                   >
-                    불러오기
-                  </Button>
-                </div>
-              ))}
+                    <span className="text-[13px] font-semibold">
+                      {c.transcriptTitle}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0 text-[11px] font-bold"
+                      disabled={loadingId !== null}
+                      onClick={() => loadPast(c.consultationId)}
+                    >
+                      {loadingId === c.consultationId ? "불러오는 중" : "불러오기"}
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

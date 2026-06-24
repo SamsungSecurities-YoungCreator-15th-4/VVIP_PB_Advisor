@@ -40,7 +40,7 @@ export interface SttConsultationData {
   consultationDate: string;
 }
 
-function mapTranscript(
+export function mapTranscript(
   items: TranscriptItem[] | null | undefined,
 ): ConsultMessage[] {
   if (!items) return [];
@@ -71,7 +71,7 @@ function coerceLiquidity(value: string | null): IpsPatch["liquidity"] {
 }
 
 /** flatten IPS JSON → store 적용 가능한 패치(키 매핑 + 타입 정합). */
-function mapIps(ips: IpsJson | null | undefined): IpsPatch {
+export function mapIps(ips: IpsJson | null | undefined): IpsPatch {
   const patch: IpsPatch = {};
   if (!ips) return patch;
   if (ips.Goal != null) patch.goal = ips.Goal;
