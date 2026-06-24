@@ -71,40 +71,6 @@ export const CALC_TO_DISPLAY: Record<CalcUnitId, DisplayGroup> = {
   infraFund: "분리과세",
 };
 
-// ── 11종(프런트) → 백엔드 canonical 12종(snake_case) 매핑 ──────────────
-// 팀 확정(2026-06): 백엔드에 대응 버킷이 없는 3종은 가장 가까운 군에 합산한다.
-//   - emergingEquity(신흥국주식)  → overseas_growth  (고변동·고베타 성격)
-//   - overseasBond(해외채권)       → general_bond     (해외채 전용 버킷 없음)
-//   - infraFund(인프라펀드)         → commodity        (실물자산 성격)
-// 백엔드 12종 중 overseas_blue_chip·dollar·cash 는 프런트 소스가 없어 0으로 둔다.
-export const CALC_TO_BACKEND: Record<CalcUnitId, string> = {
-  domesticEquity: "domestic_equity",
-  overseasDividendEquity: "overseas_dividend",
-  overseasGrowthEquity: "overseas_growth",
-  emergingEquity: "overseas_growth",
-  domesticBond: "general_bond",
-  overseasBond: "general_bond",
-  lowCouponBond: "low_coupon_bond",
-  separateTaxBond: "separate_tax_bond",
-  reits: "reit",
-  gold: "gold",
-  infraFund: "commodity",
-};
-
-/**
- * 11종 비중(%) → 백엔드 canonical 12종 비중(%).
- * 같은 백엔드 키로 모이는 항목(예: 국내채권+해외채권→general_bond)은 합산한다.
- * 백엔드가 다시 정규화하므로 합계 100 가정만 지키면 된다.
- */
-export function toBackendWeights(weights: CalcUnitWeights): Record<string, number> {
-  const acc: Record<string, number> = {};
-  for (const unit of CALC_UNITS) {
-    const key = CALC_TO_BACKEND[unit.id];
-    acc[key] = (acc[key] ?? 0) + (weights[unit.id] ?? 0);
-  }
-  return acc;
-}
-
 /** 11종 비중을 화면 표시용 6분류 비중으로 합산한다. */
 export function toDisplayAllocation(
   weights: CalcUnitWeights,
