@@ -16,8 +16,8 @@ import pytest
 # only these unit tests do not need the network package itself.
 sys.modules.setdefault("yfinance", types.SimpleNamespace(download=lambda *a, **k: None))
 
-from app.portfolio_logic import portfolio_logic as portfolio_module  # noqa: E402
-from app.portfolio_logic.portfolio_logic import (  # noqa: E402
+from app.portfolio import portfolio_logic as portfolio_module  # noqa: E402
+from app.portfolio.portfolio_logic import (  # noqa: E402
     BENCHMARK_CONFIGS,
     DEFAULT_RANDOM_SEED,
     MIN_BETA_OBSERVATIONS,
@@ -35,7 +35,7 @@ from app.portfolio_logic.portfolio_logic import (  # noqa: E402
     generate_random_weights,
     resolve_external_financial_income_krw,
 )
-from app.portfolio_logic.tax_advice import calc_combined_tax_saving  # noqa: E402
+from app.portfolio.tax_advice import calc_combined_tax_saving  # noqa: E402
 
 
 def _returns(
