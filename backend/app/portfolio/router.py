@@ -3,7 +3,7 @@
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Dict, Optional, Literal, Any
+from typing import Dict, Optional, Literal, Any, Union
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -24,8 +24,11 @@ from .assets import (
 from .models import (
     AnalysisRequest,
     PortfolioRequest,
-    PortfolioCalculateResponse,
-    PortfolioStressTestResponse,
+)
+from .api_contracts import (
+    PortfolioCalculateRequest,
+    PortfolioCalculateResponseContract,
+    PortfolioStressTestResponseContract,
 )
 from .utils import (
     SESSION_REQUEST_STORE,
@@ -106,22 +109,34 @@ def get_benchmarks():
     return get_benchmark_catalog()
 
 
-@router.post("/portfolio/calculate", response_model=PortfolioCalculateResponse)
-def portfolio_calculate(request: Dict[str, Any]):
-    """API 명세서 ⑤ 포트폴리오 계산."""
+@router.post(
+    "/portfolio/calculate",
+    response_model=PortfolioCalculateResponseContract,
+)
+def portfolio_calculate(
+    request: Union[PortfolioCalculateRequest, AnalysisRequest],
+):
+    """STT ips_json 또는 내부 AnalysisRequest로 포트폴리오를 계산한다."""
     try:
-        normalized_request, adapter_info = normalize_analysis_request_payload(request)
+        payload = request.model_dump(exclude_none=True)
+        normalized_request, adapter_info = normalize_analysis_request_payload(payload)
         full = run_full_analysis(normalized_request)
         return build_portfolio_calculate_response(full, adapter_info)
     except Exception as e:
         raise public_http_exception(e)
 
 
-@router.post("/portfolio/stress-test", response_model=PortfolioStressTestResponse)
-def portfolio_stress_test(request: Dict[str, Any]):
-    """API 명세서 ⑥ 스트레스 테스트."""
+@router.post(
+    "/portfolio/stress-test",
+    response_model=PortfolioStressTestResponseContract,
+)
+def portfolio_stress_test(
+    request: Union[PortfolioCalculateRequest, AnalysisRequest],
+):
+    """calculate와 동일한 입력 계약으로 스트레스 결과를 반환한다."""
     try:
-        normalized_request, adapter_info = normalize_analysis_request_payload(request)
+        payload = request.model_dump(exclude_none=True)
+        normalized_request, adapter_info = normalize_analysis_request_payload(payload)
         full = run_full_analysis(normalized_request)
         response = build_portfolio_calculate_response(full, adapter_info)
         return {

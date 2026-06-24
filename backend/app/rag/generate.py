@@ -56,23 +56,82 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks)
 
 
-def normalize_insight_summary(text: str, max_chars: int = 50, min_chars: int = 30) -> str:
-    """IPS unique 에 붙일 짧은 요약을 한 줄·최대 길이로 정규화한다."""
+def normalize_insight_summary(text: str, max_chars: int = 50, min_chars: int = 20) -> str:
+    """IPS unique 에 붙일 짧은 요약을 한 줄·명사형·최대 길이로 정규화한다."""
     summary = " ".join(text.split())
     summary = summary.strip("`\"'“”‘’")
-    if summary.startswith("요약:"):
-        summary = summary.removeprefix("요약:").strip()
+    for prefix in ("요약:", "요약："):
+        if summary.startswith(prefix):
+            summary = summary.removeprefix(prefix).strip()
+    summary = _normalize_summary_as_noun_phrase(summary)
     if len(summary) > max_chars:
         candidate = summary[:max_chars].rstrip(" ,.;:·-")
         last_space = candidate.rfind(" ")
         if last_space >= min_chars:
             candidate = candidate[:last_space].rstrip(" ,.;:·-")
         summary = candidate
-    return summary
+    return _normalize_summary_as_noun_phrase(summary)
+
+
+def _normalize_summary_as_noun_phrase(text: str) -> str:
+    """LLM 또는 fallback 이 문장형을 반환해도 화면에는 명사형 구문으로 노출한다."""
+    summary = text.strip().rstrip(" .。!?！？")
+    if not summary:
+        return summary
+
+    summary = re.sub(
+        r"^(?P<subject>[가-힣A-Za-z0-9]+)(?:이|가|은|는)\s+",
+        r"\g<subject> ",
+        summary,
+    )
+    sentence_endings = (
+        ("확인되었습니다", "확인"),
+        ("확인됐습니다", "확인"),
+        ("확인됩니다", "확인"),
+        ("상승했습니다", "상승"),
+        ("하락했습니다", "하락"),
+        ("증가했습니다", "증가"),
+        ("감소했습니다", "감소"),
+        ("예상됩니다", "예상"),
+        ("전망됩니다", "전망"),
+        ("판단됩니다", "판단"),
+        ("보입니다", "보임"),
+        ("높입니다", "높임"),
+        ("줄입니다", "줄임"),
+        ("나타납니다", "나타남"),
+        ("미칩니다", "미침"),
+        ("어렵습니다", "어려움"),
+        ("하였습니다", "함"),
+        ("했습니다", "함"),
+        ("하겠습니다", "예정"),
+        ("합니다", "함"),
+        ("되었습니다", "됨"),
+        ("됐습니다", "됨"),
+        ("됩니다", "됨"),
+        ("있습니다", "있음"),
+        ("없습니다", "없음"),
+        ("입니다", ""),
+    )
+    for ending, replacement in sentence_endings:
+        if summary.endswith(ending):
+            summary = summary[: -len(ending)] + replacement
+            break
+
+    noun_keywords = (
+        r"상승|하락|증가|감소|확인|필요|부각|확대|축소|개선|악화|유지|전환|"
+        r"강화|완화|부담|효과|영향|리스크|니즈|선호|검토|대응|관리|"
+        r"예상|전망|우려|기대|가능성|판단|보임|높임|줄임|나타남|미침|어려움"
+    )
+    summary = re.sub(
+        rf"(?:이|가|은|는|을|를)\s+(?=(?:함께\s+)?(?:{noun_keywords})(?:\s|$))",
+        " ",
+        summary,
+    )
+    return " ".join(summary.split()).strip(" ,.;:·-")
 
 
 def fallback_insight_summary(answer: str) -> str:
-    """mini 요약 실패 시 answer 첫 문장을 최대 50자로 줄여 반환한다."""
+    """mini 요약 실패 시 answer 첫 문장을 50자 이내 명사형으로 줄여 반환한다."""
     sentences = [
         sentence.strip()
         for sentence in re.split(r"(?<=[.?!])\s+", answer.strip())
@@ -82,7 +141,7 @@ def fallback_insight_summary(answer: str) -> str:
     summary = normalize_insight_summary(first_sentence)
     if summary:
         return summary
-    return "인사이트 요약을 생성하지 못했습니다."
+    return "인사이트 요약 생성 실패"
 
 
 class LLMGenerator(Generator):
@@ -136,7 +195,7 @@ class LLMGenerator(Generator):
 
 
 class InsightSummaryGenerator:
-    """AI 인사이트 answer 를 IPS unique 반영용 30~50자 요약으로 압축한다.
+    """AI 인사이트 answer 를 IPS unique 반영용 50자 이내 명사형 요약으로 압축한다.
 
     answer 는 이미 검색 근거 기반으로 생성된 텍스트이므로, 요약기는 새 사실·숫자를 만들지
     않고 화면 반영용 짧은 문장만 만든다. 실패하면 라우터가 fallback_insight_summary()
@@ -149,8 +208,9 @@ class InsightSummaryGenerator:
         "반드시 다음 규칙을 지킨다.\n"
         "1. 입력된 AI 인사이트 답변에 있는 내용만 사용한다.\n"
         "2. 새로운 사실, 숫자, 투자 권유, 수익 보장 표현을 만들지 않는다.\n"
-        "3. 한국어 한 문장으로 30자 이상 50자 이하로 작성한다.\n"
-        "4. 마크다운, 따옴표, '요약:' 같은 접두사는 쓰지 않는다."
+        "3. 한국어 명사형 구문으로 50자 이내로 작성한다.\n"
+        "4. '-했습니다', '-됩니다', '-입니다' 같은 문장형 종결어미를 쓰지 않는다.\n"
+        "5. 마크다운, 따옴표, '요약:' 같은 접두사는 쓰지 않는다."
     )
 
     def summarize(self, answer: str) -> str:
@@ -160,7 +220,8 @@ class InsightSummaryGenerator:
         user_prompt = (
             "[AI 인사이트 답변]\n"
             f"{answer.strip()}\n\n"
-            "위 답변만 근거로 IPS Unique에 붙일 30~50자 한국어 요약 한 문장을 작성하라."
+            "위 답변만 근거로 IPS Unique에 붙일 50자 이내 한국어 명사형 요약 구문을 작성하라. "
+            "예: '금리가 상승했습니다'가 아니라 '금리 상승'처럼 작성하라."
         )
         response = get_insight_summary_client().chat.completions.create(
             model=get_insight_summary_deployment(),

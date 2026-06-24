@@ -177,6 +177,8 @@ def estimate_overseas_stock_capital_gains_tax(
     expected_returns: pd.Series,
     total_asset: float,
     realized_gain_rate: float,
+    realized_gain_krw: Optional[float] = None,
+    realized_loss_krw: float = 0.0,
 ) -> Dict[str, Any]:
     gross_realized_gain = 0.0
     weights = normalize_weights(weights)
@@ -191,11 +193,18 @@ def estimate_overseas_stock_capital_gains_tax(
             )
             gross_realized_gain += asset_capital_gain * realized_gain_rate
 
-    taxable_gain = max(gross_realized_gain - OVERSEAS_STOCK_GAIN_DEDUCTION, 0.0)
+    if realized_gain_krw is not None:
+        gross_realized_gain = max(safe_float(realized_gain_krw), 0.0)
+
+    realized_loss = max(safe_float(realized_loss_krw), 0.0)
+    net_realized_gain = max(gross_realized_gain - realized_loss, 0.0)
+    taxable_gain = max(net_realized_gain - OVERSEAS_STOCK_GAIN_DEDUCTION, 0.0)
     estimated_tax = taxable_gain * OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE
 
     return {
         "gross_realized_gain": safe_round(gross_realized_gain, 0),
+        "realized_loss_offset": safe_round(realized_loss, 0),
+        "net_realized_gain": safe_round(net_realized_gain, 0),
         "basic_deduction": OVERSEAS_STOCK_GAIN_DEDUCTION,
         "taxable_gain": safe_round(taxable_gain, 0),
         "tax_rate": OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
@@ -911,6 +920,8 @@ def calculate_after_tax_return(
                 request
                 .overseas_stock_realized_gain_rate
             ),
+            realized_gain_krw=request.overseas_realized_gain_krw,
+            realized_loss_krw=request.overseas_realized_loss,
         )
     )
 

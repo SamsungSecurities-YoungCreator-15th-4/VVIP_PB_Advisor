@@ -40,7 +40,11 @@ class IPSRequest(BaseModel):
 
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(..., ge=1, le=50)
-    tax_sensitivity: Literal["low", "medium", "high"] = Field(...)
+    # Tax는 STT 자유 텍스트를 원문+결정론적 tax_profile로 보존한다.
+    # tax_sensitivity는 기존 AnalysisRequest 하위 호환용이며 STT 경로에서는 사용하지 않는다.
+    tax_text: str = Field("")
+    tax_profile: Dict[str, Any] = Field(default_factory=dict)
+    tax_sensitivity: Optional[Literal["low", "medium", "high"]] = Field(None)
     liquidity_need: Literal["low", "mid", "high"] = Field(...)
 
     current_weights: Optional[Dict[str, float]] = Field(None)
@@ -61,6 +65,11 @@ class IPSRequest(BaseModel):
     marginal_income_tax_rate: float = Field(0.24, ge=0.06, le=0.495)
     overseas_stock_realized_gain_rate: float = Field(0.0, ge=0.0, le=1.0)
     overseas_realized_loss: float = Field(0.0, ge=0)
+    overseas_realized_gain_krw: Optional[float] = Field(
+        None,
+        ge=0,
+        description="발화/구조화 입력에서 명시된 해외주식 실현이익(원). 없으면 기존 realized_gain_rate 추정을 사용",
+    )
     # 외부 금융소득 입력은 단위 혼동을 막기 위해 명시형 필드를 우선 사용한다.
     # 우선순위: external_financial_income_krw > external_financial_income_manwon
     #          > other_financial_income(기존 호환, 원 단위).
@@ -165,7 +174,9 @@ class PortfolioRequest(BaseModel):
     target_after_tax_return: Optional[float] = Field(None, gt=0.0, le=1.0)
     risk_profile: Literal["conservative", "balanced", "aggressive"] = Field(...)
     investment_horizon_years: int = Field(10, ge=1, le=50)
-    tax_sensitivity: Literal["low", "medium", "high"] = Field("medium")
+    tax_text: str = Field("")
+    tax_profile: Dict[str, Any] = Field(default_factory=dict)
+    tax_sensitivity: Optional[Literal["low", "medium", "high"]] = Field(None)
     liquidity_need: Literal["low", "mid", "high"] = Field("mid")
     current_weights: Optional[Dict[str, float]] = Field(None)
 
@@ -188,6 +199,11 @@ class PortfolioRequest(BaseModel):
     marginal_income_tax_rate: float = Field(0.24, ge=0.06, le=0.495)
     overseas_stock_realized_gain_rate: float = Field(0.0, ge=0.0, le=1.0)
     overseas_realized_loss: float = Field(0.0, ge=0)
+    overseas_realized_gain_krw: Optional[float] = Field(
+        None,
+        ge=0,
+        description="발화/구조화 입력에서 명시된 해외주식 실현이익(원). 없으면 기존 realized_gain_rate 추정을 사용",
+    )
     # 외부 금융소득 입력은 단위 혼동을 막기 위해 명시형 필드를 우선 사용한다.
     # 우선순위: external_financial_income_krw > external_financial_income_manwon
     #          > other_financial_income(기존 호환, 원 단위).
