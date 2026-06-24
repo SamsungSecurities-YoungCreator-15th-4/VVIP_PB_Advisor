@@ -12,44 +12,72 @@ import { type ApiResult, empty, live } from "./result";
 import type { InsightCitation, InsightData } from "./rag";
 import type { DartInsightRequest, DartInsightResponse } from "./types";
 
-// 기업 재무 의도를 나타내는 키워드. 하나라도 포함되면 DART 라우팅 후보다.
-// (오탐을 줄이려 'V자산'·'V자본' 같은 단어 일부가 아니라 구체 항목명만 둔다.)
+// 기업 '재무제표' 의도를 나타내는 키워드. 단독 '재무'·'손익'·'자산' 류는 일반 대화
+// (재무설계·재무상담·재무목표 등)에 흔해 오탐이 많아 제외하고, 재무제표 항목을 특정하는
+// 단어만 둔다.
 const FINANCIAL_KEYWORDS = [
   "재무제표",
-  "재무상태",
-  "재무",
-  "실적",
-  "매출",
+  "재무상태표",
+  "손익계산서",
   "영업이익",
-  "순이익",
   "당기순이익",
-  "총자산",
-  "총부채",
-  "자기자본",
-  "손익",
+  "순이익",
+  "매출액",
+  "매출",
+  "실적",
 ];
 
-// 회사명 후보 추출 시 제거할 군말(재무 키워드 + 흔한 요청 표현).
+// 회사명 후보에서 제거할 군말(재무 키워드 + 흔한 요청 표현).
 // 한 글자 조사(은/는/이/가…)는 회사명 중간 음절을 깨뜨릴 수 있어 전역 제거하지 않고,
 // 아래 TRAILING_JOSA 로 '문자열 끝'에서만 떼어낸다.
 const NOISE_PATTERN =
-  /재무제표|재무상태표?|재무|실적|매출액?|영업이익|당기순이익|순이익|총자산|총부채|자기자본|자본총계|손익계산서?|손익|에\s*대해서?|관련(?:해서)?|알려\s*줘|보여\s*줘|분석(?:해\s*줘)?|요약(?:해\s*줘)?|궁금(?:해|합니다)?|좀|어때/g;
+  /재무제표|재무상태표|손익계산서|영업이익|당기순이익|순이익|매출액|매출|실적|에\s*대해서?|관련(?:해서)?|알려\s*줘|보여\s*줘|분석(?:해\s*줘)?|요약(?:해\s*줘)?|궁금(?:해|합니다)?|좀|어때|어떤지/g;
 
-const TRAILING_JOSA = /(?:의|은|는|이|가|을|를|에|에서)\s*$/;
+const TRAILING_JUNK = /[\s?!.~,·]+$/;
+const TRAILING_JOSA = /(?:의|은|는|이|가|을|를|에|에서)$/;
 
-/** 질의가 기업 재무 의도면 회사명 후보를 담아 반환하고, 아니면 null. */
+// 키워드 제거 후 남은 후보가 이런 일반 토큰이면 회사명이 아니다 → RAG 로 보낸다.
+const GENERIC_TOKENS = new Set([
+  "상담",
+  "상황",
+  "목표",
+  "계획",
+  "설계",
+  "분석",
+  "요약",
+  "회수",
+  "전망",
+  "관리",
+  "고객",
+  "추이",
+  "비교",
+  "현황",
+  "개선",
+  "점검",
+  "상태",
+  "건전성",
+]);
+
+/**
+ * 질의가 특정 기업의 재무제표 의도면 회사명 후보를 담아 반환하고, 아니면 null(=RAG).
+ * corpName === "" 는 '재무제표'만 입력한 경우로, DART 클라이언트가 회사명 안내를 띄운다.
+ */
 export function detectFinancialQuery(
   query: string,
 ): { corpName: string } | null {
   const q = query.trim();
   if (!FINANCIAL_KEYWORDS.some((k) => q.includes(k))) return null;
-  const corpName = q
+  const name = q
     .replace(NOISE_PATTERN, " ")
     .replace(/\s+/g, " ")
     .trim()
+    .replace(TRAILING_JUNK, "")
     .replace(TRAILING_JOSA, "")
     .trim();
-  return { corpName };
+  if (!name) return { corpName: "" }; // '재무제표'만 → 회사명 안내
+  // 여러 토큰(공백 포함)이거나 일반 토큰이면 회사명 질의가 아님 → RAG.
+  if (name.includes(" ") || GENERIC_TOKENS.has(name)) return null;
+  return { corpName: name };
 }
 
 function formatWon(v: number | null | undefined): string {
