@@ -48,11 +48,14 @@ from .prices import (
 from .expected_returns import calculate_expected_returns
 from .tax_accounts import get_common_tax_rules
 from .metrics import (
+    build_stress_drawdown_series,
+    calculate_cumulative_returns,
     calculate_metrics,
     derive_asset_shocks_from_macro,
     resolve_scenario_shocks,
 )
 from .responses import (
+    build_tax_optimizer_payload,
     get_guideline_definition,
     extract_backtest_payload,
     extract_tax_inputs_payload,
@@ -211,6 +214,31 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             shocks=asset_shocks,
         )
 
+        # ── 백테스트: 위기 시점 급락 포인트(A 합의) ─────────────────────────
+        # 과거 누적곡선(base)은 그대로 두고, 끝에 위기 급락 한 칸을 덧붙인다.
+        # portfolio_shock = Σ wᵢ·shockᵢ (포트폴리오 단위 연간 충격; 위기 땐 음수).
+        portfolio_shock = sum(
+            weights.get(asset, 0.0) * shock for asset, shock in asset_shocks.items()
+        )
+        base_backtest = calculate_cumulative_returns(weights, returns)
+        stressed_backtest = build_stress_drawdown_series(base_backtest, portfolio_shock)
+
+        # ── 절세: base/stressed 최적화 페이로드 ────────────────────────────
+        # calculate_metrics가 충격 반영(shift_expected_returns) tax_breakdown을 이미
+        # 만들어 주므로, 그 결과를 절세 최적화 페이로드로 변환만 한다(세금 재계산 없음).
+        # 절대 세액(원)은 req.total_asset 단위에 비례 — base/stressed가 같은
+        # total_asset을 쓰므로 둘의 차이(절세 방향)는 단위와 무관하게 일관적이다.
+        base_tax = build_tax_optimizer_payload(
+            "stress",
+            {"name": "현재 포트폴리오", "tax_breakdown": base["tax_breakdown"]},
+            req,
+        )
+        stressed_tax = build_tax_optimizer_payload(
+            "stress",
+            {"name": "현재 포트폴리오", "tax_breakdown": stressed["tax_breakdown"]},
+            req,
+        )
+
         return {
             "as_of": datetime.now(KST).isoformat(timespec="seconds"),
             "scenario": request.scenario,
@@ -220,8 +248,13 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             ),
             "stress_fx_shock": None if request.scenario else req.stress_fx_shock,
             "asset_shocks": {k: safe_round(v, 6) for k, v in asset_shocks.items()},
+            "portfolio_shock": safe_round(portfolio_shock, 6),
             "base": base,
             "stressed": stressed,
+            "base_backtest": base_backtest,
+            "stressed_backtest": stressed_backtest,
+            "base_tax": base_tax,
+            "stressed_tax": stressed_tax,
         }
     except Exception as e:
         raise public_http_exception(e)

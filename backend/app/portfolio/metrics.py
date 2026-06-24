@@ -1294,6 +1294,38 @@ def calculate_cumulative_returns(
     ]
 
 
+def build_stress_drawdown_series(
+    base_series: List[Dict[str, Any]],
+    portfolio_shock: float,
+) -> List[Dict[str, Any]]:
+    """과거 누적곡선은 그대로 두고, 끝에 위기 시점 급락 포인트 한 칸을 덧붙인다.
+
+    설계 합의(A): 백테스트는 과거 실측 곡선이라 변형하지 않는다. 위기는 일회성
+    drawdown 이벤트로만, 곡선 끝에 별도 포인트 한 칸으로 표시한다.
+        portfolio_shock = Σ wᵢ·shockᵢ  (포트폴리오 단위 연간 충격; 위기 땐 음수)
+    덧붙인 포인트는 stress_event=True와 label="위기"로 표시해 프런트가 구분한다.
+    누적값은 (1+마지막누적)×(1+충격)−1 로 급락을 적용한다.
+    """
+    series = [dict(point) for point in base_series]
+    if not series:
+        return series
+    last = series[-1]
+    last_value = safe_float(last.get("value"))
+    base_index = safe_float(last.get("base_index")) or BACKTEST_BASE_INDEX
+    crisis_value = (1.0 + last_value) * (1.0 + float(portfolio_shock)) - 1.0
+    series.append(
+        {
+            "date": last.get("date"),
+            "label": "위기",
+            "stress_event": True,
+            "value": safe_round(crisis_value, 6),
+            "index_value": safe_round((1.0 + crisis_value) * base_index, 4),
+            "base_index": base_index,
+        }
+    )
+    return series
+
+
 def calculate_benchmark_cumulative_returns(
     weights: Dict[str, float],
     returns: pd.DataFrame,
