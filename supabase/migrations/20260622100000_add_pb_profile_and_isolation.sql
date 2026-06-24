@@ -41,7 +41,10 @@ CREATE INDEX IF NOT EXISTS idx_client_pb_id ON client(pb_id);
 
 -- ───────────────────────────────────────────────
 -- 3. client RLS 정책 (pb_id = auth.uid())
+--    정책은 RLS가 켜져 있어야 효력이 있으므로 각 테이블에 ENABLE RLS 필요.
 -- ───────────────────────────────────────────────
+
+ALTER TABLE client ENABLE ROW LEVEL SECURITY;
 
 -- SELECT: 담당 PB만 고객 조회
 CREATE POLICY client_select_own ON client
@@ -60,6 +63,8 @@ CREATE POLICY client_update_own ON client
 -- ───────────────────────────────────────────────
 -- 4. consultation RLS 정책 (client.pb_id 조인)
 -- ───────────────────────────────────────────────
+
+ALTER TABLE consultation ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY consultation_select_own ON consultation
   FOR SELECT
@@ -84,6 +89,8 @@ CREATE POLICY consultation_insert_own ON consultation
 -- ───────────────────────────────────────────────
 -- 5. ips_snapshot RLS 정책 (client.pb_id 조인)
 -- ───────────────────────────────────────────────
+
+ALTER TABLE ips_snapshot ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY ips_snapshot_select_own ON ips_snapshot
   FOR SELECT
@@ -110,6 +117,9 @@ CREATE POLICY ips_snapshot_insert_own ON ips_snapshot
 --    consultation → client 을 2단계 조인. 현재 백엔드에서 직접 INSERT하지 않으므로
 --    SELECT 정책만 추가한다(INSERT는 향후 기능 확장 시 추가).
 -- ───────────────────────────────────────────────
+
+ALTER TABLE portfolio_option ENABLE ROW LEVEL SECURITY;
+ALTER TABLE proposal ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY portfolio_option_select_own ON portfolio_option
   FOR SELECT
