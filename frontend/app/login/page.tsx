@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabase } from "@/lib/supabaseClient";
 
 function FloatInput({
   id,
@@ -68,7 +68,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     // ID 입력란을 이메일로 사용한다(Supabase Auth 는 이메일+비밀번호).
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { error: signInError } = await getSupabase().auth.signInWithPassword({
       email: id.trim(),
       password,
     });

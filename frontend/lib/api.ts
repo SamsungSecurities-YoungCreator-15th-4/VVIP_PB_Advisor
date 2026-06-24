@@ -13,7 +13,7 @@ import type {
   StressedPortfolio,
   StressScenario,
 } from "./types";
-import { supabase } from "./supabaseClient";
+import { getSupabase } from "./supabaseClient";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
@@ -25,7 +25,7 @@ async function authHeader(): Promise<Record<string, string>> {
   try {
     const {
       data: { session },
-    } = await supabase.auth.getSession();
+    } = await getSupabase().auth.getSession();
     const token = session?.access_token;
     return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
