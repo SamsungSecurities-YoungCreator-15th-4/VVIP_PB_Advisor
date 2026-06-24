@@ -55,9 +55,10 @@ def strip_markdown(text: str) -> str:
     """
     if not text:
         return text
-    # 코드펜스(```lang ... ```)를 먼저 제거 — 안쪽 코드는 보존하고 펜스 줄만 없앤다.
-    # (인라인 백틱 제거는 3중 백틱을 못 지우므로 펜스를 선행 처리한다.)
-    text = re.sub(r"```[a-zA-Z0-9_+-]*\n?(.*?)\n?```", r"\1", text, flags=re.DOTALL)
+    # 코드펜스(```lang ... ```)의 여는/닫는 펜스 마커만 제거하고 안쪽 코드는 보존한다.
+    # 펜스 마커와 같은 줄의 info string(``` 다음 언어 라벨)까지 한 번에 지운다.
+    # 부분식이 모두 선형(역참조·중첩수량자 없음)이라 ReDoS 위험이 없다.
+    text = re.sub(r"```[^\n`]*", "", text)
     # 줄머리 ATX 헤더(## 제목)·인용(> )·리스트 불릿(- / * ) 기호만 제거(내용 보존).
     lines = []
     for line in text.split("\n"):
@@ -67,10 +68,12 @@ def strip_markdown(text: str) -> str:
         lines.append(line)
     text = "\n".join(lines)
     # 굵게/기울임 강조 기호 제거(**, __, *, _) — 안쪽 텍스트는 그대로 둔다.
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-    text = re.sub(r"__(.+?)__", r"\1", text)
-    text = re.sub(r"\*(\S(?:.*?\S)?)\*", r"\1", text)
-    text = re.sub(r"(?<![\w])_(\S(?:.*?\S)?)_(?![\w])", r"\1", text)
+    # 모두 부정 문자클래스 기반 선형 패턴이라 중첩 수량자로 인한 ReDoS 가 없다.
+    text = re.sub(r"\*\*([^*\n]+)\*\*", r"\1", text)
+    text = re.sub(r"__([^_\n]+)__", r"\1", text)
+    # 기울임은 구분자 안쪽 첫 글자가 공백이 아닐 때만(예: '2 * 3' 같은 곱셈 오인 방지).
+    text = re.sub(r"\*([^*\s\n][^*\n]*)\*", r"\1", text)
+    text = re.sub(r"(?<!\w)_([^_\s\n][^_\n]*)_(?!\w)", r"\1", text)
     # 인라인 코드 백틱 제거.
     text = re.sub(r"`([^`]+)`", r"\1", text)
     return text.strip()
