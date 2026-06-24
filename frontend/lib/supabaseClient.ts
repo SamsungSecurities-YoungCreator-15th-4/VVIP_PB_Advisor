@@ -4,6 +4,10 @@
  * 이 인스턴스는 로그인/세션·access_token 관리에만 쓴다. 데이터 조회·생성은
  * 기존대로 FastAPI 백엔드(lib/api)를 통해 한다.
  *
+ * 저장소: @supabase/ssr 의 createBrowserClient 를 쓴다. 세션을 localStorage 가
+ * 아니라 '쿠키'에 저장하므로, 서버(proxy.ts)가 같은 세션을 읽어 라우트 보호를
+ * 강제할 수 있다. (구 createClient=localStorage 는 서버에서 못 읽어 미들웨어 불가였음)
+ *
  * anon 키는 공개 전제 키라 NEXT_PUBLIC_ 노출 OK. service_role 키는 절대 프론트에 두지 않는다.
  *
  * 지연 생성(lazy): 모듈 로드 시점이 아니라 첫 사용 시점에 클라이언트를 만든다.
@@ -11,9 +15,10 @@
  *   - 실제 호출(getSession·signIn) 시점에 env 가 없으면 그때 명확히 에러를 낸다.
  *
  * 주의: lib/api/clients.ts 의 createClient(고객 생성 함수)와 이름이 겹치지 않도록
- *       여기서는 supabase-js 의 createClient 를 getSupabase() 안에서만 쓴다.
+ *       여기서는 supabase-ssr 의 createBrowserClient 를 getSupabase() 안에서만 쓴다.
  */
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import { type SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | null = null;
 
@@ -29,6 +34,6 @@ export function getSupabase(): SupabaseClient {
     );
   }
 
-  client = createClient(supabaseUrl, supabaseAnonKey);
+  client = createBrowserClient(supabaseUrl, supabaseAnonKey);
   return client;
 }
