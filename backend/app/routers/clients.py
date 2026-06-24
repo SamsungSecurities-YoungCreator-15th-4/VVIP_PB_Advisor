@@ -15,6 +15,7 @@ import logging
 import math
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -121,9 +122,20 @@ class DashboardSnapshotResponse(BaseModel):
     consultation_id: str
     calculation_session_id: str
     dashboard_result: dict[str, Any]
-    stress_test_result: dict[str, Any]
+    stress_test_result: dict[str, Any] = Field(default_factory=dict)
     saved_at: str
     message: str
+
+
+def _validate_client_id(client_id: str) -> None:
+    """DB 조회 전에 client_id UUID 형식을 검증한다."""
+    try:
+        UUID(client_id)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(
+            status_code=400,
+            detail="올바르지 않은 고객 ID 형식입니다.",
+        ) from None
 
 
 def _get_owned_client_with_meta(
@@ -156,6 +168,8 @@ def save_client_dashboard_snapshot(
     상담이 끝날 때마다 previous_dashboard를 최신 결과로 덮어쓴다.
     따라서 다음 방문 때 GET하면 자동으로 직전 상담(n-1) 결과가 된다.
     """
+    _validate_client_id(client_id)
+
     if not request.dashboard_result:
         raise HTTPException(
             status_code=422,
@@ -299,6 +313,8 @@ def get_client_previous_dashboard(
     pb_id: str = Depends(get_current_pb_id),
 ) -> DashboardSnapshotResponse:
     """고객의 가장 최근 저장 결과, 즉 현재 방문 기준 직전 상담 결과를 반환한다."""
+    _validate_client_id(client_id)
+
     supabase = get_supabase()
 
     try:
