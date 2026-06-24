@@ -913,9 +913,10 @@ def test_pr106_gemini_review_range_failure_is_graceful(
             "forced simulation failure"
         )
 
+    # 분할 이후 build_portfolio_response 는 responses 모듈에서 이 함수를 직접
+    # 바인딩하므로, '사용되는 곳'(responses)에 패치해야 한다.
     monkeypatch.setattr(
-        portfolio_module,
-        "calculate_monte_carlo_metric_ranges",
+        "app.portfolio.responses.calculate_monte_carlo_metric_ranges",
         raise_simulation_error,
     )
 
