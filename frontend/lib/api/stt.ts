@@ -109,11 +109,11 @@ function mockConsultation(): SttConsultationData {
 }
 
 export async function uploadSttConsultation(
-  customerName: string,
+  clientId: string,
   file: File,
 ): Promise<ApiResult<SttConsultationData>> {
   const form = new FormData();
-  form.append("customer_name", customerName);
+  form.append("client_id", clientId);
   form.append("audio_file", file);
 
   try {

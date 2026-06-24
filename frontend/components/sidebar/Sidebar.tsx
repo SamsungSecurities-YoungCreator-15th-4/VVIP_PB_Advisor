@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import DataSourceBadge from "@/components/common/DataSourceBadge";
 import StressTestSection from "@/components/right-panel/StressTestSection";
+import SttRecordingModal from "@/components/sidebar/SttRecordingModal";
 import { type Customer, CUSTOMERS, PAST_CONSULTATIONS } from "@/lib/mockData";
 import {
   type ListedClient,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
+import { useSttRealtime } from "@/lib/useSttRealtime";
 
 const DEFAULT_CLIENT_TAX_PROFILE = {
   isaUsedManwon: 0,
@@ -100,6 +102,17 @@ export default function Sidebar() {
   const [newAum, setNewAum] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  const {
+    status: realtimeStatus,
+    errorMsg: realtimeError,
+    isPaused: realtimePaused,
+    analyserRef: realtimeAnalyser,
+    start: startRealtime,
+    stop: stopRealtime,
+    pause: pauseRealtime,
+    resume: resumeRealtime,
+  } = useSttRealtime();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -195,7 +208,11 @@ export default function Sidebar() {
   const handleTranscribe = async () => {
     if (!uploadedFile || sttStatus === "uploading") return;
     setSttStatus("uploading");
-    const res = await uploadSttConsultation(customer.name, uploadedFile);
+    if (!customer.clientId) {
+      setSttStatus("error", "고객 ID가 없습니다. 고객을 다시 선택해 주세요.");
+      return;
+    }
+    const res = await uploadSttConsultation(customer.clientId, uploadedFile);
     setTranscript(res.data.transcript, res.source);
     setConsultationId(res.data.consultationId);
     // 추출된 IPS 값만 조율기에 반영(없는 값은 기존 유지).
@@ -224,7 +241,15 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="flex w-[300px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
+      <SttRecordingModal
+        status={realtimeStatus}
+        isPaused={realtimePaused}
+        analyserRef={realtimeAnalyser}
+        onPause={pauseRealtime}
+        onResume={resumeRealtime}
+        onStop={stopRealtime}
+      />
+      <aside className="flex w-[300px] shrink-0 self-start flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
         {/* 패널 헤더 */}
         <div className="flex items-center px-0.5 pb-0.5">
           <button
@@ -309,16 +334,70 @@ export default function Sidebar() {
 
             <button
               type="button"
-              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+              disabled={
+                !customer.clientId ||
+                realtimeStatus === "connecting" ||
+                realtimeStatus === "stopping"
+              }
+              onClick={() => {
+                if (!customer.clientId) return;
+                if (realtimeStatus === "recording") {
+                  stopRealtime();
+                } else if (
+                  realtimeStatus === "idle" ||
+                  realtimeStatus === "done" ||
+                  realtimeStatus === "error"
+                ) {
+                  void startRealtime(customer.clientId);
+                }
+              }}
+              className={`flex-1 rounded-xl border-[1.5px] border-dashed px-3 py-1 text-center disabled:cursor-not-allowed disabled:opacity-50 ${
+                realtimeStatus === "recording"
+                  ? "border-red-400 bg-red-50"
+                  : "border-[#B8D4FF] bg-brand/5"
+              }`}
             >
-              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
-                <Mic className="size-4 text-brand" />
+              <span
+                className={`mx-auto mb-1 flex size-8 items-center justify-center rounded-full border ${
+                  realtimeStatus === "recording"
+                    ? "border-red-200 bg-red-50"
+                    : "border-[#DCE9FF] bg-white"
+                }`}
+              >
+                {realtimeStatus === "connecting" ||
+                realtimeStatus === "stopping" ? (
+                  <Loader2 className="size-4 animate-spin text-brand" />
+                ) : (
+                  <Mic
+                    className={`size-4 ${
+                      realtimeStatus === "recording"
+                        ? "animate-pulse text-red-500"
+                        : "text-brand"
+                    }`}
+                  />
+                )}
               </span>
-              <span className="block text-[13px] font-bold text-brand-dark">
-                실시간 녹음
+              <span
+                className={`block text-[13px] font-bold ${
+                  realtimeStatus === "recording"
+                    ? "text-red-600"
+                    : "text-brand-dark"
+                }`}
+              >
+                {realtimeStatus === "connecting"
+                  ? "연결 중..."
+                  : realtimeStatus === "recording"
+                    ? "녹음 중"
+                    : realtimeStatus === "stopping"
+                      ? "처리 중..."
+                      : "실시간 녹음"}
               </span>
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                STT
+                {realtimeStatus === "recording"
+                  ? "클릭해 종료"
+                  : customer.clientId
+                    ? "WebSocket STT"
+                    : "DB 고객 필요"}
               </span>
             </button>
           </div>
@@ -340,7 +419,7 @@ export default function Sidebar() {
               )}
             </Button>
           )}
-          {sttStatus === "done" && (
+          {(sttStatus === "done" || realtimeStatus === "done") && (
             <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">
               전사 완료 — 상담 내역·IPS 조율기에 반영했습니다.
             </p>
@@ -348,6 +427,11 @@ export default function Sidebar() {
           {sttStatus === "error" && (
             <p className="mt-1.5 text-[10px] font-semibold text-amber-600">
               {sttNote ?? "전사에 실패해 데모 데이터를 표시합니다."}
+            </p>
+          )}
+          {realtimeStatus === "error" && realtimeError && (
+            <p className="mt-1.5 text-[10px] font-semibold text-amber-600">
+              {realtimeError}
             </p>
           )}
         </Card>
@@ -391,7 +475,7 @@ export default function Sidebar() {
         </Card>
 
         {/* IPS 조율기 */}
-        <Card className="flex-1 gap-0 p-3">
+        <Card className="gap-0 p-3">
           <div className="mb-1">
             <p className="text-[14px] font-bold">IPS 조율기</p>
           </div>
@@ -465,11 +549,13 @@ export default function Sidebar() {
               className="h-6 text-[13px] md:text-[13px]"
             />
           </IpsRow>
-          <IpsRow k="Unique" sub="특수" last>
-            <Input
+          <IpsRow k="Unique" sub="특수" last alignTop>
+            <textarea
               value={ips.unique}
               onChange={(e) => setIps({ unique: e.target.value })}
-              className="h-6 text-[13px] md:text-[13px]"
+              rows={5}
+              className="w-full resize-none rounded-md border border-input bg-white px-3 py-1.5 text-[13px] font-medium text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="특이사항 입력..."
             />
           </IpsRow>
         </Card>
@@ -658,18 +744,20 @@ function IpsRow({
   k,
   sub,
   last,
+  alignTop,
   children,
 }: {
   k: string;
   sub: string;
   last?: boolean;
+  alignTop?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
-      className={`flex items-center gap-2 py-1.5 ${last ? "" : "border-b border-muted"}`}
+      className={`flex gap-2 py-1.5 ${alignTop ? "items-start" : "items-center"} ${last ? "" : "border-b border-muted"}`}
     >
-      <div className="w-14 shrink-0">
+      <div className={`w-14 shrink-0 ${alignTop ? "pt-1" : ""}`}>
         <b className="block text-[13px] font-extrabold">{k}</b>
         <span className="block text-[10px] font-semibold leading-none text-muted-foreground">
           {sub}

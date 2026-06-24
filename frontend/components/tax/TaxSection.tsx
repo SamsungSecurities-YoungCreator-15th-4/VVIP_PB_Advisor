@@ -13,11 +13,8 @@ import { useDashboardStore } from "@/lib/store";
 
 /** 중앙 하단: 절세 최적화 시뮬레이터 (절세 효과 / 종합과세 임계선 / 절세 제안) */
 export default function TaxSection() {
-  const { selectedPortfolioId, selectedCustomerId, customers } =
-    useDashboardStore();
+  const { selectedPortfolioId } = useDashboardStore();
   const portfolio = PORTFOLIOS.find((p) => p.id === selectedPortfolioId);
-  const customer =
-    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
   const baseLabel = `${portfolio?.name ?? "포트폴리오 A"}`;
 
   return (

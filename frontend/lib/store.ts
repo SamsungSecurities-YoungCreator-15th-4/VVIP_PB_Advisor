@@ -7,13 +7,15 @@ import { create } from "zustand";
 import {
   type ConsultMessage,
   type Customer,
+  type Portfolio,
   CONSULT_LOG,
   CUSTOMERS,
   IPS_DEFAULT,
+  PORTFOLIOS,
   SCENARIO_BASE,
   TAX_THRESHOLD,
 } from "./mockData";
-import type { DataSource } from "./api";
+import type { ApiResult, DataSource, InsightData } from "./api";
 
 export interface IpsState {
   returnPct: number;
@@ -52,6 +54,24 @@ interface DashboardState {
   sttStatus: SttStatus;
   sttNote?: string;
 
+  // ── 포트폴리오 계산 결과 ──
+  portfolios: Portfolio[];
+  portfolioSource: DataSource;
+  portfolioNote?: string;
+  setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
+
+  // ── 스트레스 테스트 결과 ──
+  stressedPortfolios: Portfolio[];
+  isStressMode: boolean;
+  stressAnalyzing: boolean;
+  setStressedPortfolios: (portfolios: Portfolio[]) => void;
+  setStressAnalyzing: (v: boolean) => void;
+  clearStressMode: () => void;
+
+  // ── AI 인사이트 결과 ──
+  insightResult: ApiResult<InsightData> | null;
+  setInsightResult: (result: ApiResult<InsightData>) => void;
+
   helpMode: boolean;
   toggleHelpMode: () => void;
 
@@ -89,6 +109,25 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   liveBase: { ratePct: SCENARIO_BASE.ratePct, fxKrw: SCENARIO_BASE.fxKrw },
   liveBaseLoaded: false,
   otherIncomeManwon: TAX_THRESHOLD.otherIncomeDefault,
+
+  // 초기 포트폴리오는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
+  portfolios: PORTFOLIOS,
+  portfolioSource: "fallback" as DataSource,
+  portfolioNote: "포트폴리오를 계산 중입니다.",
+  setPortfolios: (portfolios, source, note) =>
+    set({ portfolios, portfolioSource: source, portfolioNote: note }),
+
+  stressedPortfolios: [],
+  isStressMode: false,
+  stressAnalyzing: false,
+  setStressedPortfolios: (portfolios) =>
+    set({ stressedPortfolios: portfolios, isStressMode: true }),
+  setStressAnalyzing: (v) => set({ stressAnalyzing: v }),
+  clearStressMode: () =>
+    set({ stressedPortfolios: [], isStressMode: false }),
+
+  insightResult: null,
+  setInsightResult: (result) => set({ insightResult: result }),
 
   // 초기 상담 전사는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
   transcript: CONSULT_LOG,

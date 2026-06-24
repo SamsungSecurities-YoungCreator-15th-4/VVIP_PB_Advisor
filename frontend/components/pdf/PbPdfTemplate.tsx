@@ -10,7 +10,6 @@ import {
   INSIGHT,
   MACRO_INDICATORS,
   BASE_TIME,
-  IPS_DEFAULT,
 } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 
@@ -33,10 +32,6 @@ function useSelectedCustomer() {
   const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
   return customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 }
-
-const current = PORTFOLIOS.find((p) => p.id === "current")!;
-const portA = PORTFOLIOS.find((p) => p.id === "a")!;
-const portB = PORTFOLIOS.find((p) => p.id === "b")!;
 
 // 절세 계좌 배치 — 기준값(한도) 및 차트 최대값
 // 출처: 조세특례제한법 §91의18(ISA), 소득세법 §59의3(연금·IRP)
@@ -76,71 +71,6 @@ const WEIGHTS = {
   b: [28, 26, 22, 12, 8, 4],
 };
 
-const IPS_ROWS = [
-  {
-    key: "GOAL",
-    korean: "투자 목적",
-    tag: "복합",
-    tagColor: "#6B7280",
-    detail: IPS_DEFAULT.goal + " (3년 내 자금 활용 가능성 포함)",
-  },
-  {
-    key: "ASSET",
-    korean: "운용 자산",
-    tag: IPS_DEFAULT.assetLabel,
-    tagColor: "#F59E0B",
-    detail: "총 운용 가능 자산 기준. 기존 자산 구성 변경 검토 중",
-  },
-  {
-    key: "RETURN",
-    korean: "목표 수익률",
-    tag: `${IPS_DEFAULT.returnPct}%`,
-    tagColor: "#10B981",
-    detail: `연 ${IPS_DEFAULT.returnPct}% 목표 (세후 기준). 변동성 최소화 조건 병행`,
-  },
-  {
-    key: "RISK",
-    korean: "위험 성향",
-    tag: IPS_DEFAULT.risk,
-    tagColor: "#F59E0B",
-    detail: "안정형~공격형 스펙트럼 중 균형형. MDD -15% 이내 선호",
-  },
-  {
-    key: "TIME",
-    korean: "투자 기간",
-    tag: `${IPS_DEFAULT.timeYears}년`,
-    tagColor: BRAND,
-    detail: "장기 운용 기준. 단, 유동성 필요 시 분리 운용 필요",
-  },
-  {
-    key: "TAX",
-    korean: "세금",
-    tag: "종합과세",
-    tagColor: UP,
-    detail: IPS_DEFAULT.tax + " 절세전략 필요",
-  },
-  {
-    key: "LIQUID",
-    korean: "유동성",
-    tag: IPS_DEFAULT.liquidity,
-    tagColor: "#F59E0B",
-    detail: "낮음~높음 중 중간. 비상자금 3억 별도 보유 권장",
-  },
-  {
-    key: "LEGAL",
-    korean: "법적 제약",
-    tag: "검토필요",
-    tagColor: UP,
-    detail: IPS_DEFAULT.legal + ". 사전 증여 전략 수립 권장",
-  },
-  {
-    key: "UNIQUE",
-    korean: "특수 사항",
-    tag: "복합",
-    tagColor: "#6B7280",
-    detail: IPS_DEFAULT.unique,
-  },
-];
 
 // 스트레스 테스트 시나리오 — 포트폴리오 A 기준 운용자산 18억원 시뮬레이션 추정치
 const SCENARIO_ROWS = [
@@ -360,6 +290,12 @@ function AssetBar({
 function CoverPage() {
   const customer = useSelectedCustomer();
   const today = getToday();
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const selectedPortfolioName =
+    (storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS).find(
+      (p) => p.id === selectedPortfolioId,
+    )?.name ?? "포트폴리오 A";
   return (
     <div
       data-pdf-page=""
@@ -404,22 +340,12 @@ function CoverPage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 9,
-                background: "rgba(255,255,255,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 18,
-                fontWeight: 900,
-                color: "white",
-              }}
-            >
-              S
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt=""
+              style={{ width: 36, height: 36, borderRadius: 9, objectFit: "cover" }}
+            />
             <div>
               <div
                 style={{
@@ -522,7 +448,7 @@ function CoverPage() {
           {[
             { label: "보고서 일자", value: today },
             { label: "기준 시각", value: `${BASE_TIME} 기준` },
-            { label: "선택 포트폴리오", value: "포트폴리오 A" },
+            { label: "선택 포트폴리오", value: selectedPortfolioName },
             {
               label: "예상 연간 절세",
               value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원/년`,
@@ -581,6 +507,73 @@ function CoverPage() {
 
 // ── 페이지 2: 시장 현황 & IPS ────────────────────────────────────
 function MarketIpsPage() {
+  const customer = useSelectedCustomer();
+  const ips = useDashboardStore((s) => s.ips);
+  const IPS_ROWS = [
+    {
+      key: "GOAL",
+      korean: "투자 목적",
+      tag: "복합",
+      tagColor: "#6B7280",
+      detail: ips.goal + " (3년 내 자금 활용 가능성 포함)",
+    },
+    {
+      key: "ASSET",
+      korean: "운용 자산",
+      tag: customer.aumLabel,
+      tagColor: "#F59E0B",
+      detail: "총 운용 가능 자산 기준. 기존 자산 구성 변경 검토 중",
+    },
+    {
+      key: "RETURN",
+      korean: "목표 수익률",
+      tag: `${ips.returnPct}%`,
+      tagColor: "#10B981",
+      detail: `연 ${ips.returnPct}% 목표 (세후 기준). 변동성 최소화 조건 병행`,
+    },
+    {
+      key: "RISK",
+      korean: "위험 성향",
+      tag: ips.risk,
+      tagColor: "#F59E0B",
+      detail: "안정형~공격형 스펙트럼 중 균형형. MDD -15% 이내 선호",
+    },
+    {
+      key: "TIME",
+      korean: "투자 기간",
+      tag: `${ips.timeYears}년`,
+      tagColor: BRAND,
+      detail: "장기 운용 기준. 단, 유동성 필요 시 분리 운용 필요",
+    },
+    {
+      key: "TAX",
+      korean: "세금",
+      tag: "종합과세",
+      tagColor: UP,
+      detail: ips.tax + " 절세전략 필요",
+    },
+    {
+      key: "LIQUID",
+      korean: "유동성",
+      tag: ips.liquidity,
+      tagColor: "#F59E0B",
+      detail: "낮음~높음 중 중간. 비상자금 3억 별도 보유 권장",
+    },
+    {
+      key: "LEGAL",
+      korean: "법적 제약",
+      tag: "검토필요",
+      tagColor: UP,
+      detail: ips.legal + ". 사전 증여 전략 수립 권장",
+    },
+    {
+      key: "UNIQUE",
+      korean: "특수 사항",
+      tag: "복합",
+      tagColor: "#6B7280",
+      detail: ips.unique,
+    },
+  ];
   return (
     <div
       data-pdf-page=""
@@ -752,6 +745,11 @@ function MarketIpsPage() {
 
 // ── 페이지 3: 포트폴리오 비교 ────────────────────────────────────
 function PortfolioPage() {
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const displayPortfolios = storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS;
+  const current = displayPortfolios.find((p) => p.id === "current") ?? PORTFOLIOS.find((p) => p.id === "current")!;
+  const portA = displayPortfolios.find((p) => p.id === "a") ?? PORTFOLIOS.find((p) => p.id === "a")!;
+  const portB = displayPortfolios.find((p) => p.id === "b") ?? PORTFOLIOS.find((p) => p.id === "b")!;
   const cols = [
     {
       p: current,
@@ -1785,6 +1783,9 @@ function TaxProductsPage() {
 
 // ── 페이지 6: AI 인사이트 ────────────────────────────────────────
 function AiPage() {
+  const insightResult = useDashboardStore((s) => s.insightResult);
+  const answer = insightResult?.data?.answer ?? INSIGHT.defaultAnswer;
+  const citationSources = insightResult?.data?.citations ?? INSIGHT.sources;
   return (
     <div
       data-pdf-page=""
@@ -1882,7 +1883,7 @@ function AiPage() {
                 paddingTop: 1,
               }}
             >
-              {INSIGHT.defaultAnswer}
+              {answer}
             </span>
           </div>
         </div>
@@ -1927,7 +1928,7 @@ function AiPage() {
             </tr>
           </thead>
           <tbody>
-            {INSIGHT.sources.map((src, i) => (
+            {citationSources.map((src, i) => (
               <tr
                 key={src.title}
                 style={{

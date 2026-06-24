@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import AssetDonut from "@/components/portfolio/AssetDonut";
 import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
 import { toDisplayAllocation } from "@/lib/assetMapping";
-import { PORTFOLIOS, type Portfolio } from "@/lib/mockData";
+import { fetchPortfolioCalculate } from "@/lib/api";
+import { type Portfolio } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 import HelpTooltip from "@/components/common/HelpTooltip";
 
@@ -25,24 +27,79 @@ const METRIC_HELP: Record<string, string> = {
 
 /** 중앙 상단: 현재 / 포트폴리오 A / 포트폴리오 B — 카드 클릭으로 선택 */
 export default function PortfolioSection() {
-  const { selectedPortfolioId, selectPortfolio } = useDashboardStore();
+  const {
+    selectedPortfolioId, selectPortfolio,
+    portfolios, portfolioSource, portfolioNote, setPortfolios,
+    stressedPortfolios, isStressMode, stressAnalyzing,
+    selectedCustomerId, customers,
+    ips, liveBase, consultationId,
+  } = useDashboardStore();
+
+  const displayPortfolios = isStressMode && stressedPortfolios.length > 0
+    ? stressedPortfolios
+    : portfolios;
+  const [calculating, setCalculating] = useState(false);
+
+  // 고객 선택 또는 마운트 시 포트폴리오 계산
+  useEffect(() => {
+    const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+    if (!customer) return;
+
+    let cancelled = false;
+    const tid = setTimeout(() => { if (!cancelled) setCalculating(true); }, 0);
+    fetchPortfolioCalculate({
+      aumEokwon: customer.aumEokwon,
+      returnPct: ips.returnPct,
+      risk: ips.risk,
+      timeYears: ips.timeYears,
+      liquidity: ips.liquidity,
+      tax: ips.tax,
+      ratePct: liveBase.ratePct,
+      fxKrw: liveBase.fxKrw,
+      consultationId: consultationId || undefined,
+      clientId: customer.id,
+    }).then((result) => {
+      if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
+    }).finally(() => {
+      if (!cancelled) setCalculating(false);
+    });
+    return () => { cancelled = true; clearTimeout(tid); };
+  }, [selectedCustomerId, customers, ips.returnPct, ips.risk, ips.timeYears, ips.liquidity, ips.tax, liveBase.ratePct, liveBase.fxKrw, consultationId, setPortfolios]);
+
+  const asOf = new Date().toLocaleDateString("ko-KR", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).replace(/\. /g, ".").replace(/\.$/, "");
 
   return (
     <section>
       <div className="mb-2 flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2.5">
           <h2 className="text-lg font-extrabold">포트폴리오 대시보드</h2>
-          <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
-            <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
-            연동 완료
-          </div>
+          {(calculating || stressAnalyzing) ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              분석중...
+            </div>
+          ) : portfolioSource === "live" ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
+              <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
+              연동 완료
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700"
+              title={portfolioNote}
+            >
+              ⚠ 데모
+            </div>
+          )}
         </div>
         <span className="text-[11px] font-semibold text-muted-foreground">
-          2026.06.08 기준
+          {asOf} 기준
         </span>
       </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        {PORTFOLIOS.map((pf) => (
+        {displayPortfolios.map((pf) => (
           <PortfolioCard
             key={pf.id}
             pf={pf}

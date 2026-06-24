@@ -236,3 +236,6 @@ export type {
   CreateClientResult,
   ListedClient,
 } from "./api/clients";
+
+export { fetchPortfolioCalculate, fetchPortfolioStressTest } from "./api/portfolio";
+export type { PortfolioCalcOptions, PortfolioCalcData } from "./api/portfolio";
