@@ -102,17 +102,17 @@ class ClientListResponse(BaseModel):
 
 
 class DashboardSnapshotSaveRequest(BaseModel):
-    """상담 종료 후 저장할 중앙 대시보드 전체 결과."""
+    """현재 상담의 첫 번째 포트폴리오 분석 결과 저장 요청."""
 
     consultation_id: str = Field(..., min_length=1)
     calculation_session_id: str = Field(..., min_length=1)
     dashboard_result: dict[str, Any] = Field(
         ...,
-        description="POST /portfolio/calculate 응답 전체",
+        description="현재 상담에서 처음 실행한 POST /portfolio/calculate 응답 전체",
     )
     stress_test_result: dict[str, Any] = Field(
         default_factory=dict,
-        description="중앙 대시보드 스트레스 테스트 결과 전체",
+        description="첫 분석 시점의 스트레스 결과. 아직 실행하지 않았다면 빈 객체",
     )
 
 
@@ -127,15 +127,18 @@ class DashboardSnapshotResponse(BaseModel):
     message: str
 
 
-def _validate_client_id(client_id: str) -> None:
-    """DB 조회 전에 client_id UUID 형식을 검증한다."""
+def _validate_uuid(value: str, field_name: str) -> None:
     try:
-        UUID(client_id)
+        UUID(value)
     except (ValueError, AttributeError, TypeError):
         raise HTTPException(
             status_code=400,
-            detail="올바르지 않은 고객 ID 형식입니다.",
+            detail=f"올바르지 않은 {field_name} 형식입니다.",
         ) from None
+
+
+def _validate_client_id(client_id: str) -> None:
+    _validate_uuid(client_id, "고객 ID")
 
 
 def _get_owned_client_with_meta(
@@ -154,6 +157,55 @@ def _get_owned_client_with_meta(
     return result.data[0] if result.data else None
 
 
+def _validate_snapshot_payload_ids(
+    payload: dict[str, Any],
+    *,
+    payload_name: str,
+    client_id: str,
+    consultation_id: str,
+    calculation_session_id: str,
+) -> None:
+    """payload 안에 식별자가 있다면 바깥 요청 식별자와 일치해야 한다."""
+    expected = {
+        "client_id": client_id,
+        "consultation_id": consultation_id,
+        "calculation_session_id": calculation_session_id,
+    }
+    for key, expected_value in expected.items():
+        actual_value = payload.get(key)
+        if actual_value is not None and str(actual_value) != expected_value:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{payload_name}.{key}와 요청의 {key}가 "
+                    "일치하지 않습니다."
+                ),
+            )
+
+
+def _build_existing_snapshot_response(
+    snapshot: dict[str, Any],
+) -> DashboardSnapshotResponse:
+    """같은 상담에서 재호출되면 저장값은 유지하고 saved=False로 응답한다."""
+    try:
+        return DashboardSnapshotResponse(
+            **{
+                **snapshot,
+                "saved": False,
+                "message": (
+                    "현재 상담의 첫 분석 결과가 이미 저장되어 있어 "
+                    "후속 분석 결과로 덮어쓰지 않았습니다."
+                ),
+            }
+        )
+    except Exception as exc:
+        logger.exception("invalid existing previous_dashboard payload")
+        raise HTTPException(
+            status_code=500,
+            detail="기존 직전 상담 대시보드 결과 형식이 올바르지 않습니다.",
+        ) from exc
+
+
 @router.post(
     "/{client_id}/dashboard-snapshot",
     response_model=DashboardSnapshotResponse,
@@ -163,12 +215,20 @@ def save_client_dashboard_snapshot(
     request: DashboardSnapshotSaveRequest,
     pb_id: str = Depends(get_current_pb_id),
 ) -> DashboardSnapshotResponse:
-    """현재 상담 결과를 저장한다.
+    """고객별로 가장 최근 상담의 첫 분석 결과 한 건만 유지한다.
 
-    상담이 끝날 때마다 previous_dashboard를 최신 결과로 덮어쓴다.
-    따라서 다음 방문 때 GET하면 자동으로 직전 상담(n-1) 결과가 된다.
+    예시:
+    - 3회차 시작 시 GET -> 현재 저장된 2-1 반환
+    - 3회차 첫 분석 POST -> 3-1로 교체 저장
+    - 같은 consultation_id의 3-2, 3-3 POST -> 3-1 유지
+    - 4회차 첫 분석 POST -> 4-1로 교체 저장
+
+    따라서 과거 1-1, 2-1, 3-1을 누적하지 않고 client.meta에는 항상
+    최신 상담의 첫 분석 결과 한 건만 존재한다.
     """
     _validate_client_id(client_id)
+    _validate_uuid(request.consultation_id, "상담 ID")
+    _validate_uuid(request.calculation_session_id, "계산 세션 ID")
 
     if not request.dashboard_result:
         raise HTTPException(
@@ -176,66 +236,20 @@ def save_client_dashboard_snapshot(
             detail="dashboard_result는 비어 있을 수 없습니다.",
         )
 
-    dashboard_session_id = request.dashboard_result.get(
-        "calculation_session_id"
+    _validate_snapshot_payload_ids(
+        request.dashboard_result,
+        payload_name="dashboard_result",
+        client_id=client_id,
+        consultation_id=request.consultation_id,
+        calculation_session_id=request.calculation_session_id,
     )
-    if (
-        dashboard_session_id is not None
-        and str(dashboard_session_id)
-        != request.calculation_session_id
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "dashboard_result.calculation_session_id와 "
-                "요청의 calculation_session_id가 일치하지 않습니다."
-            ),
-        )
-
-    dashboard_client_id = request.dashboard_result.get("client_id")
-    if (
-        dashboard_client_id is not None
-        and str(dashboard_client_id) != client_id
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "dashboard_result.client_id와 URL의 client_id가 "
-                "일치하지 않습니다."
-            ),
-        )
-
-    dashboard_consultation_id = request.dashboard_result.get(
-        "consultation_id"
+    _validate_snapshot_payload_ids(
+        request.stress_test_result,
+        payload_name="stress_test_result",
+        client_id=client_id,
+        consultation_id=request.consultation_id,
+        calculation_session_id=request.calculation_session_id,
     )
-    if (
-        dashboard_consultation_id is not None
-        and str(dashboard_consultation_id)
-        != request.consultation_id
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "dashboard_result.consultation_id와 요청의 "
-                "consultation_id가 일치하지 않습니다."
-            ),
-        )
-
-    stress_session_id = request.stress_test_result.get(
-        "calculation_session_id"
-    )
-    if (
-        stress_session_id is not None
-        and str(stress_session_id)
-        != request.calculation_session_id
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "stress_test_result.calculation_session_id와 "
-                "요청의 calculation_session_id가 일치하지 않습니다."
-            ),
-        )
 
     supabase = get_supabase()
 
@@ -258,6 +272,22 @@ def save_client_dashboard_snapshot(
             detail="담당 고객을 찾을 수 없습니다.",
         )
 
+    current_meta = (
+        client.get("meta")
+        if isinstance(client.get("meta"), dict)
+        else {}
+    )
+    existing_snapshot = current_meta.get("previous_dashboard")
+
+    # 핵심: 같은 consultation_id면 이미 n-1이 저장된 상태다.
+    # 후속 분석(n-2, n-3...)은 절대 덮어쓰지 않는다.
+    if (
+        isinstance(existing_snapshot, dict)
+        and str(existing_snapshot.get("consultation_id") or "")
+        == request.consultation_id
+    ):
+        return _build_existing_snapshot_response(existing_snapshot)
+
     saved_at = datetime.now(KST).isoformat(timespec="seconds")
     snapshot = {
         "saved": True,
@@ -267,14 +297,12 @@ def save_client_dashboard_snapshot(
         "dashboard_result": request.dashboard_result,
         "stress_test_result": request.stress_test_result,
         "saved_at": saved_at,
-        "message": "현재 상담 대시보드 결과가 저장되었습니다.",
+        "message": (
+            "현재 상담의 첫 분석 결과를 저장했습니다. "
+            "기존 상담 결과는 교체되어 별도로 누적되지 않습니다."
+        ),
     }
 
-    current_meta = (
-        client.get("meta")
-        if isinstance(client.get("meta"), dict)
-        else {}
-    )
     updated_meta = {
         **current_meta,
         "previous_dashboard": snapshot,
@@ -289,10 +317,10 @@ def save_client_dashboard_snapshot(
             .execute()
         )
     except Exception as exc:
-        logger.exception("client dashboard snapshot update failed")
+        logger.exception("client first dashboard snapshot update failed")
         raise HTTPException(
             status_code=500,
-            detail="대시보드 결과 저장 중 오류가 발생했습니다.",
+            detail="상담 첫 분석 결과 저장 중 오류가 발생했습니다.",
         ) from exc
 
     if not result.data:
@@ -312,7 +340,7 @@ def get_client_previous_dashboard(
     client_id: str,
     pb_id: str = Depends(get_current_pb_id),
 ) -> DashboardSnapshotResponse:
-    """고객의 가장 최근 저장 결과, 즉 현재 방문 기준 직전 상담 결과를 반환한다."""
+    """고객 선택 직후 표시할 가장 최근 상담의 첫 분석 결과 한 건을 반환한다."""
     _validate_client_id(client_id)
 
     supabase = get_supabase()
@@ -327,7 +355,7 @@ def get_client_previous_dashboard(
         logger.exception("client previous dashboard lookup failed")
         raise HTTPException(
             status_code=500,
-            detail="이전 대시보드 결과 조회 중 오류가 발생했습니다.",
+            detail="직전 상담 대시보드 결과 조회 중 오류가 발생했습니다.",
         ) from exc
 
     if not client:
@@ -346,7 +374,7 @@ def get_client_previous_dashboard(
     if not isinstance(snapshot, dict):
         raise HTTPException(
             status_code=404,
-            detail="이 고객의 이전 상담 대시보드 결과가 없습니다.",
+            detail="이 고객의 저장된 직전 상담 첫 분석 결과가 없습니다.",
         )
 
     try:
@@ -355,7 +383,7 @@ def get_client_previous_dashboard(
         logger.exception("invalid previous_dashboard payload")
         raise HTTPException(
             status_code=500,
-            detail="저장된 이전 대시보드 결과 형식이 올바르지 않습니다.",
+            detail="저장된 직전 상담 대시보드 결과 형식이 올바르지 않습니다.",
         ) from exc
 
 

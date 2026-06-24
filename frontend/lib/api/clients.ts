@@ -102,3 +102,108 @@ export async function listClients(): Promise<ApiResult<ListedClient[]>> {
     );
   }
 }
+
+// ── 직전 상담 첫 분석 스냅샷 API ──
+
+export interface DashboardSnapshot {
+  /** true: 새 상담의 첫 분석을 저장함, false: 같은 상담이라 기존 첫 분석을 유지함 */
+  saved: boolean;
+  clientId: string;
+  consultationId: string;
+  calculationSessionId: string;
+  dashboardResult: Record<string, unknown>;
+  stressTestResult: Record<string, unknown>;
+  savedAt: string;
+  message: string;
+}
+
+interface DashboardSnapshotRaw {
+  saved: boolean;
+  client_id: string;
+  consultation_id: string;
+  calculation_session_id: string;
+  dashboard_result: Record<string, unknown>;
+  stress_test_result?: Record<string, unknown> | null;
+  saved_at: string;
+  message: string;
+}
+
+export interface SaveFirstDashboardSnapshotInput {
+  clientId: string;
+  consultationId: string;
+  /** POST /portfolio/calculate 응답 전체 */
+  dashboardResult: Record<string, unknown>;
+  /** 첫 분석 시 스트레스 결과가 없다면 생략 */
+  stressTestResult?: Record<string, unknown>;
+}
+
+function mapDashboardSnapshot(raw: DashboardSnapshotRaw): DashboardSnapshot {
+  return {
+    saved: raw.saved,
+    clientId: raw.client_id,
+    consultationId: raw.consultation_id,
+    calculationSessionId: raw.calculation_session_id,
+    dashboardResult: raw.dashboard_result,
+    stressTestResult: raw.stress_test_result ?? {},
+    savedAt: raw.saved_at,
+    message: raw.message,
+  };
+}
+
+/**
+ * PB 접속 또는 고객 선택 직후 호출한다.
+ * 저장값이 없으면 null, 있으면 예를 들어 3회차 상담 시작 시 2-1을 반환한다.
+ */
+export async function getPreviousDashboard(
+  clientId: string,
+): Promise<DashboardSnapshot | null> {
+  if (!clientId) return null;
+
+  try {
+    const raw = await apiGet<DashboardSnapshotRaw>(
+      `/clients/${encodeURIComponent(clientId)}/previous-dashboard`,
+    );
+    return mapDashboardSnapshot(raw);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * 분석하기의 /portfolio/calculate 성공 직후 호출한다.
+ * 같은 consultationId로 여러 번 호출되어도 백엔드는 첫 번째 결과만 유지한다.
+ */
+export async function saveFirstDashboardSnapshot(
+  input: SaveFirstDashboardSnapshotInput,
+): Promise<DashboardSnapshot> {
+  const calculationSessionId = String(
+    input.dashboardResult.calculation_session_id ?? "",
+  );
+
+  if (!input.clientId) {
+    throw new Error("clientId가 없어 상담 첫 분석 결과를 저장할 수 없습니다.");
+  }
+  if (!input.consultationId) {
+    throw new Error("consultationId가 없어 상담 첫 분석 결과를 저장할 수 없습니다.");
+  }
+  if (!calculationSessionId) {
+    throw new Error(
+      "dashboardResult.calculation_session_id가 없어 상담 첫 분석 결과를 저장할 수 없습니다.",
+    );
+  }
+
+  const raw = await apiPost<DashboardSnapshotRaw>(
+    `/clients/${encodeURIComponent(input.clientId)}/dashboard-snapshot`,
+    {
+      consultation_id: input.consultationId,
+      calculation_session_id: calculationSessionId,
+      dashboard_result: input.dashboardResult,
+      stress_test_result: input.stressTestResult ?? {},
+    },
+  );
+
+  return mapDashboardSnapshot(raw);
+}
+
+// ── 직전 상담 첫 분석 스냅샷 API 끝 ──
