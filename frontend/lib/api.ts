@@ -206,6 +206,14 @@ export type { TaxInsightData } from "./api/tax";
 export { uploadSttConsultation } from "./api/stt";
 export type { SttConsultationData, IpsPatch } from "./api/stt";
 
+export { fetchStressMetrics, mapMetrics } from "./api/stress";
+export type {
+  CrisisScenario,
+  StressMode,
+  StressMetricsResult,
+  StressMetricsOptions,
+} from "./api/stress";
+
 export { createClient, listClients } from "./api/clients";
 export type {
   CreatedClient,

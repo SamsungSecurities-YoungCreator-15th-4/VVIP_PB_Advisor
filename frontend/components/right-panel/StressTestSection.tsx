@@ -27,7 +27,14 @@ type PresetKey = "current" | (typeof SCENARIO_PRESETS)[number]["key"];
 
 /** 우측 상단: 시나리오 Test — 금리·환율 슬라이더와 예상 평가손익 */
 export default function StressTestSection() {
-  const { scenario, setScenario, liveBase, setLiveBase } = useDashboardStore();
+  const {
+    scenario,
+    setScenario,
+    liveBase,
+    setLiveBase,
+    activeScenario,
+    activateScenario,
+  } = useDashboardStore();
   const { byId, failed, aumEokwon } = useStressedPortfolios();
   const [preset, setPreset] = useState<PresetKey | null>("current");
 
@@ -115,6 +122,29 @@ export default function StressTestSection() {
         ))}
       </div>
 
+      <div className="mb-3.5">
+        <p className="mb-2 text-[13px] font-bold text-muted-foreground">
+          위기 시나리오
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <ScenarioButton
+            label="2008 금융위기"
+            active={activeScenario === "crisis_2008"}
+            onClick={() => activateScenario("crisis_2008")}
+          />
+          <ScenarioButton
+            label="2022 러우전쟁"
+            active={activeScenario === "crisis_ru_war"}
+            onClick={() => activateScenario("crisis_ru_war")}
+          />
+        </div>
+        {activeScenario && (
+          <p className="mt-1.5 text-[11px] font-semibold text-brand-dark">
+            위기 시나리오 적용 중 · 슬라이더를 조정하면 해제됩니다
+          </p>
+        )}
+      </div>
+
       <ScenarioSlider
         label="금리"
         valueLabel={`${scenario.ratePct.toFixed(2)}%`}
@@ -174,6 +204,31 @@ export default function StressTestSection() {
         })}
       </div>
     </Card>
+  );
+}
+
+function ScenarioButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-xl px-3 py-2 text-[12px] font-bold transition-colors ${
+        active
+          ? "bg-brand text-white shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
+          : "bg-muted text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
