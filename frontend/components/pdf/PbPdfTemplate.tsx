@@ -515,7 +515,7 @@ function MarketIpsPage() {
       korean: "투자 목적",
       tag: "복합",
       tagColor: "#6B7280",
-      detail: ips.goal + " (3년 내 자금 활용 가능성 포함)",
+      detail: (ips.goal ?? "") + " (3년 내 자금 활용 가능성 포함)",
     },
     {
       key: "ASSET",
@@ -550,7 +550,7 @@ function MarketIpsPage() {
       korean: "세금",
       tag: "종합과세",
       tagColor: UP,
-      detail: ips.tax + " 절세전략 필요",
+      detail: (ips.tax ?? "") + " 절세전략 필요",
     },
     {
       key: "LIQUID",
@@ -564,7 +564,7 @@ function MarketIpsPage() {
       korean: "법적 제약",
       tag: "검토필요",
       tagColor: UP,
-      detail: ips.legal + ". 사전 증여 전략 수립 권장",
+      detail: (ips.legal ?? "") + ". 사전 증여 전략 수립 권장",
     },
     {
       key: "UNIQUE",

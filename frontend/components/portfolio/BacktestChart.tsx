@@ -95,9 +95,20 @@ export default function BacktestChart() {
 
   const xKey = hasRealData ? "date" : "year";
   const xTicks = hasRealData
-    ? (chartData as { date: string }[])
-        .filter((d) => d.date.slice(5, 7) === "01")
-        .map((d) => d.date)
+    ? (() => {
+        // 연도가 바뀌는 첫 데이터 포인트만 틱으로 선택 — 1월 영업일 전체를 잡으면
+        // 라벨이 겹치므로 연도당 정확히 하나만 표시한다.
+        const ticks: string[] = [];
+        let lastYear = "";
+        for (const d of chartData as { date: string }[]) {
+          const year = d.date.slice(0, 4);
+          if (year !== lastYear) {
+            ticks.push(d.date);
+            lastYear = year;
+          }
+        }
+        return ticks;
+      })()
     : ["2021", "2022", "2023", "2024", "2025", "2026"];
 
   return (

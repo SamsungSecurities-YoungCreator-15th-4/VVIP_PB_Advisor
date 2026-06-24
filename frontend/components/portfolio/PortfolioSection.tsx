@@ -94,7 +94,10 @@ export default function PortfolioSection() {
             </div>
           )}
         </div>
-        <span className="text-[11px] font-semibold text-muted-foreground">
+        <span
+          className="text-[11px] font-semibold text-muted-foreground"
+          suppressHydrationWarning
+        >
           {asOf} 기준
         </span>
       </div>
