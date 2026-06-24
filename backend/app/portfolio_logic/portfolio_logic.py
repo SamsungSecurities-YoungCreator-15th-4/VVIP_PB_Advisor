@@ -3354,6 +3354,59 @@ def derive_asset_shocks_from_macro(
     return shocks
 
 
+# ── 역사적 위기 시나리오 프리셋 (버튼식 재현용) ──────────────────────────────
+# 자산군별 연간 충격(소수). calculate_metrics(shocks=...)에 그대로 주입한다.
+# 금리·환율 2축 슬라이더로는 주식 급락·상관관계 붕괴를 표현 못 하므로, 위기는
+# 자산군별 실측 충격 벡터로 별도 정의한다. 값은 각 위기 국면 실현 수익률 점추정.
+#
+# 출처(연간 실현 수익률 점추정):
+#   2008 금융위기: KOSPI -41%, S&P500 -38.5%, Nasdaq100 -41%, 리츠(NAREIT) -37%,
+#     美 종합채권 +5%(국채 강세), 금 +5.5%, 원자재/유가 폭락, 달러 강세.
+#   2022 러우전쟁·인플레: KOSPI -25%, S&P500 -19.4%, Nasdaq100 -33%, 美 종합채권 -13%,
+#     장기채 -30%대, 리츠 -25%, 금 -0.3%, Bloomberg 원자재 +16%, 달러지수 +8%.
+# ※ 점추정이며 실측 회귀계수 아님. 환헤지 여부·국면에 따라 실제값은 달라질 수 있다.
+CRISIS_SCENARIO_SHOCKS: Dict[str, Dict[str, float]] = {
+    "crisis_2008": {
+        "domestic_equity": -0.40,
+        "overseas_blue_chip": -0.38,
+        "overseas_growth": -0.42,
+        "overseas_dividend": -0.30,
+        "general_bond": 0.08,
+        "separate_tax_bond": 0.12,
+        "low_coupon_bond": 0.10,
+        "reit": -0.40,
+        "gold": 0.05,
+        "commodity": -0.40,
+        "dollar": 0.15,
+        "cash": 0.0,
+    },
+    "crisis_ru_war": {
+        "domestic_equity": -0.25,
+        "overseas_blue_chip": -0.19,
+        "overseas_growth": -0.33,
+        "overseas_dividend": -0.05,
+        "general_bond": -0.13,
+        "separate_tax_bond": -0.25,
+        "low_coupon_bond": -0.12,
+        "reit": -0.25,
+        "gold": 0.0,
+        "commodity": 0.20,
+        "dollar": 0.08,
+        "cash": 0.0,
+    },
+}
+
+
+def resolve_scenario_shocks(scenario: str, assets: List[str]) -> Dict[str, float]:
+    """위기 시나리오 키 → 보유 자산에 해당하는 충격 벡터(0 제외)."""
+    preset = CRISIS_SCENARIO_SHOCKS.get(scenario)
+    if preset is None:
+        raise ValueError(
+            f"알 수 없는 시나리오: {scenario}. 지원: {sorted(CRISIS_SCENARIO_SHOCKS)}"
+        )
+    return {a: preset[a] for a in assets if a in preset and preset[a] != 0.0}
+
+
 def apply_return_shocks(
     selected_returns: pd.DataFrame,
     selected_expected_returns: pd.Series,
@@ -6893,6 +6946,9 @@ class StressMetricsRequest(BaseModel):
 
     weights: Optional[Dict[str, float]] = Field(None)
     portfolio: PortfolioRequest
+    # 위기 시나리오 버튼용. 지정 시 금리·환율 슬라이더 대신 해당 위기 충격 벡터를 주입한다.
+    # None이면 슬라이더(금리·환율) 기반. Literal로 두어 Pydantic이 입구에서 값 검증·문서화.
+    scenario: Optional[Literal["crisis_2008", "crisis_ru_war"]] = Field(None)
 
 
 @router.post("/portfolio/stress-metrics", response_model=Dict[str, Any])
@@ -6928,7 +6984,11 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             for asset in weights
             if asset in returns.columns and weights[asset] > 1e-12
         ]
-        asset_shocks = derive_asset_shocks_from_macro(assets, req)
+        # 위기 시나리오 버튼이면 해당 위기 충격 벡터, 아니면 금리·환율 슬라이더 충격.
+        if request.scenario:
+            asset_shocks = resolve_scenario_shocks(request.scenario, assets)
+        else:
+            asset_shocks = derive_asset_shocks_from_macro(assets, req)
         stressed = calculate_metrics(
             weights,
             analysis_returns,
@@ -6940,8 +7000,12 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
 
         return {
             "as_of": datetime.now(KST).isoformat(timespec="seconds"),
-            "stress_interest_rate_shock": req.stress_interest_rate_shock,
-            "stress_fx_shock": req.stress_fx_shock,
+            "scenario": request.scenario,
+            # 위기 시나리오일 땐 슬라이더 충격이 무시되므로 None으로 명시(오해 방지).
+            "stress_interest_rate_shock": (
+                None if request.scenario else req.stress_interest_rate_shock
+            ),
+            "stress_fx_shock": None if request.scenario else req.stress_fx_shock,
             "asset_shocks": {k: safe_round(v, 6) for k, v in asset_shocks.items()},
             "base": base,
             "stressed": stressed,
