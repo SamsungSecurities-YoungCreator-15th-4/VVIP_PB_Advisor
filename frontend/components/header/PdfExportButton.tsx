@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PdfPreviewModal from "@/components/pdf/PdfPreviewModal";
+import { CUSTOMERS } from "@/lib/mockData";
 
 // SSR 비활성화 — new Date() hydration mismatch 방지
 const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), {
@@ -26,10 +27,15 @@ const isDev = process.env.NODE_ENV === "development";
 
 type PdfType = "pb" | "client";
 
-const FILE_NAMES: Record<PdfType, string> = {
-  pb: "VVIP_상담리포트_PB용.pdf",
-  client: "VVIP_상담리포트_고객용.pdf",
-};
+function getFileName(type: PdfType): string {
+  const name = CUSTOMERS[0].name;
+  const date = new Date()
+    .toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })
+    .replace(/\. /g, "")
+    .replace(/\.$/, "");
+  const label = type === "pb" ? "PB용" : "고객용";
+  return `VVIP_상담리포트_${label}_${name}_${date}.pdf`;
+}
 
 export default function PdfExportButton() {
   const [preview, setPreview] = useState<PdfType | null>(null);
@@ -68,7 +74,7 @@ export default function PdfExportButton() {
         }
       }
 
-      pdf.save(FILE_NAMES[type]);
+      pdf.save(getFileName(type));
     } finally {
       setExporting(null);
     }
