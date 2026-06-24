@@ -34,6 +34,7 @@ from app.schemas.consultations import (
 )
 from app.services.ips import (
     build_ips_snapshot_payload,
+    fill_missing_ips_values,
     flatten_ips_json,
 )
 from app.services.stt_pipeline import SttPipelineResult, run_uploaded_wav_pipeline
@@ -345,7 +346,8 @@ def _save_stt_consultation_result(
     customer_name = client["name"]
     try:
         raw_note = transcript_to_raw_note(pipeline_result.transcript_json)
-        ips_json = flatten_ips_json(pipeline_result.ips_json)
+        initial_ips_json = _get_initial_ips_json(supabase, client["id"])
+        ips_json = fill_missing_ips_values(pipeline_result.ips_json, initial_ips_json)
     except ValueError as exc:
         logger.exception("Invalid IPS extraction result")
         raise HTTPException(
@@ -562,14 +564,7 @@ def get_initial_ips(
     if not client:
         raise _client_not_found(client_id)
 
-    result = (
-        supabase.table("ips_snapshot")
-        .select("id,client_id,source_type,raw_ips_json,created_at")
-        .eq("client_id", client_id)
-        .eq("source_type", "initial")
-        .limit(1)
-        .execute()
-    )
+    result = _select_initial_ips_snapshot(supabase, client_id)
     snapshot = _first_row(result.data)
     if not snapshot:
         raise HTTPException(
@@ -594,6 +589,27 @@ def get_initial_ips(
         ips_json=ips_json,
         created_at=_to_kst_iso(snapshot["created_at"]),
     )
+
+
+def _select_initial_ips_snapshot(supabase, client_id: str):
+    return (
+        supabase.table("ips_snapshot")
+        .select("id,client_id,source_type,raw_ips_json,created_at")
+        .eq("client_id", client_id)
+        .eq("source_type", "initial")
+        .order("created_at", desc=False)
+        .limit(1)
+        .execute()
+    )
+
+
+def _get_initial_ips_json(supabase, client_id: str) -> dict | None:
+    result = _select_initial_ips_snapshot(supabase, client_id)
+    snapshot = _first_row(result.data)
+    if not snapshot:
+        logger.warning("Initial IPS snapshot not found for STT fallback: %s", client_id)
+        return None
+    return snapshot.get("raw_ips_json") or None
 
 
 @router.get("/detail", response_model=ConsultationResponse)

@@ -25,8 +25,16 @@ from pathlib import Path
 
 import pytest
 
-from app.rag.generate import ExtractiveGenerator
-from app.services.ips import build_ips_snapshot_payload, flatten_ips_json
+from app.rag.generate import (
+    ExtractiveGenerator,
+    fallback_insight_summary,
+    normalize_insight_summary,
+)
+from app.services.ips import (
+    build_ips_snapshot_payload,
+    fill_missing_ips_values,
+    flatten_ips_json,
+)
 from app.services.transcript import transcript_to_raw_note
 from app.stt.stt_record import (
     extract_customer_text,
@@ -120,6 +128,54 @@ class TestIpsDeterminism:
         flat = flatten_ips_json(RAW_IPS_NESTED)
         assert flatten_ips_json(flat) == flat
 
+    def test_fill_missing_ips_values_uses_initial_only_for_missing_fields(self):
+        extracted = {
+            "Goal": "상담에서 새로 확인한 목표",
+            "Asset": None,
+            "Return": 0,
+            "Risk": "",
+            "Time": 3,
+            "Tax": None,
+            "Liquidity": "높음",
+            "Legal": " ",
+            "Unique": "해외 배당주 선호",
+        }
+        initial = flatten_ips_json(RAW_IPS_NESTED)
+
+        merged = fill_missing_ips_values(extracted, initial)
+
+        assert merged["Goal"] == "상담에서 새로 확인한 목표"
+        assert merged["Asset"] == initial["Asset"]
+        assert merged["Return"] == 0
+        assert merged["Risk"] == initial["Risk"]
+        assert merged["Time"] == 3
+        assert merged["Tax"] == initial["Tax"]
+        assert merged["Liquidity"] == "높음"
+        assert merged["Legal"] == initial["Legal"]
+        assert merged["Unique"] == "해외 배당주 선호"
+
+    def test_fill_missing_ips_values_fills_omitted_keys_before_validation(self):
+        extracted = {
+            "Goal": "상담에서 새로 확인한 목표",
+            "RRTTLLU": {
+                "Risk": "공격형",
+                "Unique": "해외 배당주 선호",
+            },
+        }
+        initial = flatten_ips_json(RAW_IPS_NESTED)
+
+        merged = fill_missing_ips_values(extracted, initial)
+
+        assert merged["Goal"] == "상담에서 새로 확인한 목표"
+        assert merged["Asset"] == initial["Asset"]
+        assert merged["Return"] == initial["Return"]
+        assert merged["Risk"] == "공격형"
+        assert merged["Time"] == initial["Time"]
+        assert merged["Tax"] == initial["Tax"]
+        assert merged["Liquidity"] == initial["Liquidity"]
+        assert merged["Legal"] == initial["Legal"]
+        assert merged["Unique"] == "해외 배당주 선호"
+
 
 class TestTranscriptDeterminism:
     def test_raw_note_is_deterministic(self):
@@ -180,6 +236,22 @@ class TestRagGeneratorDeterminism:
     def test_extractive_generate_empty_chunks_raises(self):
         with pytest.raises(ValueError):
             ExtractiveGenerator().generate("질의", [])
+
+    def test_insight_summary_fallback_is_deterministic_and_bounded(self):
+        answer = (
+            "절세와 유동성 니즈가 함께 확인됩니다. 제공된 자료 기준입니다."
+        )
+        a = fallback_insight_summary(answer)
+        b = fallback_insight_summary(answer)
+        assert a == b
+        assert 0 < len(a) <= 50
+        assert "제공된 자료" not in a
+
+    def test_normalize_insight_summary_removes_prefix_and_bounds_length(self):
+        raw = "요약: " + "절세와 유동성 니즈를 함께 고려한 보수적 상담 포인트입니다" * 2
+        summary = normalize_insight_summary(raw)
+        assert not summary.startswith("요약:")
+        assert len(summary) <= 50
 
 
 class TestRagSearchTransformDeterminism:

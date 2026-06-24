@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.market.routes import router as market_router
-from app.portfolio_logic.portfolio_logic import router as portfolio_router
+from app.portfolio.portfolio_logic import router as portfolio_router
 from app.routers import clients, dart, portfolio_insight, rag, tax
 from app.routers.consultations import router as consultations_router
 

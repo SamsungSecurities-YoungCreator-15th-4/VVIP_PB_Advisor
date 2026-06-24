@@ -16,8 +16,8 @@ import pytest
 # only these unit tests do not need the network package itself.
 sys.modules.setdefault("yfinance", types.SimpleNamespace(download=lambda *a, **k: None))
 
-from app.portfolio_logic import portfolio_logic as portfolio_module  # noqa: E402
-from app.portfolio_logic.portfolio_logic import (  # noqa: E402
+from app.portfolio import portfolio_logic as portfolio_module  # noqa: E402
+from app.portfolio.portfolio_logic import (  # noqa: E402
     BENCHMARK_CONFIGS,
     DEFAULT_RANDOM_SEED,
     MIN_BETA_OBSERVATIONS,
@@ -35,7 +35,7 @@ from app.portfolio_logic.portfolio_logic import (  # noqa: E402
     generate_random_weights,
     resolve_external_financial_income_krw,
 )
-from app.portfolio_logic.tax_advice import calc_combined_tax_saving  # noqa: E402
+from app.portfolio.tax_advice import calc_combined_tax_saving  # noqa: E402
 
 
 def _returns(
@@ -694,4 +694,254 @@ def test_price_data_uses_last_success_snapshot(
         ]["data_source"]
         == "disk_last_success_snapshot"
     )
+
+
+def test_after_tax_and_mdd_ranges_share_scenario_basis() -> None:
+    returns = _returns()
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+    weights = {
+        "domestic_equity": 0.20,
+        "overseas_blue_chip": 0.25,
+        "overseas_growth": 0.15,
+        "general_bond": 0.20,
+        "gold": 0.10,
+        "cash": 0.10,
+    }
+    request = _request(age=62)
+
+    response = build_portfolio_response(
+        "포트폴리오 A",
+        "portfolio_a",
+        weights,
+        returns,
+        expected,
+        request,
+        backtest_returns=returns,
+    )
+    metrics = response["metrics"]
+    basis = metrics["monte_carlo_range_basis"]
+    after_tax_range = metrics[
+        "after_tax_return_range"
+    ]
+    mdd_range = metrics["mdd_range"]
+
+    assert basis["available"] is True
+    assert basis["rebalancing"] == "none_buy_and_hold"
+    assert basis["display_range"] == {
+        "lower_percentile": 20,
+        "center_percentile": 50,
+        "upper_percentile": 80,
+        "central_coverage": 0.60,
+        "label": "P20-P80",
+    }
+    assert after_tax_range == basis["after_tax_return"]
+    assert mdd_range == basis["mdd"]
+
+    assert (
+        after_tax_range["p10"]
+        <= after_tax_range["p20"]
+        <= after_tax_range["p50"]
+        <= after_tax_range["p80"]
+        <= after_tax_range["p90"]
+    )
+    assert (
+        mdd_range["p10"]
+        <= mdd_range["p20"]
+        <= mdd_range["p50"]
+        <= mdd_range["p80"]
+        <= mdd_range["p90"]
+        <= 0
+    )
+
+    assert after_tax_range["lower"] == after_tax_range["p20"]
+    assert after_tax_range["center"] == after_tax_range["p50"]
+    assert after_tax_range["upper"] == after_tax_range["p80"]
+    assert mdd_range["lower"] == mdd_range["p20"]
+    assert mdd_range["center"] == mdd_range["p50"]
+    assert mdd_range["upper"] == mdd_range["p80"]
+
+
+def test_metric_range_calculation_is_reproducible() -> None:
+    returns = _returns()
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+    weights = {
+        "overseas_blue_chip": 0.30,
+        "overseas_growth": 0.20,
+        "general_bond": 0.25,
+        "gold": 0.10,
+        "cash": 0.15,
+    }
+    request = _request(age=62)
+    response = build_portfolio_response(
+        "포트폴리오 A",
+        "portfolio_a",
+        weights,
+        returns,
+        expected,
+        request,
+        backtest_returns=returns,
+    )
+
+    kwargs = {
+        "weights": weights,
+        "returns": returns,
+        "expected_returns": expected,
+        "total_asset": request.total_asset,
+        "investment_horizon_years": (
+            request.investment_horizon_years
+        ),
+        "tax_breakdown": response["tax_breakdown"],
+        "random_seed": 42,
+        "num_simulations": 1000,
+    }
+    first = (
+        portfolio_module
+        .calculate_monte_carlo_metric_ranges(
+            **kwargs
+        )
+    )
+    second = (
+        portfolio_module
+        .calculate_monte_carlo_metric_ranges(
+            **kwargs
+        )
+    )
+
+    assert first == second
+    assert first["simulation_count"] == 1000
+    assert first["horizon_years"] == 5
+    assert (
+        first["scenario_basis_id"]
+        == second["scenario_basis_id"]
+    )
+
+
+def test_ranges_are_not_added_to_other_ratio_metrics() -> None:
+    returns = _returns()
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+    response = build_portfolio_response(
+        "포트폴리오 A",
+        "portfolio_a",
+        {
+            "overseas_blue_chip": 0.30,
+            "general_bond": 0.35,
+            "gold": 0.15,
+            "cash": 0.20,
+        },
+        returns,
+        expected,
+        _request(age=62),
+        backtest_returns=returns,
+    )
+    metrics = response["metrics"]
+
+    assert "after_tax_return_range" in metrics
+    assert "mdd_range" in metrics
+    assert "volatility_range" not in metrics
+    assert "sharpe_ratio_range" not in metrics
+    assert "sortino_ratio_range" not in metrics
+    assert "beta_range" not in metrics
+
+
+def test_pr106_gemini_review_defensive_tax_breakdown() -> None:
+    assert (
+        portfolio_module
+        ._effective_tax_rate_from_breakdown(None)
+        == 0.0
+    )
+    assert (
+        portfolio_module
+        ._effective_tax_rate_from_breakdown("invalid")
+        == 0.0
+    )
+
+
+def test_pr106_gemini_review_accepts_string_index() -> None:
+    returns = _returns(n=120)
+    returns.index = returns.index.strftime(
+        "%Y-%m-%d"
+    )
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+
+    result = (
+        portfolio_module
+        .calculate_monte_carlo_metric_ranges(
+            weights={
+                "overseas_blue_chip": 0.5,
+                "general_bond": 0.3,
+                "cash": 0.2,
+            },
+            returns=returns,
+            expected_returns=expected,
+            total_asset=3_000_000_000,
+            investment_horizon_years=1,
+            tax_breakdown={},
+            random_seed=42,
+            num_simulations=100,
+        )
+    )
+
+    assert result["available"] is True
+    assert "2023-01-02" in result[
+        "scenario_basis_id"
+    ]
+
+
+def test_pr106_gemini_review_range_failure_is_graceful(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    returns = _returns()
+    asset_keys = list(
+        portfolio_module.ASSET_TICKERS.keys()
+    )
+    expected = returns[asset_keys].mean() * 252
+
+    def raise_simulation_error(*args, **kwargs):
+        raise np.linalg.LinAlgError(
+            "forced simulation failure"
+        )
+
+    monkeypatch.setattr(
+        portfolio_module,
+        "calculate_monte_carlo_metric_ranges",
+        raise_simulation_error,
+    )
+
+    response = build_portfolio_response(
+        "포트폴리오 A",
+        "portfolio_a",
+        {
+            "overseas_blue_chip": 0.4,
+            "general_bond": 0.4,
+            "cash": 0.2,
+        },
+        returns,
+        expected,
+        _request(age=62),
+        backtest_returns=returns,
+    )
+
+    metrics = response["metrics"]
+    assert metrics[
+        "monte_carlo_range_basis"
+    ] == {
+        "available": False,
+        "reason": "unexpected_simulation_error",
+    }
+    assert metrics[
+        "after_tax_return_range"
+    ] is None
+    assert metrics["mdd_range"] is None
 

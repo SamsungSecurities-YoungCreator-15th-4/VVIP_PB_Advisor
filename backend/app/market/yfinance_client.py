@@ -74,14 +74,69 @@ def _read_snapshot_entry(section: str, key: str) -> dict | None:
 
 # ── 시세 (KOSPI/S&P500/미국채10년 등) ───────────────────────────────────────
 
+_LIVE_PRICE_KEYS = ("last_price", "lastPrice", "regular_market_price", "regularMarketPrice")
+_PREV_CLOSE_KEYS = (
+    "previous_close", "previousClose",
+    "regular_market_previous_close", "regularMarketPreviousClose",
+)
+
+
+def _fast_info_value(ticker: "yf.Ticker", keys: tuple[str, ...]) -> float | None:
+    """fast_info에서 keys 중 처음으로 잡히는 양수 값을 float로 반환. 실패 시 None."""
+    try:
+        fast = ticker.fast_info
+    except Exception:
+        return None
+    for key in keys:
+        try:
+            value = fast[key] if not hasattr(fast, key) else getattr(fast, key)
+        except (KeyError, TypeError, AttributeError):
+            value = getattr(fast, key, None)
+        if value:
+            try:
+                v = float(value)
+            except (TypeError, ValueError):
+                continue
+            if v > 0:
+                return v
+    return None
+
+
+def _live_price(ticker: "yf.Ticker") -> float | None:
+    """fast_info에서 최신 체결가를 읽는다. 실패하면 None.
+
+    history(일봉)는 당일 막 마감된 바를 즉시 반영하지 않아 '전일 종가'에 머무를 수
+    있다(급변일에 하루 늦은 값). fast_info의 last_price는 그 지연을 타지 않는다.
+    """
+    return _fast_info_value(ticker, _LIVE_PRICE_KEYS)
+
+
+def _previous_close(ticker: "yf.Ticker") -> float | None:
+    """fast_info에서 전일 종가를 읽는다. 실패하면 None."""
+    return _fast_info_value(ticker, _PREV_CLOSE_KEYS)
+
+
 def _fetch_quote_sync(symbol: str) -> QuoteResult:
-    hist = yf.Ticker(symbol).history(period="5d", interval="1d")
+    ticker = yf.Ticker(symbol)
+    hist = ticker.history(period="5d", interval="1d")
     closes = hist["Close"].dropna()
     if closes.empty:
         raise RuntimeError(f"no data for {symbol}")
 
-    price = float(closes.iloc[-1])
-    prev = float(closes.iloc[-2]) if len(closes) >= 2 else price
+    hist_last = float(closes.iloc[-1])
+    # 현재가: 실시간가 우선, 없으면 history 마지막 종가로 폴백.
+    price = _live_price(ticker) or hist_last
+
+    # 전일 종가: fast_info의 previous_close를 우선 사용(가장 정확).
+    # 실패 시에만 history 기반 추정으로 폴백 — history 마지막 종가가 현재가와
+    # 다르면 그게 전일 종가(일봉 지연), 같으면 그 직전 종가를 전일로 본다.
+    prev = _previous_close(ticker)
+    if prev is None:
+        if abs(hist_last - price) > 1e-6:
+            prev = hist_last
+        else:
+            prev = float(closes.iloc[-2]) if len(closes) >= 2 else price
+
     change = price - prev
     change_pct = (change / prev * 100) if prev else 0.0
     return QuoteResult(price=price, change=change, changePct=change_pct)

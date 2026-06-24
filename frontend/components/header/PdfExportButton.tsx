@@ -12,23 +12,39 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PdfPreviewModal from "@/components/pdf/PdfPreviewModal";
+import { useDashboardStore } from "@/lib/store";
 
 // SSR 비활성화 — new Date() hydration mismatch 방지
-const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), { ssr: false });
-const ClientPdfTemplate = dynamic(() => import("@/components/pdf/ClientPdfTemplate"), { ssr: false });
+const PbPdfTemplate = dynamic(() => import("@/components/pdf/PbPdfTemplate"), {
+  ssr: false,
+});
+const ClientPdfTemplate = dynamic(
+  () => import("@/components/pdf/ClientPdfTemplate"),
+  { ssr: false },
+);
 
 const isDev = process.env.NODE_ENV === "development";
 
 type PdfType = "pb" | "client";
 
-const FILE_NAMES: Record<PdfType, string> = {
-  pb: "VVIP_상담리포트_PB용.pdf",
-  client: "VVIP_상담리포트_고객용.pdf",
-};
+function getFileName(type: PdfType, name: string): string {
+  const date = new Date()
+    .toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })
+    .replace(/\. /g, "")
+    .replace(/\.$/, "");
+  const label = type === "pb" ? "PB용" : "고객용";
+  return `VVIP_상담리포트_${label}_${name}_${date}.pdf`;
+}
 
 export default function PdfExportButton() {
   const [preview, setPreview] = useState<PdfType | null>(null);
   const [exporting, setExporting] = useState<PdfType | null>(null);
+
+  // 파일명은 PDF 표지·헤더와 동일하게 현재 선택된 고객을 따른다.
+  const customers = useDashboardStore((s) => s.customers);
+  const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
+  const selectedCustomer =
+    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
 
   const pbRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<HTMLDivElement>(null);
@@ -42,7 +58,11 @@ export default function PdfExportButton() {
       const { domToCanvas } = await import("modern-screenshot");
       const { default: jsPDF } = await import("jspdf");
 
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
 
       // data-pdf-page 속성이 있는 요소를 페이지 단위로 캡처
       const pages = container.querySelectorAll<HTMLElement>("[data-pdf-page]");
@@ -59,7 +79,7 @@ export default function PdfExportButton() {
         }
       }
 
-      pdf.save(FILE_NAMES[type]);
+      pdf.save(getFileName(type, selectedCustomer.name));
     } finally {
       setExporting(null);
     }
@@ -70,7 +90,13 @@ export default function PdfExportButton() {
       {/* ── off-screen 템플릿 컨테이너 (dynamic ssr:false — hydration mismatch 방지) ── */}
       <div
         aria-hidden="true"
-        style={{ position: "fixed", left: -9999, top: 0, pointerEvents: "none", zIndex: -1 }}
+        style={{
+          position: "fixed",
+          left: -9999,
+          top: 0,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
       >
         <div ref={pbRef}>
           <PbPdfTemplate />
@@ -95,14 +121,12 @@ export default function PdfExportButton() {
             <ChevronDown className="size-3 opacity-70" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="start">
           <DropdownMenuItem onSelect={() => handleExport("pb")}>
-            <FileDown className="mr-1.5 size-3" />
-            PB용 추출
+            PB용
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => handleExport("client")}>
-            <FileDown className="mr-1.5 size-3" />
-            고객용 추출
+            고객용
           </DropdownMenuItem>
 
           {isDev && (
@@ -134,6 +158,12 @@ export default function PdfExportButton() {
   );
 }
 
-function DevPreviewModal({ type, onClose }: { type: PdfType; onClose: () => void }) {
+function DevPreviewModal({
+  type,
+  onClose,
+}: {
+  type: PdfType;
+  onClose: () => void;
+}) {
   return <PdfPreviewModal type={type} onClose={onClose} />;
 }

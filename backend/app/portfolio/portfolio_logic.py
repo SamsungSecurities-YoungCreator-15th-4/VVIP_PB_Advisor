@@ -1,6 +1,5 @@
 # ruff: noqa: E501
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
@@ -8,513 +7,95 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal, Tuple, Any
 import uuid
 import json
-import threading
 import logging
 import re
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
+# ── 분할: 상수·기준표 → constants.py, 자산군 정의 → assets.py 로 이동.
+#    외부 importer(테스트·tax_advice 등) 호환을 위해 여기서 re-export 한다.
+from .constants import (  # noqa: F401
+    TRADING_DAYS,
+    SORTINO_NO_DOWNSIDE_CAP,
+    MIN_COMMON_PRICE_OBSERVATIONS,
+    MAX_SESSION_REQUEST_STORE_SIZE,
+    BACKTEST_BASE_INDEX,
+    SEPARATE_TAX_BOND_MIN_HOLDING_YEARS,
+    VOL_STRESS_BETA,
+    VOL_STRESS_CAP,
+    DEFAULT_RANDOM_SEED,
+    MONTE_CARLO_METRIC_RANGE_VERSION,
+    MONTE_CARLO_METRIC_RANGE_SIMULATIONS,
+    MONTE_CARLO_METRIC_RANGE_MAX_HORIZON_YEARS,
+    MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR,
+    MONTE_CARLO_METRIC_RANGE_SEED_OFFSET,
+    MONTE_CARLO_METRIC_RANGE_PERCENTILES,
+    MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER,
+    MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER,
+    MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER,
+    MIN_BETA_OBSERVATIONS,
+    PORTFOLIO_B_MIN_WEIGHT_DISTANCE,
+    PRICE_SNAPSHOT_VERSION,
+    PRICE_SNAPSHOT_DIR,
+    PRICE_SNAPSHOT_PATH,
+    _PRICE_SNAPSHOT_LOCK,
+    BenchmarkKey,
+    DEFAULT_BENCHMARK_KEY,
+    BENCHMARK_POLICY_VERSION,
+    BENCHMARK_CONFIGS,
+    BENCHMARK_SERIES_KEYS,
+    PENSION_RECEIVE_AGE,
+    DEFAULT_RISK_FREE_RATE,
+    DEFAULT_CASH_RETURN,
+    FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
+    OVERSEAS_STOCK_GAIN_DEDUCTION,
+    OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
+    DEFAULT_WITHHOLDING_TAX_RATE,
+    ISA_GENERAL_TAX_FREE_LIMIT,
+    ISA_SEOGMIN_TAX_FREE_LIMIT,
+    ISA_LOW_TAX_RATE,
+    ISA_MANDATORY_HOLDING_YEARS,
+    ISA_ANNUAL_CONTRIBUTION_LIMIT,
+    ISA_TOTAL_CONTRIBUTION_LIMIT,
+    IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT,
+    IRP_TAX_CREDIT_RATE_HIGH_INCOME,
+    IRP_TAX_CREDIT_RATE_LOW_INCOME,
+    TAX_RULE_TABLE_VERSION,
+    TAX_RULE_EFFECTIVE_DATE,
+    TAX_RULE_TABLE,
+    SECOND_PORTFOLIO_MAX_CORRELATION,
+    GUIDELINE_RULES,
+    SELECTION_RISK_CONTROLS,
+    SELECTION_RANKING_BASIS,
+)
+from .assets import (  # noqa: F401
+    ASSET_TICKERS,
+    ASSET_NAMES_KR,
+    LEGACY_ASSET_ALIASES,
+    UNIQUE_ASSETS,
+    STOCK_ASSETS,
+    OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS,
+    OVERSEAS_STOCK_ASSETS,
+    BOND_ASSETS,
+    BOND_CASH_ASSETS,
+    ALTERNATIVE_ASSETS,
+    CASH_LIKE_ASSETS,
+    INCOME_TAXABLE_ASSETS,
+    ASSET_INCOME_YIELD_ASSUMPTIONS,
+    ISA_PRIORITY_ASSETS,
+    IRP_PRIORITY_ASSETS,
+    ASSET_DURATION_YEARS,
+    INTEREST_RATE_SENSITIVE_ASSETS,
+    FX_SENSITIVE_ASSETS,
+    CLIENT_RISK_LEVEL,
+    RISK_LEVEL_NAME,
+)
+
+
 router = APIRouter(tags=["portfolio"])
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
-
-
-# ============================================================
-# 0. 기본 설정
-# ============================================================
-
-TRADING_DAYS = 252
-SORTINO_NO_DOWNSIDE_CAP = 3.0
-MIN_COMMON_PRICE_OBSERVATIONS = 126
-MAX_SESSION_REQUEST_STORE_SIZE = 100
-BACKTEST_BASE_INDEX = 100.0
-SEPARATE_TAX_BOND_MIN_HOLDING_YEARS = 3
-
-# 시계열 충격 주입(calculate_metrics(shocks=...))에서 쓰는 변동성 확대 계수와 상한.
-# 충격 |s| 1단위(=100%p)당 변동성 확대량 BETA, 상한 CAP. |s|=15%면 변동성 약 1.3배.
-# 위기 국면에서 실현변동성이 함께 확대되는 현상을 반영한 프로젝트용 선형 근사다.
-VOL_STRESS_BETA = 2.0
-VOL_STRESS_CAP = 1.6
-
-# PR #65 재현성 원칙: 모든 RNG 경로는 동일한 기본 시드를 사용한다.
-DEFAULT_RANDOM_SEED = 42
-
-
-# 프로젝트 가정: 약 3개월 미만의 공통 관측치로는 베타를 표시하지 않는다.
-MIN_BETA_OBSERVATIONS = 60
-
-# 0.5 * Σ|wA-wB|. 0.10은 전체 자산의 최소 10% 재배치를 뜻한다.
-PORTFOLIO_B_MIN_WEIGHT_DISTANCE = 0.10
-
-# 포트폴리오 가격 데이터 마지막 성공 스냅샷.
-PRICE_SNAPSHOT_VERSION = 1
-PRICE_SNAPSHOT_DIR = (
-    Path(__file__).resolve().parents[2] / ".cache" / "portfolio"
-)
-PRICE_SNAPSHOT_PATH = PRICE_SNAPSHOT_DIR / "price_frames.json"
-_PRICE_SNAPSHOT_LOCK = threading.RLock()
-
-# 벤치마크는 추천 자산군이 아니라 최종 결과 비교용 데이터다.
-# PB는 KOSPI, S&P 500, MSCI ACWI 중 하나를 표시 기준으로 선택할 수 있다.
-BenchmarkKey = Literal["kospi", "sp500", "msci_acwi"]
-
-DEFAULT_BENCHMARK_KEY: BenchmarkKey = "msci_acwi"
-BENCHMARK_POLICY_VERSION = "pb-selectable-display-only-v1"
-
-BENCHMARK_CONFIGS: Dict[str, Dict[str, Any]] = {
-    "kospi": {
-        "series_key": "_benchmark_kospi",
-        "ticker": "^KS11",
-        "label": "KOSPI",
-        "currency": "KRW",
-        "official_index_series": True,
-        "proxy_note": None,
-    },
-    "sp500": {
-        "series_key": "_benchmark_sp500",
-        "ticker": "^GSPC",
-        "label": "S&P 500",
-        "currency": "USD",
-        "official_index_series": True,
-        "proxy_note": None,
-    },
-    "msci_acwi": {
-        "series_key": "_benchmark_msci_acwi",
-        "ticker": "ACWI",
-        "label": "MSCI ACWI (ACWI ETF proxy)",
-        "currency": "USD",
-        "official_index_series": False,
-        "proxy_note": (
-            "공식 MSCI 지수 원시계열이 아니라 iShares MSCI ACWI ETF(ACWI)의 "
-            "가격수익률을 글로벌 시장 대용치로 사용합니다."
-        ),
-    },
-}
-
-BENCHMARK_SERIES_KEYS = {
-    config["series_key"] for config in BENCHMARK_CONFIGS.values()
-}
-PENSION_RECEIVE_AGE = 55
-
-# 기준 금리와 시나리오 금리는 분리한다.
-# 검증된 사실: Sharpe/Sortino의 risk-free rate와 스트레스 시나리오 금리는 서로 다른 입력으로 둘 수 있다.
-# 프로젝트용 가정: 기준 무위험이자율은 미국 기준 3.5%를 기본값으로 사용한다.
-DEFAULT_RISK_FREE_RATE = 0.035
-DEFAULT_CASH_RETURN = 0.025
-
-# 금융소득종합과세 기준: 이자·배당 금융소득 2,000만 원 초과 여부
-FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD = 20_000_000
-
-# 해외주식 양도소득 기본공제 및 기본세율
-OVERSEAS_STOCK_GAIN_DEDUCTION = 2_500_000
-OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE = 0.22
-
-# 국내 이자·배당 원천징수 기본세율
-DEFAULT_WITHHOLDING_TAX_RATE = 0.154
-
-# ISA 기본 세제 가정
-ISA_GENERAL_TAX_FREE_LIMIT = 2_000_000
-ISA_SEOGMIN_TAX_FREE_LIMIT = 4_000_000
-ISA_LOW_TAX_RATE = 0.099
-ISA_MANDATORY_HOLDING_YEARS = 3
-ISA_ANNUAL_CONTRIBUTION_LIMIT = 20_000_000
-ISA_TOTAL_CONTRIBUTION_LIMIT = 100_000_000
-
-# IRP/연금계좌 기본 세액공제 가정
-IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT = 9_000_000
-IRP_TAX_CREDIT_RATE_HIGH_INCOME = 0.132
-IRP_TAX_CREDIT_RATE_LOW_INCOME = 0.165
-
-TAX_RULE_TABLE_VERSION = "2026-06-13-v1"
-TAX_RULE_EFFECTIVE_DATE = "2026-06-13"
-
-# 세율/공제액은 코드 곳곳의 매직넘버로 흩뿌리지 않고 공통 rule table에도 함께 싣는다.
-# 실제 서비스에서는 이 테이블을 baseline migration의 tax_rule 테이블에서 로드하면 된다.
-TAX_RULE_TABLE = {
-    "financial_income_comprehensive_tax_threshold": {
-        "value": FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
-        "unit": "KRW",
-        "source": "금융소득종합과세 검토 기준",
-    },
-    "overseas_stock_gain_deduction": {
-        "value": OVERSEAS_STOCK_GAIN_DEDUCTION,
-        "unit": "KRW",
-        "source": "해외주식 양도소득 기본공제",
-    },
-    "overseas_stock_capital_gains_tax_rate": {
-        "value": OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
-        "unit": "rate",
-        "source": "해외주식 양도소득 기본세율",
-    },
-    "default_withholding_tax_rate": {
-        "value": DEFAULT_WITHHOLDING_TAX_RATE,
-        "unit": "rate",
-        "source": "국내 이자·배당 원천징수 기본세율",
-    },
-    "isa_general_tax_free_limit": {
-        "value": ISA_GENERAL_TAX_FREE_LIMIT,
-        "unit": "KRW",
-        "source": "ISA 일반형 비과세 한도",
-    },
-    "isa_seogmin_tax_free_limit": {
-        "value": ISA_SEOGMIN_TAX_FREE_LIMIT,
-        "unit": "KRW",
-        "source": "ISA 서민형 비과세 한도",
-    },
-    "isa_low_tax_rate": {
-        "value": ISA_LOW_TAX_RATE,
-        "unit": "rate",
-        "source": "ISA 비과세 한도 초과분 저율 분리과세율",
-    },
-    "isa_mandatory_holding_years": {
-        "value": ISA_MANDATORY_HOLDING_YEARS,
-        "unit": "year",
-        "source": "ISA 의무보유기간",
-    },
-    "isa_annual_contribution_limit": {
-        "value": ISA_ANNUAL_CONTRIBUTION_LIMIT,
-        "unit": "KRW",
-        "source": "ISA 연 납입한도",
-    },
-    "isa_total_contribution_limit": {
-        "value": ISA_TOTAL_CONTRIBUTION_LIMIT,
-        "unit": "KRW",
-        "source": "ISA 총 납입한도",
-    },
-    "irp_tax_credit_limit": {
-        "value": IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT,
-        "unit": "KRW",
-        "source": "연금저축·IRP 합산 세액공제 한도",
-    },
-    "irp_tax_credit_rate_high_income": {
-        "value": IRP_TAX_CREDIT_RATE_HIGH_INCOME,
-        "unit": "rate",
-        "source": "IRP 세액공제율 가정: 고소득 구간",
-    },
-    "irp_tax_credit_rate_low_income": {
-        "value": IRP_TAX_CREDIT_RATE_LOW_INCOME,
-        "unit": "rate",
-        "source": "IRP 세액공제율 가정: 저소득 구간",
-    },
-}
-
-# seed.sql tax_rule.rule_key와 맞추기 위한 alias rule.
-# 기존 세부 key는 추적용으로 유지하고, 화면/DB 연동 시에는 seed_rule_key를 우선 사용한다.
-TAX_RULE_TABLE.update(
-    {
-        "financial_income_tax_threshold": {
-            "value": FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
-            "unit": "KRW",
-            "source": "seed.sql tax_rule alias: financial_income_tax_threshold",
-            "legacy_key": "financial_income_comprehensive_tax_threshold",
-        },
-        "overseas_stock_transfer_tax": {
-            "value": OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
-            "unit": "rate",
-            "source": "seed.sql tax_rule alias: overseas_stock_transfer_tax",
-            "params": {
-                "basic_deduction": OVERSEAS_STOCK_GAIN_DEDUCTION,
-                "loss_offset_scope": "overseas_equity_same_year",
-            },
-            "legacy_keys": [
-                "overseas_stock_gain_deduction",
-                "overseas_stock_capital_gains_tax_rate",
-            ],
-        },
-        "isa_tax_exemption": {
-            "value": ISA_LOW_TAX_RATE,
-            "unit": "rate",
-            "source": "seed.sql tax_rule alias: isa_tax_exemption",
-            "params": {
-                "general_tax_free_limit": ISA_GENERAL_TAX_FREE_LIMIT,
-                "seogmin_tax_free_limit": ISA_SEOGMIN_TAX_FREE_LIMIT,
-                "mandatory_holding_years": ISA_MANDATORY_HOLDING_YEARS,
-                "annual_contribution_limit": ISA_ANNUAL_CONTRIBUTION_LIMIT,
-                "total_contribution_limit": ISA_TOTAL_CONTRIBUTION_LIMIT,
-            },
-            "legacy_keys": [
-                "isa_general_tax_free_limit",
-                "isa_seogmin_tax_free_limit",
-                "isa_low_tax_rate",
-                "isa_mandatory_holding_years",
-            ],
-        },
-        "pension_account_tax_credit": {
-            "value": IRP_TAX_CREDIT_RATE_HIGH_INCOME,
-            "unit": "rate",
-            "source": "seed.sql tax_rule: pension_account_tax_credit",
-            "params": {
-                "tax_credit_limit": IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT,
-                "high_income_rate": IRP_TAX_CREDIT_RATE_HIGH_INCOME,
-                "low_income_rate": IRP_TAX_CREDIT_RATE_LOW_INCOME,
-            },
-            "legacy_keys": [
-                "irp_tax_credit",
-                "irp_tax_credit_limit",
-                "irp_tax_credit_rate_high_income",
-                "irp_tax_credit_rate_low_income",
-            ],
-        },
-        # 하위호환용 코드 alias. DB 조회 시에는 위 seed key를 사용한다.
-        "irp_tax_credit": {
-            "value": IRP_TAX_CREDIT_RATE_HIGH_INCOME,
-            "unit": "rate",
-            "source": "legacy alias of pension_account_tax_credit",
-            "seed_rule_key": "pension_account_tax_credit",
-        },
-    }
-)
-
-# 하위호환용 상관계수 기준값.
-# 포트폴리오 A/B 선정에는 사용하지 않고 화면 참고값 계산만 유지한다.
-SECOND_PORTFOLIO_MAX_CORRELATION = 0.95
-
-
-# ============================================================
-# 1. 자산군
-# ============================================================
-# 확정 자산 enum은 프론트·DB·응답 JSON에서 공통으로 사용할 키다.
-# 사용자가 요청한 12종: 코스피, S&P500, 나스닥, 일반채, 분리과세채, 저쿠폰채,
-# 해외배당(SCHD), 리츠, 금, 원자재, 달러, 현금.
-#
-# 검증된 사실:
-# - DXY는 Yahoo Finance에서 DX-Y.NYB로 조회 가능.
-# - 471230.KS는 한국 국채 proxy로 사용한다.
-# - 484790.KS는 KODEX 미국30년국채액티브(H) proxy로, 환헤지형이므로 FX 민감자산에서 제외한다.
-# - 439870.KS는 분리과세 장기채 전략의 가격 proxy로 사용한다.
-#
-# 프로젝트용 가정:
-# - ETF proxy가 세법상 직접투자 상품과 완전히 동일하다는 뜻은 아니다.
-# - 세금 계산에서 배당·이자 수익과 가격차익을 간이 분리하기 위해 아래 수익률 가정을 사용한다.
-
-ASSET_TICKERS = {
-    "domestic_equity": "^KS11",
-    "overseas_blue_chip": "SPY",
-    "overseas_growth": "QQQ",
-    "overseas_dividend": "SCHD",
-    "general_bond": "471230.KS",
-    "separate_tax_bond": "439870.KS",
-    "low_coupon_bond": "484790.KS",
-    "reit": "VNQ",
-    "gold": "GLD",
-    "commodity": "DBC",
-    "dollar": "DX-Y.NYB",
-    "cash": "CASH",
-}
-
-ASSET_NAMES_KR = {
-    "domestic_equity": "코스피",
-    "overseas_blue_chip": "S&P500",
-    "overseas_growth": "나스닥",
-    "overseas_dividend": "해외배당 ETF(SCHD)",
-    "general_bond": "일반채 proxy",
-    "separate_tax_bond": "분리과세채 장기국고채 proxy",
-    "low_coupon_bond": "저쿠폰채 proxy",
-    "reit": "리츠",
-    "gold": "금",
-    "commodity": "원자재",
-    "dollar": "달러",
-    "cash": "현금",
-}
-
-# 기존 키로 들어온 요청도 한동안 받아주기 위한 호환 alias.
-LEGACY_ASSET_ALIASES = {
-    "domestic_stock": "domestic_equity",
-    "sp500": "overseas_blue_chip",
-    "nasdaq": "overseas_growth",
-    "high_dividend": "overseas_dividend",
-    "kr_treasury": "general_bond",
-    "dxy": "dollar",
-}
-
-UNIQUE_ASSETS = ["cash", "general_bond", "low_coupon_bond", "separate_tax_bond"]
-
-STOCK_ASSETS = ["domestic_equity", "overseas_blue_chip", "overseas_growth", "overseas_dividend"]
-OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS = [
-    "overseas_blue_chip",
-    "overseas_growth",
-    "overseas_dividend",
-    "reit",
-]
-# 기존 함수명 호환용 alias
-OVERSEAS_STOCK_ASSETS = OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS
-BOND_ASSETS = ["general_bond", "separate_tax_bond", "low_coupon_bond"]
-BOND_CASH_ASSETS = BOND_ASSETS + ["cash"]
-ALTERNATIVE_ASSETS = ["reit", "gold", "commodity", "dollar"]
-CASH_LIKE_ASSETS = ["cash", "general_bond", "low_coupon_bond", "separate_tax_bond"]
-
-# 이자·배당 성격이 강해 금융소득종합과세 검토 대상에 넣을 자산.
-# 해외배당·리츠는 전체 기대수익률 전부가 아니라 아래 income yield 가정 범위까지만 금융소득으로 본다.
-INCOME_TAXABLE_ASSETS = [
-    "cash",
-    "general_bond",
-    "low_coupon_bond",
-    "separate_tax_bond",
-    "overseas_dividend",
-    "reit",
-]
-
-# 배당·이자 수익률 간이 가정. 기대수익률 중 이 수준까지만 이자·배당성 금융소득으로 본다.
-ASSET_INCOME_YIELD_ASSUMPTIONS = {
-    "cash": DEFAULT_CASH_RETURN,
-    "general_bond": 0.030,
-    "low_coupon_bond": 0.015,
-    "separate_tax_bond": 0.025,
-    "overseas_dividend": 0.035,
-    "reit": 0.040,
-}
-
-ISA_PRIORITY_ASSETS = [
-    "overseas_dividend",
-    "reit",
-    "general_bond",
-    "low_coupon_bond",
-    "separate_tax_bond",
-    "cash",
-]
-
-IRP_PRIORITY_ASSETS = [
-    "general_bond",
-    "low_coupon_bond",
-    "separate_tax_bond",
-    "overseas_blue_chip",
-    "overseas_dividend",
-]
-
-# 듀레이션은 점수화에만 사용. 차트 하단 6종 지표에는 포함하지 않음.
-# 검증된 사실: 듀레이션은 금리 변화에 대한 채권 가격 민감도 지표.
-# 프로젝트용 가정: 아래 수치는 ETF/전략별 대표 근사치.
-ASSET_DURATION_YEARS = {
-    "domestic_equity": 0.0,
-    "overseas_blue_chip": 0.0,
-    "overseas_growth": 0.0,
-    "overseas_dividend": 0.0,
-    "reit": 0.0,
-    "gold": 0.0,
-    "commodity": 0.0,
-    "dollar": 0.0,
-    "general_bond": 7.99,
-    "separate_tax_bond": 19.53,
-    "low_coupon_bond": 15.39,
-    "cash": 0.0,
-}
-
-INTEREST_RATE_SENSITIVE_ASSETS = BOND_ASSETS
-FX_SENSITIVE_ASSETS = [
-    "overseas_blue_chip",
-    "overseas_growth",
-    "overseas_dividend",
-    "reit",
-    "gold",
-    "commodity",
-    "dollar",
-    # low_coupon_bond는 환헤지(H) proxy이므로 환율 충격에서 제외한다.
-]
-
-CLIENT_RISK_LEVEL = {
-    "conservative": 1,
-    "balanced": 2,
-    "aggressive": 3,
-}
-
-RISK_LEVEL_NAME = {
-    1: "안정형",
-    2: "균형형",
-    3: "공격형",
-}
-
-# ============================================================
-# 2. 기준표 및 리스크 관리 기준
-# ============================================================
-# 검증된 사실:
-# - 투자위험 판단에는 변동성, 최대 손실 가능성, 기초자산 구성, 유동성, 만기, 환율 변동성 등이 고려될 수 있음.
-# - 투자자 성향보다 높은 위험도의 상품 권유는 제한됨.
-# - 금융소득 2,000만 원, ISA 3년, 해외주식 양도차익 250만 원 공제 등은 세법/제도상 기본 기준.
-#
-# 프로젝트용 가정:
-# - 안정형/균형형/공격형의 변동성, MDD, 자산비중 한도
-# - VaR/ERC 리스크 관리 기준
-# - 추천 B 상관계수 0.95 기준
-
-GUIDELINE_RULES = {
-    "conservative": {
-        "level": 1,
-        "label": "안정형",
-        "volatility_max": 0.10,
-        "mdd_min": -0.10,
-        "liquidity_coverage_min": 1.0,
-        "stock_weight_max": 0.30,
-        "alternative_weight_max": 0.10,
-        "bond_cash_weight_min": 0.60,
-        "expected_return_min": 0.030,
-        "expected_return_max": 0.055,
-        "sharpe_min": 0.6,
-        "sortino_min": 0.8,
-        "tax_gap_max": 0.006,
-        "taxable_income_max": FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
-        "after_tax_retention_min": None,
-    },
-    "balanced": {
-        "level": 2,
-        "label": "균형형",
-        "volatility_max": 0.20,
-        "mdd_min": -0.20,
-        "liquidity_coverage_min": 1.0,
-        "stock_weight_max": 0.60,
-        "alternative_weight_max": 0.25,
-        "bond_cash_weight_min": 0.25,
-        "expected_return_min": 0.045,
-        "expected_return_max": 0.105,
-        "sharpe_min": 0.4,
-        "sortino_min": 0.6,
-        "tax_gap_max": None,
-        "taxable_income_max": FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
-        "after_tax_retention_min": None,
-    },
-    "aggressive": {
-        "level": 3,
-        "label": "공격형",
-        "volatility_max": 0.32,
-        "mdd_min": -0.50,
-        "liquidity_coverage_min": 0.0,
-        "stock_weight_max": 0.85,
-        "alternative_weight_max": 0.40,
-        "bond_cash_weight_min": 0.00,
-        "expected_return_min": 0.070,
-        "expected_return_max": None,
-        "sharpe_min": 0.25,
-        "sortino_min": None,
-        "tax_gap_max": None,
-        "taxable_income_max": None,
-        "after_tax_retention_min": 0.78,
-    },
-}
-
-SELECTION_RISK_CONTROLS = {
-    "conservative": {
-        "historical_var_95_daily_max_loss": 0.010,
-        "risk_contribution_max_share": 0.45,
-    },
-    "balanced": {
-        "historical_var_95_daily_max_loss": 0.018,
-        "risk_contribution_max_share": 0.55,
-    },
-    "aggressive": {
-        "historical_var_95_daily_max_loss": 0.030,
-        "risk_contribution_max_share": 0.70,
-    },
-}
-
-SELECTION_RANKING_BASIS = [
-    "common_suitability_filter",
-    "common_liquidity_filter",
-    "common_historical_var_95_filter",
-    "common_risk_contribution_filter",
-    "portfolio_a_after_tax_return_desc",
-    "portfolio_b_target_return_then_risk_contribution_asc",
-]
-
 
 
 # ============================================================
@@ -3354,6 +2935,59 @@ def derive_asset_shocks_from_macro(
     return shocks
 
 
+# ── 역사적 위기 시나리오 프리셋 (버튼식 재현용) ──────────────────────────────
+# 자산군별 연간 충격(소수). calculate_metrics(shocks=...)에 그대로 주입한다.
+# 금리·환율 2축 슬라이더로는 주식 급락·상관관계 붕괴를 표현 못 하므로, 위기는
+# 자산군별 실측 충격 벡터로 별도 정의한다. 값은 각 위기 국면 실현 수익률 점추정.
+#
+# 출처(연간 실현 수익률 점추정):
+#   2008 금융위기: KOSPI -41%, S&P500 -38.5%, Nasdaq100 -41%, 리츠(NAREIT) -37%,
+#     美 종합채권 +5%(국채 강세), 금 +5.5%, 원자재/유가 폭락, 달러 강세.
+#   2022 러우전쟁·인플레: KOSPI -25%, S&P500 -19.4%, Nasdaq100 -33%, 美 종합채권 -13%,
+#     장기채 -30%대, 리츠 -25%, 금 -0.3%, Bloomberg 원자재 +16%, 달러지수 +8%.
+# ※ 점추정이며 실측 회귀계수 아님. 환헤지 여부·국면에 따라 실제값은 달라질 수 있다.
+CRISIS_SCENARIO_SHOCKS: Dict[str, Dict[str, float]] = {
+    "crisis_2008": {
+        "domestic_equity": -0.40,
+        "overseas_blue_chip": -0.38,
+        "overseas_growth": -0.42,
+        "overseas_dividend": -0.30,
+        "general_bond": 0.08,
+        "separate_tax_bond": 0.12,
+        "low_coupon_bond": 0.10,
+        "reit": -0.40,
+        "gold": 0.05,
+        "commodity": -0.40,
+        "dollar": 0.15,
+        "cash": 0.0,
+    },
+    "crisis_ru_war": {
+        "domestic_equity": -0.25,
+        "overseas_blue_chip": -0.19,
+        "overseas_growth": -0.33,
+        "overseas_dividend": -0.05,
+        "general_bond": -0.13,
+        "separate_tax_bond": -0.25,
+        "low_coupon_bond": -0.12,
+        "reit": -0.25,
+        "gold": 0.0,
+        "commodity": 0.20,
+        "dollar": 0.08,
+        "cash": 0.0,
+    },
+}
+
+
+def resolve_scenario_shocks(scenario: str, assets: List[str]) -> Dict[str, float]:
+    """위기 시나리오 키 → 보유 자산에 해당하는 충격 벡터(0 제외)."""
+    preset = CRISIS_SCENARIO_SHOCKS.get(scenario)
+    if preset is None:
+        raise ValueError(
+            f"알 수 없는 시나리오: {scenario}. 지원: {sorted(CRISIS_SCENARIO_SHOCKS)}"
+        )
+    return {a: preset[a] for a in assets if a in preset and preset[a] != 0.0}
+
+
 def apply_return_shocks(
     selected_returns: pd.DataFrame,
     selected_expected_returns: pd.Series,
@@ -3388,6 +3022,414 @@ def shift_expected_returns(
             shifted[asset] = float(shifted[asset]) + float(shock)
     return shifted
 
+
+
+
+def _nearest_positive_semidefinite(
+    matrix: np.ndarray,
+) -> np.ndarray:
+    clean = np.nan_to_num(
+        np.asarray(matrix, dtype=float),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+    symmetric = (clean + clean.T) / 2.0
+
+    try:
+        eigenvalues, eigenvectors = np.linalg.eigh(symmetric)
+        eigenvalues = np.clip(eigenvalues, 0.0, None)
+        corrected = (
+            eigenvectors
+            @ np.diag(eigenvalues)
+            @ eigenvectors.T
+        )
+        return (corrected + corrected.T) / 2.0
+    except np.linalg.LinAlgError:
+        return np.diag(
+            np.clip(np.diag(symmetric), 0.0, None)
+        )
+
+
+def _metric_percentile_payload(
+    values: np.ndarray,
+    *,
+    digits: int,
+    unit: str,
+) -> Dict[str, Any]:
+    levels = list(MONTE_CARLO_METRIC_RANGE_PERCENTILES)
+    percentile_values = np.percentile(values, levels)
+    mapped = {
+        f"p{level}": safe_round(value, digits)
+        for level, value in zip(levels, percentile_values)
+    }
+
+    return {
+        **mapped,
+        "lower": mapped[
+            f"p{MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER}"
+        ],
+        "center": mapped[
+            f"p{MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER}"
+        ],
+        "upper": mapped[
+            f"p{MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER}"
+        ],
+        "lower_percentile": (
+            MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER
+        ),
+        "center_percentile": (
+            MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER
+        ),
+        "upper_percentile": (
+            MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER
+        ),
+        "unit": unit,
+        "direction": "higher_is_better",
+    }
+
+
+def _effective_tax_rate_from_breakdown(
+    tax_breakdown: Optional[Dict[str, Any]],
+) -> float:
+    """세금 상세가 없거나 잘못된 형식이면 세율 0으로 안전하게 처리한다."""
+    if not isinstance(tax_breakdown, dict):
+        return 0.0
+
+    gross_profit = safe_float(
+        tax_breakdown.get("gross_profit")
+    )
+    total_tax_after_saving = safe_float(
+        tax_breakdown.get("total_tax_after_saving")
+    )
+    if gross_profit <= 1e-12:
+        return 0.0
+
+    return float(
+        np.clip(
+            total_tax_after_saving / gross_profit,
+            0.0,
+            1.0,
+        )
+    )
+
+
+def calculate_monte_carlo_metric_ranges(
+    weights: Dict[str, float],
+    returns: pd.DataFrame,
+    expected_returns: pd.Series,
+    total_asset: float,
+    investment_horizon_years: float,
+    tax_breakdown: Dict[str, Any],
+    random_seed: int = DEFAULT_RANDOM_SEED,
+    num_simulations: Optional[int] = None,
+) -> Dict[str, Any]:
+    # 세후수익률과 MDD를 동일한 미래 시장 경로에서 계산한다.
+    normalized_weights = normalize_weights(weights)
+    total_asset = safe_float(total_asset)
+
+    if total_asset <= 0:
+        return {
+            "available": False,
+            "reason": "total_asset_must_be_positive",
+        }
+
+    try:
+        requested_years = float(investment_horizon_years)
+    except (TypeError, ValueError):
+        requested_years = 1.0
+
+    horizon_years = max(
+        1,
+        min(
+            int(round(requested_years)),
+            MONTE_CARLO_METRIC_RANGE_MAX_HORIZON_YEARS,
+        ),
+    )
+    months = (
+        horizon_years
+        * MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
+    )
+    simulations = max(
+        int(
+            num_simulations
+            if num_simulations is not None
+            else MONTE_CARLO_METRIC_RANGE_SIMULATIONS
+        ),
+        100,
+    )
+
+    # 비중과 무관한 공통 자산 순서와 시드를 사용하므로
+    # 현재안/A/B에 같은 시장 시나리오가 적용된다.
+    assets = [
+        asset
+        for asset in ASSET_TICKERS.keys()
+        if (
+            asset in returns.columns
+            and asset in expected_returns.index
+        )
+    ]
+
+    missing_weighted_assets = [
+        asset
+        for asset, weight in normalized_weights.items()
+        if (
+            safe_float(weight) > 1e-12
+            and asset not in assets
+        )
+    ]
+    if missing_weighted_assets:
+        return {
+            "available": False,
+            "reason": "weighted_asset_data_missing",
+            "missing_assets": missing_weighted_assets,
+        }
+
+    if not assets:
+        return {
+            "available": False,
+            "reason": "no_common_assets",
+        }
+
+    clean_returns = (
+        returns[assets]
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna(how="any")
+    )
+    if len(clean_returns) < MIN_BETA_OBSERVATIONS:
+        return {
+            "available": False,
+            "reason": "insufficient_return_observations",
+            "observations": len(clean_returns),
+            "minimum_observations": MIN_BETA_OBSERVATIONS,
+        }
+
+    daily_log_returns = np.log1p(
+        clean_returns.clip(lower=-0.999999)
+    )
+    monthly_covariance = (
+        daily_log_returns.cov().to_numpy(dtype=float)
+        * TRADING_DAYS
+        / MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
+    )
+    monthly_covariance = _nearest_positive_semidefinite(
+        monthly_covariance
+    )
+
+    annual_expected = (
+        expected_returns
+        .reindex(assets)
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+    )
+    annual_expected = np.clip(
+        annual_expected,
+        -0.95,
+        None,
+    )
+
+    # 로그정규 모형에서 단순수익률 기대값이 기존 기대수익률과
+    # 최대한 맞도록 분산 보정항을 차감한다.
+    monthly_log_mean = (
+        np.log1p(annual_expected)
+        / MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
+        - 0.5 * np.diag(monthly_covariance)
+    )
+
+    weight_vector = np.array(
+        [
+            safe_float(normalized_weights.get(asset))
+            for asset in assets
+        ],
+        dtype=float,
+    )
+    weight_total = float(weight_vector.sum())
+    if weight_total <= 0:
+        return {
+            "available": False,
+            "reason": "portfolio_weight_sum_zero",
+        }
+    weight_vector = weight_vector / weight_total
+
+    scenario_seed = (
+        int(random_seed)
+        + MONTE_CARLO_METRIC_RANGE_SEED_OFFSET
+    )
+    rng = np.random.default_rng(scenario_seed)
+
+    # 모든 월·경로의 자산별 로그수익률을 한 번에 생성한다.
+    # 약 60개월 × 10,000경로 × 12자산 규모로,
+    # 월별 Python 반복 호출보다 빠르면서 메모리 사용도 제한적이다.
+    monthly_log_draws = rng.multivariate_normal(
+        mean=monthly_log_mean,
+        cov=monthly_covariance,
+        size=(months, simulations),
+        check_valid="ignore",
+    )
+
+    # Buy & Hold: 누적 로그수익률을 자산별 초기 금액에 적용한다.
+    np.cumsum(
+        monthly_log_draws,
+        axis=0,
+        out=monthly_log_draws,
+    )
+    np.exp(
+        monthly_log_draws,
+        out=monthly_log_draws,
+    )
+    monthly_log_draws *= (
+        weight_vector * total_asset
+    )
+
+    portfolio_value_history = (
+        monthly_log_draws.sum(axis=2)
+    )
+    portfolio_value_history = np.vstack(
+        [
+            np.full(
+                (1, simulations),
+                total_asset,
+                dtype=float,
+            ),
+            portfolio_value_history,
+        ]
+    )
+
+    running_peak = np.maximum.accumulate(
+        portfolio_value_history,
+        axis=0,
+    )
+    drawdown = (
+        portfolio_value_history / running_peak - 1.0
+    )
+    path_mdd = drawdown.min(axis=0)
+    gross_portfolio_value = (
+        portfolio_value_history[-1]
+    )
+
+    effective_tax_rate = _effective_tax_rate_from_breakdown(
+        tax_breakdown
+    )
+    gross_gain = gross_portfolio_value - total_asset
+    after_tax_terminal_asset = (
+        total_asset
+        + np.where(
+            gross_gain > 0,
+            gross_gain * (1.0 - effective_tax_rate),
+            gross_gain,
+        )
+    )
+    after_tax_terminal_asset = np.maximum(
+        after_tax_terminal_asset,
+        0.0,
+    )
+    after_tax_annualized_return = (
+        np.power(
+            np.maximum(
+                after_tax_terminal_asset / total_asset,
+                1e-12,
+            ),
+            1.0 / horizon_years,
+        )
+        - 1.0
+    )
+
+    start_index_value = clean_returns.index[0]
+    end_index_value = clean_returns.index[-1]
+
+    start_formatter = getattr(
+        start_index_value,
+        "strftime",
+        None,
+    )
+    end_formatter = getattr(
+        end_index_value,
+        "strftime",
+        None,
+    )
+
+    start_date_str = (
+        start_formatter("%Y-%m-%d")
+        if callable(start_formatter)
+        else str(start_index_value)
+    )
+    end_date_str = (
+        end_formatter("%Y-%m-%d")
+        if callable(end_formatter)
+        else str(end_index_value)
+    )
+
+    scenario_basis_id = (
+        f"{MONTE_CARLO_METRIC_RANGE_VERSION}:"
+        f"{scenario_seed}:{simulations}:{horizon_years}:"
+        f"{start_date_str}:{end_date_str}"
+    )
+
+    return {
+        "available": True,
+        "version": MONTE_CARLO_METRIC_RANGE_VERSION,
+        "scenario_basis_id": scenario_basis_id,
+        "simulation_count": simulations,
+        "horizon_years": horizon_years,
+        "time_step": "monthly",
+        "rebalancing": "none_buy_and_hold",
+        "common_market_scenarios": True,
+        "random_seed": scenario_seed,
+        "display_range": {
+            "lower_percentile": (
+                MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER
+            ),
+            "center_percentile": (
+                MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER
+            ),
+            "upper_percentile": (
+                MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER
+            ),
+            "central_coverage": 0.60,
+            "label": "P20-P80",
+        },
+        "after_tax_return": _metric_percentile_payload(
+            after_tax_annualized_return,
+            digits=6,
+            unit="rate",
+        ),
+        "mdd": _metric_percentile_payload(
+            path_mdd,
+            digits=6,
+            unit="rate",
+        ),
+        "effective_tax_rate_proxy": safe_round(
+            effective_tax_rate,
+            6,
+        ),
+        "assumptions": {
+            "path_model": (
+                "correlated_multivariate_log_returns"
+            ),
+            "drift_source": "asset_expected_returns",
+            "covariance_source": (
+                "historical_daily_log_return_covariance"
+            ),
+            "after_tax_method": (
+                "positive_terminal_gain_adjusted_by_"
+                "current_effective_tax_rate_proxy"
+            ),
+            "mdd_method": (
+                "minimum_drawdown_of_same_simulated_"
+                "gross_portfolio_path"
+            ),
+            "tax_on_loss": False,
+            "fees_in_simulated_paths": False,
+            "range_note": (
+                "세후수익률과 MDD는 동일한 10,000개 "
+                "Buy & Hold 시장 경로에서 계산하며, "
+                "P20~P80은 경로의 중앙 60% 범위입니다."
+            ),
+            "disclaimer": (
+                "시뮬레이션 결과는 실제 수익을 보장하지 않습니다."
+            ),
+        },
+    }
 
 
 def calculate_metric_amounts(
@@ -4447,6 +4489,33 @@ def build_portfolio_response(
         include_benchmark_metrics=True,
     )
 
+    try:
+        monte_carlo_metric_ranges = (
+            calculate_monte_carlo_metric_ranges(
+                weights=weights,
+                returns=returns,
+                expected_returns=expected_returns,
+                total_asset=request.total_asset,
+                investment_horizon_years=(
+                    request.investment_horizon_years
+                ),
+                tax_breakdown=metrics.get(
+                    "tax_breakdown"
+                ),
+                random_seed=request.random_seed,
+            )
+        )
+    except Exception:
+        # Range는 부가 지표이므로 계산 실패가 전체 추천 응답을
+        # 중단시키지 않도록 안전하게 unavailable로 내린다.
+        logger.exception(
+            "Failed to calculate Monte Carlo metric ranges"
+        )
+        monte_carlo_metric_ranges = {
+            "available": False,
+            "reason": "unexpected_simulation_error",
+        }
+
     cumulative_source_returns = (
         backtest_returns
         if backtest_returns is not None
@@ -4498,6 +4567,25 @@ def build_portfolio_response(
             ],
             "liquidity_coverage": metrics["liquidity_coverage"],
             "after_tax_return": metrics["after_tax_return"],
+            "after_tax_return_range": (
+                monte_carlo_metric_ranges.get(
+                    "after_tax_return"
+                )
+                if monte_carlo_metric_ranges.get(
+                    "available"
+                )
+                else None
+            ),
+            "mdd_range": (
+                monte_carlo_metric_ranges.get("mdd")
+                if monte_carlo_metric_ranges.get(
+                    "available"
+                )
+                else None
+            ),
+            "monte_carlo_range_basis": (
+                monte_carlo_metric_ranges
+            ),
             "krw": metrics["metric_amounts"],
             "metric_amounts": metrics["metric_amounts"],
             "taxable_financial_income": metrics[
@@ -6893,6 +6981,9 @@ class StressMetricsRequest(BaseModel):
 
     weights: Optional[Dict[str, float]] = Field(None)
     portfolio: PortfolioRequest
+    # 위기 시나리오 버튼용. 지정 시 금리·환율 슬라이더 대신 해당 위기 충격 벡터를 주입한다.
+    # None이면 슬라이더(금리·환율) 기반. Literal로 두어 Pydantic이 입구에서 값 검증·문서화.
+    scenario: Optional[Literal["crisis_2008", "crisis_ru_war"]] = Field(None)
 
 
 @router.post("/portfolio/stress-metrics", response_model=Dict[str, Any])
@@ -6928,7 +7019,11 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             for asset in weights
             if asset in returns.columns and weights[asset] > 1e-12
         ]
-        asset_shocks = derive_asset_shocks_from_macro(assets, req)
+        # 위기 시나리오 버튼이면 해당 위기 충격 벡터, 아니면 금리·환율 슬라이더 충격.
+        if request.scenario:
+            asset_shocks = resolve_scenario_shocks(request.scenario, assets)
+        else:
+            asset_shocks = derive_asset_shocks_from_macro(assets, req)
         stressed = calculate_metrics(
             weights,
             analysis_returns,
@@ -6940,8 +7035,12 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
 
         return {
             "as_of": datetime.now(KST).isoformat(timespec="seconds"),
-            "stress_interest_rate_shock": req.stress_interest_rate_shock,
-            "stress_fx_shock": req.stress_fx_shock,
+            "scenario": request.scenario,
+            # 위기 시나리오일 땐 슬라이더 충격이 무시되므로 None으로 명시(오해 방지).
+            "stress_interest_rate_shock": (
+                None if request.scenario else req.stress_interest_rate_shock
+            ),
+            "stress_fx_shock": None if request.scenario else req.stress_fx_shock,
             "asset_shocks": {k: safe_round(v, 6) for k, v in asset_shocks.items()},
             "base": base,
             "stressed": stressed,
