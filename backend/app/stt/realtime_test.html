@@ -249,6 +249,13 @@
           return;
         }
 
+        const selectedClientId = clientId.value.trim();
+        if (!selectedClientId) {
+          setStatus("시작 실패: client_id를 입력하세요");
+          log("missing client_id");
+          return;
+        }
+
         setStatus("마이크 권한 요청 중");
         await setupAudio();
 
@@ -256,14 +263,6 @@
         ws.binaryType = "arraybuffer";
 
         ws.onopen = () => {
-          const selectedClientId = clientId.value.trim();
-          if (!selectedClientId) {
-            setStatus("시작 실패: client_id를 입력하세요");
-            log("missing client_id");
-            ws.close();
-            cleanupAudio();
-            return;
-          }
           ws.send(
             JSON.stringify({
               client_id: selectedClientId,
