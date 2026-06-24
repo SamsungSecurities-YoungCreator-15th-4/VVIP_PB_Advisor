@@ -45,6 +45,8 @@ class IPSRequest(BaseModel):
     tax_text: str = Field("")
     tax_profile: Dict[str, Any] = Field(default_factory=dict)
     tax_sensitivity: Optional[Literal["low", "medium", "high"]] = Field(None)
+    legal_text: str = Field("")
+    legal_profile: Dict[str, Any] = Field(default_factory=dict)
     liquidity_need: Literal["low", "mid", "high"] = Field(...)
 
     current_weights: Optional[Dict[str, float]] = Field(None)
@@ -177,6 +179,8 @@ class PortfolioRequest(BaseModel):
     tax_text: str = Field("")
     tax_profile: Dict[str, Any] = Field(default_factory=dict)
     tax_sensitivity: Optional[Literal["low", "medium", "high"]] = Field(None)
+    legal_text: str = Field("")
+    legal_profile: Dict[str, Any] = Field(default_factory=dict)
     liquidity_need: Literal["low", "mid", "high"] = Field("mid")
     current_weights: Optional[Dict[str, float]] = Field(None)
 

@@ -237,6 +237,12 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
             "tax_text": request.tax_text,
             "tax_profile": request.tax_profile,
             "tax_sensitivity": request.tax_sensitivity,
+            "legal_text": request.legal_text,
+            "legal_profile": request.legal_profile,
+            "legal_engine_note": (
+                "Legal은 결정론적 안전망과 Legal 전용 LLM으로 전문가 검토 주제만 구조화하며, "
+                "포트폴리오 비중·점수·자산 제외에는 반영하지 않습니다."
+            ),
             "liquidity_need": request.liquidity_need,
             "risk_free_rate": request.risk_free_rate,
             "risk_free_rate_basis": "미국 기준 무위험이자율. 시나리오 테스트 금리와 분리.",

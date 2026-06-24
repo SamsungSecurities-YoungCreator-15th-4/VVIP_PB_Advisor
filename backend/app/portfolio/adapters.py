@@ -823,6 +823,16 @@ def extract_optional_age(payload: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+
+
+def apply_legal_profile_to_ips_payload(
+    ips_payload: Dict[str, Any],
+    legal_value: Any,
+) -> Dict[str, Any]:
+    from .legal_semantic import apply_legal_profile_to_ips_payload as _apply_legal
+
+    return _apply_legal(ips_payload, legal_value)
+
 def normalize_analysis_request_payload(
     payload: Dict[str, Any],
 ) -> Tuple[AnalysisRequest, Dict[str, Any]]:
@@ -886,6 +896,19 @@ def normalize_analysis_request_payload(
                 tax_value,
             )
 
+        legal_value = (
+            normalized_ips.get("legal_text")
+            or normalized_ips.get("Legal")
+            or normalized_ips.get("legal")
+        )
+        if legal_value is None and isinstance(rrttllu_payload, dict):
+            legal_value = rrttllu_payload.get("Legal")
+        if legal_value is not None:
+            normalized_ips = apply_legal_profile_to_ips_payload(
+                normalized_ips,
+                legal_value,
+            )
+
         normalized_payload["ips"] = normalized_ips
         return AnalysisRequest(**normalized_payload), {
             "source": "analysis_request",
@@ -910,6 +933,10 @@ def normalize_analysis_request_payload(
     )
     tax_value = flat_ips.get("Tax")
     tax_profile = parse_tax_text(tax_value)
+    legal_value = flat_ips.get("Legal")
+    from .legal_semantic import parse_legal_semantic
+
+    legal_profile = parse_legal_semantic(legal_value)
     unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
     if unique_need_amount <= 0:
         adapter_warnings.append(
@@ -949,6 +976,8 @@ def normalize_analysis_request_payload(
             "tax_text": stringify_unique_value(tax_value),
             "tax_profile": tax_profile,
             "tax_sensitivity": None,
+            "legal_text": legal_profile.get("text", ""),
+            "legal_profile": legal_profile,
             "liquidity_need": normalize_liquidity_value(flat_ips.get("Liquidity")),
             "current_weights": current_weights_from_portfolio,
             "risk_free_rate": safe_float(

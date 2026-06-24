@@ -37,7 +37,13 @@ class STTIPSJson(BaseModel):
         examples=["금융소득종합과세가 걱정되고 ISA는 2022년 가입, 올해 1,500만원 납입"],
     )
     Liquidity: Any = Field(..., description="유동성 필요 수준. 예: 낮음/중간/높음", examples=["중간"])
-    Legal: Optional[Any] = Field(None, description="법률·규제·계약 제약 원문")
+    Legal: Optional[Any] = Field(
+        None,
+        description=(
+            "법률·규제·계약 관련 자유문장. 결정론적 안전망을 우선하고 Legal 전용 LLM은 "
+            "미분류 검토 주제만 보완하며 포트폴리오 비중·점수에는 반영하지 않음"
+        ),
+    )
     Unique: Optional[Any] = Field(None, description="필요자금·ISA·IRP·승계 등 고객 고유 상황 원문")
 
     model_config = ConfigDict(extra="ignore")
