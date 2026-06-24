@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { fetchPortfolioStressTest } from "@/lib/api";
+
 import {
   PORTFOLIOS,
   SCENARIO_BASE,
@@ -21,13 +21,13 @@ const SCENARIO_PRESETS = [
 ] as const;
 type PresetKey = "current" | (typeof SCENARIO_PRESETS)[number]["key"];
 
-/** 우측 상단: 시나리오 Test — 금리·환율 슬라이더와 분석하기 버튼 */
+/** 우측 상단: 시나리오 Test — 금리·환율 슬라이더 */
 export default function StressTestSection() {
   const {
     scenario, setScenario, liveBase,
-    ips, customers, selectedCustomerId, consultationId,
+    customers, selectedCustomerId,
     portfolios, stressedPortfolios, isStressMode,
-    setStressedPortfolios, setStressAnalyzing, stressAnalyzing, clearStressMode,
+    clearStressMode,
   } = useDashboardStore();
 
   const [preset, setPreset] = useState<PresetKey | null>("current");
@@ -41,36 +41,10 @@ export default function StressTestSection() {
     Math.abs(rateDelta) >= SCENARIO_WARN.rateDeltaPct ||
     Math.abs(fxDelta)   >= SCENARIO_WARN.fxDeltaKrw;
 
-  // "현재" 프리셋 핸들러 — 시나리오를 liveBase로 리셋하고 스트레스 모드 해제
   const handleCurrentPreset = () => {
     setPreset("current");
     setScenario({ ratePct: liveBase.ratePct, fxKrw: liveBase.fxKrw });
     clearStressMode();
-  };
-
-  // 분석하기 버튼
-  const handleAnalyze = async () => {
-    if (!customer) return;
-    setStressAnalyzing(true);
-    try {
-      const result = await fetchPortfolioStressTest({
-        aumEokwon,
-        returnPct:      ips.returnPct,
-        risk:           ips.risk,
-        timeYears:      ips.timeYears,
-        liquidity:      ips.liquidity,
-        tax:            ips.tax,
-        ratePct:        scenario.ratePct,   // 슬라이더 값 그대로 전달
-        fxKrw:          scenario.fxKrw,
-        consultationId: consultationId || undefined,
-        clientId:       customer.id,
-      });
-      setStressedPortfolios(result);
-    } catch {
-      // 실패 시 stress mode 유지 않음
-    } finally {
-      setStressAnalyzing(false);
-    }
   };
 
   // 예상 평가손익 (연간 억원)
@@ -155,23 +129,6 @@ export default function StressTestSection() {
         maxLabel={SCENARIO_BASE.fxMax.toLocaleString()}
         onChange={(v) => { setPreset(null); setScenario({ fxKrw: v }); }}
       />
-
-      {/* 분석하기 버튼 */}
-      <button
-        type="button"
-        onClick={handleAnalyze}
-        disabled={stressAnalyzing}
-        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-[13px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-      >
-        {stressAnalyzing ? (
-          <>
-            <Loader2 className="size-3.5 animate-spin" />
-            분석 중...
-          </>
-        ) : (
-          "분석하기"
-        )}
-      </button>
 
       {/* 예상 평가손익 */}
       <div className="mt-3 rounded-xl bg-brand/5 p-3">

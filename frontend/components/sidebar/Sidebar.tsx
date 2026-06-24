@@ -249,7 +249,7 @@ export default function Sidebar() {
         onResume={resumeRealtime}
         onStop={stopRealtime}
       />
-      <aside className="flex w-[300px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
+      <aside className="flex w-[300px] shrink-0 self-start flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
         {/* 패널 헤더 */}
         <div className="flex items-center px-0.5 pb-0.5">
           <button
@@ -475,7 +475,7 @@ export default function Sidebar() {
         </Card>
 
         {/* IPS 조율기 */}
-        <Card className="flex-1 gap-0 p-3">
+        <Card className="gap-0 p-3">
           <div className="mb-1">
             <p className="text-[14px] font-bold">IPS 조율기</p>
           </div>
@@ -549,11 +549,13 @@ export default function Sidebar() {
               className="h-6 text-[13px] md:text-[13px]"
             />
           </IpsRow>
-          <IpsRow k="Unique" sub="특수" last>
-            <Input
+          <IpsRow k="Unique" sub="특수" last alignTop>
+            <textarea
               value={ips.unique}
               onChange={(e) => setIps({ unique: e.target.value })}
-              className="h-6 text-[13px] md:text-[13px]"
+              rows={5}
+              className="w-full resize-none rounded-md border border-input bg-white px-3 py-1.5 text-[13px] font-medium text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="특이사항 입력..."
             />
           </IpsRow>
         </Card>
@@ -742,18 +744,20 @@ function IpsRow({
   k,
   sub,
   last,
+  alignTop,
   children,
 }: {
   k: string;
   sub: string;
   last?: boolean;
+  alignTop?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
-      className={`flex items-center gap-2 py-1.5 ${last ? "" : "border-b border-muted"}`}
+      className={`flex gap-2 py-1.5 ${alignTop ? "items-start" : "items-center"} ${last ? "" : "border-b border-muted"}`}
     >
-      <div className="w-14 shrink-0">
+      <div className={`w-14 shrink-0 ${alignTop ? "pt-1" : ""}`}>
         <b className="block text-[13px] font-extrabold">{k}</b>
         <span className="block text-[10px] font-semibold leading-none text-muted-foreground">
           {sub}
