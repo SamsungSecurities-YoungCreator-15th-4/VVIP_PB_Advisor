@@ -25,11 +25,20 @@ function isPublic(pathname: string): boolean {
   );
 }
 
-function redirectTo(request: NextRequest, pathname: string): NextResponse {
+// getUser() 가 토큰을 갱신/삭제하면 그 세션 쿠키가 `from` 응답에 실린다. 리다이렉트
+// 시 이를 옮겨 담지 않으면(특히 만료로 쿠키가 삭제된 경우) 브라우저에 무효 쿠키가
+// 남아 매 요청마다 실패한 재검증이 반복된다. 그래서 모든 리다이렉트에서 쿠키를 보존한다.
+function redirectTo(
+  request: NextRequest,
+  pathname: string,
+  from?: NextResponse,
+): NextResponse {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
   url.search = "";
-  return NextResponse.redirect(url);
+  const redirect = NextResponse.redirect(url);
+  from?.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+  return redirect;
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
@@ -72,18 +81,14 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 미인증 + 보호 경로 → 로그인으로.
+  // 미인증 + 보호 경로 → 로그인으로(만료로 삭제된 세션 쿠키도 함께 정리).
   if (!user && !isPublic(pathname)) {
-    return redirectTo(request, "/login");
+    return redirectTo(request, "/login", response);
   }
 
   // 인증됨 + 로그인 화면 → 홈으로(갱신된 세션 쿠키 보존).
   if (user && isPublic(pathname)) {
-    const redirect = redirectTo(request, "/");
-    response.cookies.getAll().forEach((cookie) => {
-      redirect.cookies.set(cookie);
-    });
-    return redirect;
+    return redirectTo(request, "/", response);
   }
 
   return response;
