@@ -340,6 +340,7 @@ function CoverPage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.png"
               alt=""
