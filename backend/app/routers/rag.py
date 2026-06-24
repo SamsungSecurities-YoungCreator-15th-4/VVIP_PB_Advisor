@@ -12,7 +12,9 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth import get_current_pb_id
 from pydantic import BaseModel, ConfigDict
 
 from app.rag.generate import (
@@ -124,7 +126,10 @@ class InsightResponse(BaseModel):
 
 
 @router.post("/insight", response_model=InsightResponse)
-def create_insight(request: InsightRequest) -> InsightResponse:
+def create_insight(
+    request: InsightRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> InsightResponse:
     # TODO: consultation_id 존재 검증 — consultation 테이블 조회는 다음 단계에서 추가.
     query = request.query.strip()
     if not query:

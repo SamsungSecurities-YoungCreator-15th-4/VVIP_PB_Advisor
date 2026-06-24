@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
-from app.core.auth import get_current_pb_id
+from app.core.auth import get_current_pb_id, resolve_pb_id
 from app.db.supabase import get_supabase
 from app.schemas.consultations import (
     ConsultationListResponse,
@@ -175,6 +175,12 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
     6) 서버가 partial_transcript 이벤트와 completed 이벤트를 JSON으로 반환
     """
     await websocket.accept()
+    # 인증: 브라우저 WebSocket 은 Authorization 헤더를 못 실으므로 토큰을
+    # 쿼리파라미터(?token=<JWT>)로 받아 검증한다. 실패 시 정책위반(1008)으로 종료.
+    pb_id = resolve_pb_id(websocket.query_params.get("token"))
+    if pb_id is None:
+        await websocket.close(code=1008, reason="유효하지 않은 토큰입니다.")
+        return
     transcriber: RealtimeConversationTranscriber | None = None
     transcript_task: asyncio.Task[None] | None = None
     transcript_queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -204,7 +210,10 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
         )
 
         supabase = get_supabase()
-        client = await run_in_threadpool(_get_client_by_id, supabase, client_id)
+        # 소유권 검사: 인증된 PB 본인 담당 고객만 허용(타 PB 고객 차단 — IDOR 방지).
+        client = await run_in_threadpool(
+            _get_client_by_id, supabase, client_id, pb_id=pb_id
+        )
         if not client:
             await _send_realtime_json(
                 websocket,

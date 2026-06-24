@@ -16,7 +16,9 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth import get_current_pb_id
 from pydantic import BaseModel, model_validator
 
 from app.core.azure_openai import get_llm_client, get_llm_deployment
@@ -114,7 +116,10 @@ def _summarize(corp_name: str, fin: FinancialResult) -> str:
 
 
 @router.post("/insight", response_model=DartInsightResponse)
-def create_dart_insight(request: DartInsightRequest) -> DartInsightResponse:
+def create_dart_insight(
+    request: DartInsightRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> DartInsightResponse:
     query = (request.corp_code or request.corp_name or "").strip()
 
     resolved = resolve_corp_code(query)
