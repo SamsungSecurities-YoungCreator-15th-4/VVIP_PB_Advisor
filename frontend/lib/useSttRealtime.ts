@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useDashboardStore } from "@/lib/store";
+import { getSupabase } from "@/lib/supabaseClient";
 import type { ConsultMessage } from "@/lib/mockData";
 import type {
   ConsultationResponse,
@@ -123,14 +124,28 @@ export function useSttRealtime() {
       isActiveRef.current = true;
 
       try {
-        // 1) 마이크 권한 요청
+        // 1) 로그인 세션 확인 — 토큰이 없으면 백엔드 WS 가 즉시 1008 로 끊으므로,
+        // 마이크 권한 요청·오디오 리소스 생성 전에 먼저 검사해 불필요한 팝업/할당을 피한다.
+        // (브라우저 WebSocket 은 Authorization 헤더를 못 실어 ?token= 쿼리파라미터로 전달.)
+        const {
+          data: { session },
+        } = await getSupabase().auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          setErrorMsg("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+          setStatus("error");
+          cleanup();
+          return;
+        }
+
+        // 2) 마이크 권한 요청
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: false,
         });
         streamRef.current = stream;
 
-        // 2) AudioContext + WorkletNode 준비
+        // 3) AudioContext + WorkletNode 준비
         const audioCtx = new AudioContext();
         audioCtxRef.current = audioCtx;
         if (audioCtx.state === "suspended") await audioCtx.resume();
@@ -140,8 +155,10 @@ export function useSttRealtime() {
         });
         workletRef.current = workletNode;
 
-        // 3) WebSocket 연결
-        const ws = new WebSocket(WS_ENDPOINT);
+        // 4) WebSocket 연결 — 위에서 확보한 access_token 을 ?token= 으로 전달.
+        const ws = new WebSocket(
+          `${WS_ENDPOINT}?token=${encodeURIComponent(token)}`,
+        );
         ws.binaryType = "arraybuffer";
         wsRef.current = ws;
 
@@ -168,7 +185,7 @@ export function useSttRealtime() {
           const event = msg.event as string;
 
           if (event === "started") {
-            // 4) 오디오 그래프 연결 — analyser(시각화용) + WorkletNode(PCM→WS)
+            // 5) 오디오 그래프 연결 — analyser(시각화용) + WorkletNode(PCM→WS)
             const source = audioCtx.createMediaStreamSource(stream);
             const analyser = audioCtx.createAnalyser();
             analyser.fftSize = 256;
