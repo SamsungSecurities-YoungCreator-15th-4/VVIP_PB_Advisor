@@ -45,6 +45,9 @@ export default function PortfolioSection() {
     const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
     if (!customer) return;
 
+    // 데이터 패칭 로딩 패턴: 즉시 스피너를 띄우고(동기 setState) 비동기 fetch 후 해제한다.
+    // set-state-in-effect 규칙은 cascading render 를 경계하지만, 여기선 의도된 로딩 표시다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCalculating(true);
     fetchPortfolioCalculate({
       aumEokwon: customer.aumEokwon,
