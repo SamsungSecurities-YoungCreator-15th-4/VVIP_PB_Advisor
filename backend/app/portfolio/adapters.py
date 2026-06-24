@@ -39,7 +39,11 @@ from .utils import (
 KST = ZoneInfo("Asia/Seoul")
 
 KOREAN_MONEY_UNITS = {
+    "조": 1_000_000_000_000,
     "억": 100_000_000,
+    "천만": 10_000_000,
+    "백만": 1_000_000,
+    "십만": 100_000,
     "만": 10_000,
     "천": 1_000,
 }
@@ -86,9 +90,13 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
     normalized = text_value.replace(",", "")[:_MAX_TEXT_PARSE_LEN]
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", normalized):
+    unit_pattern = r"조|억|천\s*만|백\s*만|십\s*만|만|천"
+    for number_text, unit in re.findall(
+        rf"([0-9]+(?:\.[0-9]+)?)\s*({unit_pattern})", normalized
+    ):
         matched_unit = True
-        total += float(number_text) * KOREAN_MONEY_UNITS[unit]
+        normalized_unit = re.sub(r"\s+", "", unit)
+        total += float(number_text) * KOREAN_MONEY_UNITS[normalized_unit]
 
     if matched_unit:
         return float(total)
@@ -237,9 +245,13 @@ def parse_explicit_money_amount_krw(value: Any) -> float:
 
     total = 0.0
     matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", text_value):
+    unit_pattern = r"조|억|천\s*만|백\s*만|십\s*만|만|천"
+    for number_text, unit in re.findall(
+        rf"([0-9]+(?:\.[0-9]+)?)\s*({unit_pattern})", text_value
+    ):
         matched_unit = True
-        total += float(number_text) * KOREAN_MONEY_UNITS[unit]
+        normalized_unit = re.sub(r"\s+", "", unit)
+        total += float(number_text) * KOREAN_MONEY_UNITS[normalized_unit]
     if matched_unit:
         return float(total)
 
@@ -336,7 +348,15 @@ def parse_liquidity_need_amount(unique_value: Any, text: str) -> float:
     if has_account_info:
         return 0.0
 
-    return parse_amount_krw(unique_value)
+    # 자산 선호 비중(예: "미국 배당주 20%")을 20원 필요자금으로 오인하지 않는다.
+    stripped = text.strip()
+    if "%" in stripped:
+        return 0.0
+    if re.fullmatch(r"[0-9,]+(?:\.[0-9]+)?", stripped):
+        return parse_amount_krw(stripped)
+    if re.search(r"[0-9]+(?:\.[0-9]+)?\s*(?:조|억|만|천)\s*원?|[0-9]\s*원", stripped):
+        return parse_amount_krw(stripped)
+    return 0.0
 
 
 def extract_generic_client_context(unique_value: Any, text: str) -> Dict[str, Any]:
@@ -529,12 +549,22 @@ def apply_unique_profile_to_ips_payload(
     unique_value: Any,
     adapter_warnings: List[str],
 ) -> Dict[str, Any]:
-    profile = extract_unique_profile(unique_value)
+    from .unique_semantic import enrich_unique_profile
+
+    profile = enrich_unique_profile(
+        extract_unique_profile(unique_value),
+        unique_value,
+    )
     result = dict(ips_payload)
 
+    existing_unique_profile = dict(result.get("unique_profile") or {})
     result["unique_profile"] = {
         **profile,
-        **(result.get("unique_profile") or {}),
+        **existing_unique_profile,
+        # 원문 Unique를 다시 분석한 semantic 결과는 이전 계산에서 남은 profile보다 우선한다.
+        # 그래야 PB 승인 인사이트를 Unique에 추가한 뒤 재분석할 때 새 제약이 실제로 반영된다.
+        "semantic_constraints": list(profile.get("semantic_constraints") or []),
+        "semantic_audit": dict(profile.get("semantic_audit") or {}),
     }
     result["unique_items"] = result.get("unique_items") or profile["items"]
     result["client_context"] = {
@@ -556,6 +586,12 @@ def apply_unique_profile_to_ips_payload(
             result["isa_account_age_years"] = isa_info["account_age_years"]
         if safe_float(result.get("isa_cumulative_contribution")) <= 0:
             result["isa_cumulative_contribution"] = isa_info["cumulative_contribution"]
+        if isa_info.get("current_year_contribution") is not None and safe_float(
+            result.get("isa_current_year_contribution")
+        ) <= 0:
+            result["isa_current_year_contribution"] = isa_info[
+                "current_year_contribution"
+            ]
 
     irp_info = profile["irp"]
     if irp_info["detected"]:
@@ -884,7 +920,12 @@ def normalize_analysis_request_payload(
 
     investment_horizon = int(max(parse_amount_krw(flat_ips.get("Time")), 1))
     unique_value = flat_ips.get("Unique")
-    unique_profile = extract_unique_profile(unique_value)
+    from .unique_semantic import enrich_unique_profile
+
+    unique_profile = enrich_unique_profile(
+        extract_unique_profile(unique_value),
+        unique_value,
+    )
     tax_value = flat_ips.get("Tax")
     tax_profile = parse_tax_text(tax_value)
     unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
@@ -976,8 +1017,13 @@ def normalize_analysis_request_payload(
             "isa_account_exists": unique_profile["isa"]["account_exists"],
             "isa_account_age_years": unique_profile["isa"]["account_age_years"],
             "isa_cumulative_contribution": unique_profile["isa"]["cumulative_contribution"],
-            "isa_current_year_contribution": safe_float(
-                payload.get("isa_current_year_contribution"), 0.0
+            "isa_current_year_contribution": (
+                safe_float(payload.get("isa_current_year_contribution"), 0.0)
+                if payload.get("isa_current_year_contribution") is not None
+                else safe_float(
+                    unique_profile["isa"].get("current_year_contribution"),
+                    0.0,
+                )
             ),
             "irp_account_exists": unique_profile["irp"]["account_exists"],
             "irp_account_age_years": unique_profile["irp"]["account_age_years"],

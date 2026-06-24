@@ -228,8 +228,8 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
                 "개인 투자포트폴리오 계산",
             ),
             "unique_engine_note": (
-                "Unique 원문은 보존하되 LLM 없이 결정론적 규칙으로 "
-                "금액·시점·ISA·IRP 및 범용 법인/승계 플래그만 반영합니다."
+                "Unique는 결정론적 금액·시점·ISA·IRP 파서를 우선하고, "
+                "원문 검증을 통과한 LLM 방향성은 현재 비중 대비 hard constraint로만 반영합니다."
             ),
             "risk_profile": request.risk_profile,
             "client_risk_level": CLIENT_RISK_LEVEL[request.risk_profile],

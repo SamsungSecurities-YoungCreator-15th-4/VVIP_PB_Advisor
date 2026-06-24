@@ -20,9 +20,20 @@ MAX_TEXT_LENGTH = 4000
 MONEY_UNITS = {
     "조": 1_000_000_000_000,
     "억": 100_000_000,
+    "천만": 10_000_000,
+    "백만": 1_000_000,
+    "십만": 100_000,
     "만": 10_000,
     "천": 1_000,
 }
+MONEY_TOKEN_PATTERN = (
+    r"[0-9][0-9,]*(?:\.[0-9]+)?\s*"
+    r"(?:조|억|천\s*만|백\s*만|십\s*만|만|천)"
+)
+MONEY_EXPRESSION_PATTERN = (
+    rf"((?:{MONEY_TOKEN_PATTERN}\s*)+\s*원?|"
+    r"[0-9][0-9,]*(?:\.[0-9]+)?\s*원)"
+)
 
 
 def _rule(
@@ -521,8 +532,12 @@ def parse_money_krw(value: Any) -> Optional[float]:
 
     total = 0.0
     matched = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*(조|억|만|천)", text):
-        total += float(number_text) * MONEY_UNITS[unit]
+    unit_pattern = r"조|억|천\s*만|백\s*만|십\s*만|만|천"
+    for number_text, unit in re.findall(
+        rf"([0-9]+(?:\.[0-9]+)?)\s*({unit_pattern})", text
+    ):
+        normalized_unit = re.sub(r"\s+", "", unit)
+        total += float(number_text) * MONEY_UNITS[normalized_unit]
         matched = True
     if matched:
         return total
@@ -597,7 +612,7 @@ def _match_registry(
 
 def _extract_amount_after_label(text: str, labels: Sequence[str], tail: str = "") -> Optional[float]:
     label_pattern = "|".join(re.escape(label).replace(r"\ ", r"\s*") for label in labels)
-    money_pattern = r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:(?:조|억|만|천)\s*원?|원))"
+    money_pattern = MONEY_EXPRESSION_PATTERN
     pattern = rf"(?:{label_pattern}).{{0,35}}?{money_pattern}{tail}"
     match = re.search(pattern, text, flags=re.IGNORECASE)
     if not match:
@@ -657,7 +672,7 @@ def _account_facts(text: str, key: str, aliases: Sequence[str], now_year: int) -
     )
     if current_contribution is None:
         reverse = re.search(
-            r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:(?:조|억|만|천)\s*원?|원))"
+            rf"{MONEY_EXPRESSION_PATTERN}"
             r".{0,12}(?:올해|금년|당해).{0,12}(?:납입|입금)",
             segment,
             flags=re.IGNORECASE,
@@ -689,7 +704,7 @@ def _extract_facts(text: str, mentions: List[Dict[str, Any]]) -> Dict[str, Any]:
         r"(?:외부\s*금융소득|기존\s*금융소득|연간\s*금융소득|"
         r"금융소득|이자\s*[·및과와]?\s*배당소득)"
         r"\s*(?:은|는|이|가|약|총|합계|연간)?\s*[:=]?\s*"
-        r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:(?:조|억|만|천)\s*원?|원))",
+        rf"{MONEY_EXPRESSION_PATTERN}",
         text,
         flags=re.IGNORECASE,
     )
@@ -751,7 +766,7 @@ def _extract_facts(text: str, mentions: List[Dict[str, Any]]) -> Dict[str, Any]:
         )
         if transfer_amount is None:
             reverse_transfer = re.search(
-                r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:(?:조|억|만|천)\s*원?|원))"
+                rf"{MONEY_EXPRESSION_PATTERN}"
                 r".{0,35}?(?:증여|상속|승계|이전|물려)",
                 text,
             )
@@ -835,6 +850,9 @@ def apply_tax_profile_to_ips_payload(
 
     result = dict(ips_payload)
     profile = parse_tax_text(tax_value)
+    from .tax_llm_fallback import enrich_tax_profile_with_llm
+
+    profile = enrich_tax_profile_with_llm(profile)
     facts = profile["facts"]
     result["tax_text"] = profile["raw_text"]
     result["tax_profile"] = profile

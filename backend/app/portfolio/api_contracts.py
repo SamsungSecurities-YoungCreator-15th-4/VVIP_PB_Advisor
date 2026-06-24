@@ -30,7 +30,10 @@ class STTIPSJson(BaseModel):
     Time: Any = Field(..., description="투자기간(년)", examples=[10])
     Tax: Any = Field(
         ...,
-        description="세금 관련 발화 원문. low/medium/high로 추론하지 않고 규칙 기반 파서가 세목·명시 사실만 추출",
+        description=(
+            "세금 관련 발화 원문. 결정론적 registry 파서가 우선이며, 누락 가능성이 있을 때만 "
+            "Tax 전용 LLM이 원문 검증을 거쳐 허용 fact를 보완"
+        ),
         examples=["금융소득종합과세가 걱정되고 ISA는 2022년 가입, 올해 1,500만원 납입"],
     )
     Liquidity: Any = Field(..., description="유동성 필요 수준. 예: 낮음/중간/높음", examples=["중간"])

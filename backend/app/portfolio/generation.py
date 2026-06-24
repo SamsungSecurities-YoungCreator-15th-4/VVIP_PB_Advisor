@@ -11,6 +11,11 @@ from .constants import DEFAULT_RANDOM_SEED, PORTFOLIO_B_MIN_WEIGHT_DISTANCE, SEP
 from .metrics import calculate_metrics, evaluate_guideline_detail, is_suitable_for_client
 from .models import PortfolioRequest
 from .utils import normalize_weights, safe_float, safe_round, validate_required_assets_available, validate_unique_asset
+from .unique_semantic import (
+    build_unique_constraint_warnings,
+    evaluate_unique_constraints,
+    get_excluded_assets,
+)
 
 # ============================================================
 # 10. 포트폴리오 생성 / 점수화
@@ -38,6 +43,10 @@ def get_recommendation_eligible_assets(
         eligible_assets = [
             asset for asset in eligible_assets if asset != "separate_tax_bond"
         ]
+    excluded_assets = get_excluded_assets(request.unique_profile)
+    eligible_assets = [
+        asset for asset in eligible_assets if asset not in excluded_assets
+    ]
     return eligible_assets
 
 
@@ -54,6 +63,7 @@ def build_constraint_warnings(request: PortfolioRequest) -> List[str]:
                 "unique_asset=separate_tax_bond 입력은 3년 미만 기간 조건과 맞지 않아 "
                 "unique 필요자금 배치 자산을 cash로 대체했습니다."
             )
+    warnings.extend(build_unique_constraint_warnings(request))
     return warnings
 
 
@@ -61,7 +71,7 @@ def generate_random_weights(
     assets: Optional[List[str]] = None,
     rng: Optional[np.random.Generator] = None,
 ) -> Dict[str, float]:
-    assets = assets or list(ASSET_TICKERS.keys())
+    assets = list(ASSET_TICKERS.keys()) if assets is None else list(assets)
     if not assets:
         raise ValueError("랜덤 포트폴리오를 생성할 자산 목록이 비어 있습니다.")
 
@@ -308,8 +318,10 @@ def find_recommended_portfolios(
     suitable_count = 0
     liquidity_pass_count = 0
     risk_control_pass_count = 0
+    unique_semantic_pass_count = 0
     common_filter_pass_count = 0
     rejection_counts = {
+        "unique_semantic": 0,
         "suitability": 0,
         "liquidity": 0,
         "historical_var_95": 0,
@@ -324,6 +336,12 @@ def find_recommended_portfolios(
         request,
     )
     effective_unique_asset = get_effective_unique_asset(request)
+    excluded_by_unique = get_excluded_assets(request.unique_profile)
+    if request.unique_need_amount > 0 and effective_unique_asset in excluded_by_unique:
+        raise ValueError(
+            "Unique의 투자 제외 지시와 필요자금 배치 자산이 충돌합니다: "
+            f"{effective_unique_asset}. unique_asset 또는 Unique 문장을 확인해 주세요."
+        )
     validate_required_assets_available(
         {effective_unique_asset: 1.0},
         raw_available_assets,
@@ -338,6 +356,16 @@ def find_recommended_portfolios(
             unique_need_amount=request.unique_need_amount,
             unique_asset=request.unique_asset,
         )
+        semantic_passed, _semantic_violations = evaluate_unique_constraints(
+            candidate_weights=final_weights,
+            unique_profile=request.unique_profile,
+            current_weights=request.current_weights,
+        )
+        if not semantic_passed:
+            rejection_counts["unique_semantic"] += 1
+            continue
+        unique_semantic_pass_count += 1
+
         metrics = calculate_metrics(
             weights=final_weights,
             returns=returns,
@@ -406,8 +434,8 @@ def find_recommended_portfolios(
 
     if not candidates:
         raise RuntimeError(
-            "고객 적합성·유동성·VaR·위험기여도 제한을 모두 통과한 "
-            "포트폴리오가 없습니다. num_simulations 또는 위험 기준을 검토해야 합니다."
+            "Unique 의미 제약·고객 적합성·유동성·VaR·위험기여도 제한을 모두 통과한 "
+            "포트폴리오가 없습니다. Unique의 명시 비중/제외 조건과 num_simulations를 검토해야 합니다."
         )
 
     candidates = sorted(
@@ -570,6 +598,7 @@ def find_recommended_portfolios(
         "suitable_portfolios": suitable_count,
         "liquidity_pass_portfolios": liquidity_pass_count,
         "risk_control_pass_portfolios": risk_control_pass_count,
+        "unique_semantic_pass_portfolios": unique_semantic_pass_count,
         "common_filter_pass_portfolios": common_filter_pass_count,
         "filtered_out_portfolios": generated_count - common_filter_pass_count,
         "rejection_counts": rejection_counts,
@@ -587,10 +616,16 @@ def find_recommended_portfolios(
         "target_after_tax_return": safe_round(target_after_tax_return, 6),
         "random_seed": request.random_seed,
         "eligible_assets": available_assets,
+        "unique_semantic_constraints": (
+            request.unique_profile.get("semantic_constraints", [])
+            if isinstance(request.unique_profile, dict)
+            else []
+        ),
+        "excluded_by_unique": sorted(excluded_by_unique),
         "excluded_by_horizon": (
             ["separate_tax_bond"]
             if "separate_tax_bond" in raw_available_assets
-            and "separate_tax_bond" not in available_assets
+            and not is_separate_tax_bond_allowed(request)
             else []
         ),
     }
