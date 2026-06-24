@@ -13,7 +13,13 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.rag.generate import ExtractiveGenerator, Generator, LLMGenerator
+from app.rag.generate import (
+    ExtractiveGenerator,
+    Generator,
+    InsightSummaryGenerator,
+    LLMGenerator,
+    fallback_insight_summary,
+)
 from app.rag.retrieval import embed_query, search_chunks
 
 logger = logging.getLogger(__name__)
@@ -26,6 +32,7 @@ KST = ZoneInfo("Asia/Seoul")
 # 폴백해 답이라도 나오게 한다(Render Free·Azure 장애 대비 — 데모가 죽지 않게).
 _generator: Generator = LLMGenerator()
 _fallback_generator: Generator = ExtractiveGenerator()
+_summary_generator = InsightSummaryGenerator()
 
 
 def _generate_answer(query: str, chunks: list[dict]) -> str:
@@ -37,6 +44,15 @@ def _generate_answer(query: str, chunks: list[dict]) -> str:
         # 않는다. exception() 으로 스택만 남기고 추출형으로 폴백한다.
         logger.exception("LLMGenerator 생성 실패 — ExtractiveGenerator 로 폴백합니다.")
         return _fallback_generator.generate(query, chunks)
+
+
+def _generate_summary(answer: str) -> str:
+    """gpt-4.1-mini 요약 시도 후 실패하면 answer 원문 기반 요약으로 폴백한다."""
+    try:
+        return _summary_generator.summarize(answer)
+    except Exception:
+        logger.exception("InsightSummaryGenerator 생성 실패 — fallback 요약으로 폴백합니다.")
+        return fallback_insight_summary(answer)
 
 
 class InsightContext(BaseModel):
@@ -61,6 +77,7 @@ class Citation(BaseModel):
 
 class InsightResponse(BaseModel):
     answer: str
+    summary: str
     citations: list[Citation]
     as_of: datetime
 
@@ -78,8 +95,10 @@ def create_insight(request: InsightRequest) -> InsightResponse:
         raise HTTPException(status_code=404, detail="관련 문서 없음(임계값 미달)")
 
     answer = _generate_answer(query, chunks)
+    summary = _generate_summary(answer)
     return InsightResponse(
         answer=answer,
+        summary=summary,
         citations=[Citation(**chunk) for chunk in chunks],
         as_of=datetime.now(KST),
     )
