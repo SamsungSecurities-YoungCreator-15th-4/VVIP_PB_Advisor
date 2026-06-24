@@ -941,7 +941,7 @@ def normalize_analysis_request_payload(
                 "benchmark_key",
                 payload.get("benchmark", DEFAULT_BENCHMARK_KEY),
             ),
-            "num_simulations": int(safe_float(payload.get("num_simulations"), 5000)),
+            "num_simulations": int(safe_float(payload.get("num_simulations"), 3000)),
             "expected_return_haircut": safe_float(
                 payload.get("expected_return_haircut"),
                 0.75,

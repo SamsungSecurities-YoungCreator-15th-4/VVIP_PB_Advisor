@@ -54,7 +54,7 @@ class IPSRequest(BaseModel):
     period: str = Field("5y")
     benchmark_key: BenchmarkKey = Field(DEFAULT_BENCHMARK_KEY)
 
-    num_simulations: int = Field(5000, ge=500, le=100000)
+    num_simulations: int = Field(3000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
     random_seed: int = Field(DEFAULT_RANDOM_SEED, ge=0)
 
@@ -184,7 +184,7 @@ class PortfolioRequest(BaseModel):
     cash_return: float = Field(DEFAULT_CASH_RETURN)
     period: str = Field("5y")
     benchmark_key: BenchmarkKey = Field(DEFAULT_BENCHMARK_KEY)
-    num_simulations: int = Field(5000, ge=500, le=100000)
+    num_simulations: int = Field(3000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
     random_seed: int = Field(DEFAULT_RANDOM_SEED, ge=0)
 
