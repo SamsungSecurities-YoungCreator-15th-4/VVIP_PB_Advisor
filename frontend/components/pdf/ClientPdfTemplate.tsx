@@ -192,22 +192,11 @@ function CoverPage() {
             marginBottom: 32,
           }}
         >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 9,
-              background: "rgba(255,255,255,0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              fontWeight: 900,
-              color: "white",
-            }}
-          >
-            S
-          </div>
+          <img
+            src="/logo.png"
+            alt=""
+            style={{ width: 36, height: 36, borderRadius: 9, objectFit: "cover" }}
+          />
           <div>
             <div
               style={{

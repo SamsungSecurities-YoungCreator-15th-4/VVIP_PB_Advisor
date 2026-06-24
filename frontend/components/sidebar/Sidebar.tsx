@@ -27,6 +27,7 @@ import {
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
+import { useSttRealtime } from "@/lib/useSttRealtime";
 
 const DEFAULT_CLIENT_TAX_PROFILE = {
   isaUsedManwon: 0,
@@ -100,6 +101,13 @@ export default function Sidebar() {
   const [newAum, setNewAum] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  const {
+    status: realtimeStatus,
+    errorMsg: realtimeError,
+    start: startRealtime,
+    stop: stopRealtime,
+  } = useSttRealtime();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -309,16 +317,70 @@ export default function Sidebar() {
 
             <button
               type="button"
-              className="flex-1 rounded-xl border-[1.5px] border-dashed border-[#B8D4FF] bg-brand/5 px-3 py-1 text-center"
+              disabled={
+                !customer.clientId ||
+                realtimeStatus === "connecting" ||
+                realtimeStatus === "stopping"
+              }
+              onClick={() => {
+                if (!customer.clientId) return;
+                if (realtimeStatus === "recording") {
+                  stopRealtime();
+                } else if (
+                  realtimeStatus === "idle" ||
+                  realtimeStatus === "done" ||
+                  realtimeStatus === "error"
+                ) {
+                  void startRealtime(customer.clientId);
+                }
+              }}
+              className={`flex-1 rounded-xl border-[1.5px] border-dashed px-3 py-1 text-center disabled:cursor-not-allowed disabled:opacity-50 ${
+                realtimeStatus === "recording"
+                  ? "border-red-400 bg-red-50"
+                  : "border-[#B8D4FF] bg-brand/5"
+              }`}
             >
-              <span className="mx-auto mb-1 flex size-8 items-center justify-center rounded-full border border-[#DCE9FF] bg-white">
-                <Mic className="size-4 text-brand" />
+              <span
+                className={`mx-auto mb-1 flex size-8 items-center justify-center rounded-full border ${
+                  realtimeStatus === "recording"
+                    ? "border-red-200 bg-red-50"
+                    : "border-[#DCE9FF] bg-white"
+                }`}
+              >
+                {realtimeStatus === "connecting" ||
+                realtimeStatus === "stopping" ? (
+                  <Loader2 className="size-4 animate-spin text-brand" />
+                ) : (
+                  <Mic
+                    className={`size-4 ${
+                      realtimeStatus === "recording"
+                        ? "animate-pulse text-red-500"
+                        : "text-brand"
+                    }`}
+                  />
+                )}
               </span>
-              <span className="block text-[13px] font-bold text-brand-dark">
-                실시간 녹음
+              <span
+                className={`block text-[13px] font-bold ${
+                  realtimeStatus === "recording"
+                    ? "text-red-600"
+                    : "text-brand-dark"
+                }`}
+              >
+                {realtimeStatus === "connecting"
+                  ? "연결 중..."
+                  : realtimeStatus === "recording"
+                    ? "녹음 중"
+                    : realtimeStatus === "stopping"
+                      ? "처리 중..."
+                      : "실시간 녹음"}
               </span>
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                STT
+                {realtimeStatus === "recording"
+                  ? "클릭해 종료"
+                  : customer.clientId
+                    ? "WebSocket STT"
+                    : "DB 고객 필요"}
               </span>
             </button>
           </div>
@@ -340,7 +402,7 @@ export default function Sidebar() {
               )}
             </Button>
           )}
-          {sttStatus === "done" && (
+          {(sttStatus === "done" || realtimeStatus === "done") && (
             <p className="mt-1.5 text-[10px] font-semibold text-emerald-600">
               전사 완료 — 상담 내역·IPS 조율기에 반영했습니다.
             </p>
@@ -348,6 +410,11 @@ export default function Sidebar() {
           {sttStatus === "error" && (
             <p className="mt-1.5 text-[10px] font-semibold text-amber-600">
               {sttNote ?? "전사에 실패해 데모 데이터를 표시합니다."}
+            </p>
+          )}
+          {realtimeStatus === "error" && realtimeError && (
+            <p className="mt-1.5 text-[10px] font-semibold text-amber-600">
+              {realtimeError}
             </p>
           )}
         </Card>

@@ -68,9 +68,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[460px] px-10">
         {/* 로고 */}
         <div className="mb-12 flex flex-col items-center gap-4">
-          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-3xl bg-brand text-3xl font-black text-white shadow-sm">
-            S
-          </div>
+          <img src="/logo.png" alt="S.upervisor" className="h-[72px] w-[72px] rounded-3xl object-cover shadow-sm" />
           <h1 className="text-[28px] font-extrabold text-brand">S.upervisor</h1>
         </div>
 
