@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
-from app.core.auth import get_current_pb_id
+from app.core.auth import get_current_pb_id, resolve_pb_id
 from app.db.supabase import get_supabase
 from app.schemas.consultations import (
     ConsultationListResponse,
@@ -175,6 +175,16 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
     6) 서버가 partial_transcript 이벤트와 completed 이벤트를 JSON으로 반환
     """
     await websocket.accept()
+    # 인증: 브라우저 WebSocket 은 Authorization 헤더를 못 실으므로 토큰을
+    # 쿼리파라미터(?token=<JWT>)로 받아 검증한다. 실패 시 정책위반(1008)으로 종료.
+    # resolve_pb_id 는 JWKS 조회·원격 폴백 등 동기 네트워크가 있어 블로킹이므로,
+    # async 핸들러의 이벤트 루프를 막지 않도록 스레드풀에서 실행한다.
+    pb_id = await run_in_threadpool(
+        resolve_pb_id, websocket.query_params.get("token")
+    )
+    if pb_id is None:
+        await websocket.close(code=1008, reason="유효하지 않은 토큰입니다.")
+        return
     transcriber: RealtimeConversationTranscriber | None = None
     transcript_task: asyncio.Task[None] | None = None
     transcript_queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -204,13 +214,18 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
         )
 
         supabase = get_supabase()
-        client = await run_in_threadpool(_get_client_by_id, supabase, client_id)
+        # 소유권 검사: 인증된 PB 본인 담당 고객만 허용(타 PB 고객 차단 — IDOR 방지).
+        client = await run_in_threadpool(
+            _get_client_by_id, supabase, client_id, pb_id=pb_id
+        )
         if not client:
+            # 응답에 client_id 를 반영하지 않는다(열거 단서 축소). 진단은 서버 로그.
+            logger.info("Realtime STT: client not found or not owned by PB: %s", client_id)
             await _send_realtime_json(
                 websocket,
                 {
                     "event": "error",
-                    "detail": f"고객 정보를 찾을 수 없습니다: {client_id}",
+                    "detail": "고객 정보를 찾을 수 없습니다.",
                 },
                 send_lock,
             )
@@ -567,9 +582,10 @@ def get_initial_ips(
     result = _select_initial_ips_snapshot(supabase, client_id)
     snapshot = _first_row(result.data)
     if not snapshot:
+        logger.info("Initial IPS snapshot not found: %s", client_id)
         raise HTTPException(
             status_code=404,
-            detail=f"최초 IPS 정보를 찾을 수 없습니다: {client_id}",
+            detail="최초 IPS 정보를 찾을 수 없습니다.",
         )
 
     try:
@@ -714,9 +730,13 @@ def _get_client_by_id(supabase, client_id: str, *, pb_id: str | None = None) -> 
 
 
 def _client_not_found(client_id: str) -> HTTPException:
+    # 응답 본문에 client_id 를 반영하지 않는다(존재 여부 열거 단서 축소). 소유권
+    # 불일치(타 PB 고객)도 같은 404·같은 메시지로 응답해 구분되지 않게 한다.
+    # 진단용 식별자는 서버 로그에만 남긴다.
+    logger.info("Client not found or not owned by requesting PB: %s", client_id)
     return HTTPException(
         status_code=404,
-        detail=f"고객 정보를 찾을 수 없습니다: {client_id}",
+        detail="고객 정보를 찾을 수 없습니다.",
     )
 
 

@@ -8,7 +8,6 @@ from .constants import TRADING_DAYS
 from .assets import ASSET_NAMES_KR, CLIENT_RISK_LEVEL
 from .models import AnalysisRequest, PortfolioRequest
 from .utils import (
-    model_to_dict,
     validate_unique_asset,
     canonicalize_weights,
     canonicalize_asset_return_map,
@@ -19,7 +18,6 @@ from .utils import (
     safe_round,
     get_benchmark_catalog,
     attach_benchmark_returns,
-    save_session_request,
     convert_analysis_to_portfolio_request,
 )
 from .tax_accounts import resolve_external_financial_income_krw
@@ -367,14 +365,6 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
 
 def run_full_analysis(request: AnalysisRequest) -> Dict[str, Any]:
     session_id = str(uuid.uuid4())
-
-    save_session_request(
-        session_id,
-        {
-            "ips": model_to_dict(request.ips),
-            "scenario": model_to_dict(request.scenario),
-        },
-    )
 
     portfolio_request = convert_analysis_to_portfolio_request(request)
     core = run_analysis_core(portfolio_request)

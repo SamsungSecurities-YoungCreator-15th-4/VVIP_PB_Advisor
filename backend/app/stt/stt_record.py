@@ -308,6 +308,34 @@ def extract_customer_text(mapped_transcript: list[dict]) -> str:
     return "\n".join(customer_texts)
 
 
+def extract_ips_source_text(mapped_transcript: list[dict]) -> tuple[str, str]:
+    """고객 발화 우선, 없으면 전체 화자 발화를 IPS 입력으로 사용한다."""
+    customer_text = extract_customer_text(mapped_transcript)
+    if customer_text.strip():
+        return customer_text, "고객 발화"
+
+    all_speech_text = format_all_speech_as_ips_source(mapped_transcript)
+    if all_speech_text.strip():
+        logger.warning(
+            "고객 발화가 없어 전체 화자 발화로 "
+            "Goal/RRTTLLU 구조화를 시도합니다."
+        )
+    return all_speech_text, "전체 화자 발화"
+
+
+def format_all_speech_as_ips_source(mapped_transcript: list[dict]) -> str:
+    """단일 화자/화자 오인식 fallback 용 전체 발화 텍스트를 만든다."""
+    lines = []
+    for item in mapped_transcript:
+        text = (item.get("text") or "").strip()
+        if not text:
+            continue
+        utterance_time = item.get("utterance_time", "00:00")
+        speaker_role = item.get("speaker_role", "Unknown")
+        lines.append(f"[{utterance_time}] {speaker_role}: {text}")
+    return "\n".join(lines)
+
+
 def get_openai_client() -> AzureOpenAI:
     validate_env()
     return AzureOpenAI(
@@ -318,11 +346,13 @@ def get_openai_client() -> AzureOpenAI:
     )
 
 
-def extract_goal_rrttllu(customer_text: str) -> dict:
+def extract_goal_rrttllu(source_text: str, *, source_label: str = "고객 발화") -> dict:
     logger.info("4/5 Goal + RRTTLLU JSON 구조화 시작")
 
-    if not customer_text.strip():
-        raise ValueError("고객 발화가 비어 있어 Goal/RRTTLLU를 추출할 수 없습니다.")
+    if not source_text.strip():
+        raise ValueError(
+            f"{source_label}가 비어 있어 Goal/RRTTLLU를 추출할 수 없습니다."
+        )
 
     client = get_openai_client()
 
@@ -331,10 +361,10 @@ def extract_goal_rrttllu(customer_text: str) -> dict:
 
 반드시 다음 규칙을 따른다.
 
-1. 고객 발화에서 명시적으로 드러난 내용만 추출한다.
+1. 입력 발화에서 명시적으로 드러난 내용만 추출한다.
 2. 추측하지 않는다.
 3. 언급되지 않은 항목은 null로 둔다.
-4. 고객 발화가 PB-고객 금융 상담과 관련 없는 내용이면 모든 key 값을 null로 둔다.
+4. 입력 발화가 PB-고객 금융 상담과 관련 없는 내용이면 모든 key 값을 null로 둔다.
 5. 숫자는 정규화한다.
    - Asset은 억 원 단위 숫자로 변환한다. 예: 15억 원 → 15, 3억 원 → 3
    - Return은 % 단위 숫자로 변환한다. 예: 연 5% → 5
@@ -347,16 +377,17 @@ def extract_goal_rrttllu(customer_text: str) -> dict:
    - 단기 자금 인출 필요 또는 생활/전세/사업 자금 필요 → 높음
    - 일부 자금 필요 가능성 → 중간
    - 장기 운용 가능하고 단기 인출 언급 없음 → 낮음
-8. 고객 발화는 시간순이며 각 줄의 [MM:SS]는 발화 시작 시각이다.
+8. 입력 발화는 시간순이며 각 줄의 [MM:SS]는 발화 시작 시각이다.
    - 같은 항목이 여러 번 언급되거나 정정되면 가장 마지막 발화의 값을 최종값으로 채택한다.
    - 한 발화 안에서 같은 항목이 여러 번 나오면 문장 안에서 더 뒤에 나온 값을 최종값으로 채택한다.
 """
 
     user_prompt = f"""
-아래 시간순 고객 발화에서 Goal, Asset, Return, Risk, Time, Tax, Liquidity, Legal, Unique를 추출해라.
+아래 시간순 {source_label}에서 Goal, Asset, Return, Risk, Time, Tax,
+Liquidity, Legal, Unique를 추출해라.
 
-고객 발화:
-{customer_text}
+{source_label}:
+{source_text}
 """
 
     try:
@@ -416,9 +447,9 @@ def run_pipeline(audio_dir: str, output_dir: str | Path):
     mapped_transcript_output = output_path / MAPPED_TRANSCRIPT_OUTPUT_FILE
     save_json(mapped_transcript, mapped_transcript_output)
 
-    customer_text = extract_customer_text(mapped_transcript)
+    source_text, source_label = extract_ips_source_text(mapped_transcript)
 
-    goal_rrttllu = extract_goal_rrttllu(customer_text)
+    goal_rrttllu = extract_goal_rrttllu(source_text, source_label=source_label)
     goal_rrttllu_output = output_path / GOAL_RRTTLLU_OUTPUT_FILE
     save_json(goal_rrttllu, goal_rrttllu_output)
 

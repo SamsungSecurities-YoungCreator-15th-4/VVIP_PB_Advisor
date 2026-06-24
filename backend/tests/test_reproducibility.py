@@ -38,6 +38,9 @@ from app.services.ips import (
 from app.services.transcript import transcript_to_raw_note
 from app.stt.stt_record import (
     extract_customer_text,
+    extract_goal_rrttllu,
+    extract_ips_source_text,
+    format_all_speech_as_ips_source,
     format_ticks_as_mmss,
     map_speaker_roles,
 )
@@ -216,6 +219,37 @@ class TestSttDeterminism:
         out = extract_customer_text(mapped)
         assert "어떤 목적이실까요" not in out  # PB 발화
         assert "자산 운용 상담받고 싶어요" in out  # 고객 발화
+
+    def test_extract_ips_source_text_falls_back_to_all_speech(self):
+        single_speaker_transcript = [
+            {
+                "speaker_label": "Guest-1",
+                "text": "자산 20억을 5년 정도 운용하고 싶습니다.",
+                "offset_ticks": 0,
+            }
+        ]
+        mapped = map_speaker_roles(single_speaker_transcript)
+
+        assert extract_customer_text(mapped) == ""
+        source_text, source_label = extract_ips_source_text(mapped)
+
+        assert source_label == "전체 화자 발화"
+        assert "PB: 자산 20억을 5년 정도 운용하고 싶습니다." in source_text
+
+    def test_format_all_speech_skips_empty_text(self):
+        source_text = format_all_speech_as_ips_source(
+            [
+                {"speaker_role": "PB", "text": None, "utterance_time": "00:00"},
+                {"speaker_role": "고객", "text": "   ", "utterance_time": "00:01"},
+                {"speaker_role": "고객", "text": " 목표 5% ", "utterance_time": "00:02"},
+            ]
+        )
+
+        assert source_text == "[00:02] 고객: 목표 5%"
+
+    def test_extract_goal_rrttllu_empty_source_uses_label(self):
+        with pytest.raises(ValueError, match="전체 화자 발화가 비어 있어"):
+            extract_goal_rrttllu("", source_label="전체 화자 발화")
 
 
 class TestRagGeneratorDeterminism:

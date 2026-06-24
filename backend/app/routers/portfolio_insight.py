@@ -14,7 +14,9 @@ from datetime import datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.core.auth import get_current_pb_id
 from pydantic import BaseModel, ConfigDict
 
 from app.services.portfolio_insight import (
@@ -88,7 +90,10 @@ class PortfolioInsightResponse(BaseModel):
 
 
 @router.post("/insight", response_model=PortfolioInsightResponse)
-def create_portfolio_insight(request: PortfolioInsightRequest) -> PortfolioInsightResponse:
+def create_portfolio_insight(
+    request: PortfolioInsightRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> PortfolioInsightResponse:
     # extra='allow'로 들어온 모든 필드까지 LLM 근거로 넘긴다.
     payload = request.model_dump(exclude_none=True)
     # consultation_id는 UUID 직렬화 시 str로 변환
