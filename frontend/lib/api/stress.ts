@@ -30,14 +30,14 @@ export interface StressMetricsResult {
   assetShocks: Record<string, number>;
 }
 
-/** 백엔드 calculate_metrics 응답(소수 단위). */
+/** 백엔드 calculate_metrics 응답(소수 단위). 필드 누락 가능성에 대비해 nullable. */
 interface RawMetrics {
-  expected_return: number;
-  after_tax_return: number | null;
-  volatility: number;
-  sharpe_ratio: number;
-  sortino_ratio: number | null;
-  mdd: number | null;
+  expected_return?: number | null;
+  after_tax_return?: number | null;
+  volatility?: number | null;
+  sharpe_ratio?: number | null;
+  sortino_ratio?: number | null;
+  mdd?: number | null;
 }
 
 interface RawStressResponse {
@@ -50,14 +50,15 @@ interface RawStressResponse {
 /** 백엔드 지표 dict(소수) → 프런트 PortfolioMetrics(%). */
 export function mapMetrics(m: RawMetrics): PortfolioMetrics {
   return {
-    expectedReturn: m.expected_return * 100,
-    volatility: m.volatility * 100,
-    sharpeRatio: m.sharpe_ratio,
-    sortinoRatio: m.sortino_ratio,
+    // 백엔드 응답에 필드가 비어 와도 NaN 전파를 막도록 ?? 0 방어.
+    expectedReturn: (m.expected_return ?? 0) * 100,
+    volatility: (m.volatility ?? 0) * 100,
+    sharpeRatio: m.sharpe_ratio ?? 0,
+    sortinoRatio: m.sortino_ratio ?? null,
     // mdd는 음수로 올 수 있어 절댓값(%)으로 보관 — 표시 측에서 ▼ 접두.
     maxDrawdown: m.mdd == null ? null : Math.abs(m.mdd) * 100,
     // 세후수익률은 소수 그대로 유지(타입 계약: 소수).
-    afterTaxReturn: m.after_tax_return,
+    afterTaxReturn: m.after_tax_return ?? null,
     // stress-metrics는 백테스트 시계열을 주지 않는다.
     backtestData: [],
   };

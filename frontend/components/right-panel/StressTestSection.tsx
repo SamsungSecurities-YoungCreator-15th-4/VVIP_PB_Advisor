@@ -61,7 +61,10 @@ export default function StressTestSection() {
 
   // 연간 예상 평가손익(억원) = (충격 후 기대수익률 − 기준 기대수익률) × 운용자산.
   // 백엔드 실데이터를 쓰고, 연결 실패 시에만 더미 선형 민감도로 폴백한다.
-  const pnlEok = (id: "current" | "a" | "b") => {
+  // 위기 시나리오 모드는 슬라이더 델타가 0이라 여기서 산출 불가 → null 반환.
+  // (실제 시나리오 손익은 분석하기 시 백엔드 stress-metrics(weights+scenario)로 산출)
+  const pnlEok = (id: "current" | "a" | "b"): number | null => {
+    if (activeScenario) return null;
     const live = byId[BACKEND_PORTFOLIO_ID[id]];
     if (!failed && live) {
       return (
@@ -130,12 +133,18 @@ export default function StressTestSection() {
           <ScenarioButton
             label="2008 금융위기"
             active={activeScenario === "crisis_2008"}
-            onClick={() => activateScenario("crisis_2008")}
+            onClick={() => {
+              setPreset(null); // 프리셋 세그먼트와 상호배타
+              activateScenario("crisis_2008");
+            }}
           />
           <ScenarioButton
             label="2022 러우전쟁"
             active={activeScenario === "crisis_ru_war"}
-            onClick={() => activateScenario("crisis_ru_war")}
+            onClick={() => {
+              setPreset(null);
+              activateScenario("crisis_ru_war");
+            }}
           />
         </div>
         {activeScenario && (
@@ -191,14 +200,20 @@ export default function StressTestSection() {
               <span className="font-semibold text-muted-foreground">
                 {label}
               </span>
-              <span
-                className={`font-extrabold tabular-nums ${
-                  v < 0 ? "text-down" : v > 0 ? "text-up" : "text-foreground"
-                }`}
-              >
-                {v < 0 ? "▼ " : v > 0 ? "▲ " : ""}
-                {Math.abs(v).toFixed(1)}억원
-              </span>
+              {v === null ? (
+                <span className="text-[12px] font-semibold text-muted-foreground/70">
+                  분석 시 산출
+                </span>
+              ) : (
+                <span
+                  className={`font-extrabold tabular-nums ${
+                    v < 0 ? "text-down" : v > 0 ? "text-up" : "text-foreground"
+                  }`}
+                >
+                  {v < 0 ? "▼ " : v > 0 ? "▲ " : ""}
+                  {Math.abs(v).toFixed(1)}억원
+                </span>
+              )}
             </div>
           );
         })}
