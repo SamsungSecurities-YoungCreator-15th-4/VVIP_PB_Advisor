@@ -27,7 +27,7 @@ function SliceLabel(props: Record<string, unknown>) {
         {name}
       </tspan>
       <tspan x={x} dy={11}>
-        {value}%
+        {Number(value).toFixed(2)}%
       </tspan>
     </text>
   );
@@ -35,15 +35,17 @@ function SliceLabel(props: Record<string, unknown>) {
 
 /** 포트폴리오 카드 자산배분 파이차트 — 슬라이스별 외부 레이블 */
 export default function AssetDonut({ allocation }: Props) {
+  const data = allocation
+    .filter((d) => d.weight > 0)
+    .map((d) => ({ ...d, fill: DISPLAY_GROUP_COLORS[d.group] }));
+  const isSingle = data.length <= 1;
+
   return (
     <div className="w-full flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            data={allocation.map((d) => ({
-              ...d,
-              fill: DISPLAY_GROUP_COLORS[d.group],
-            }))}
+            data={data}
             dataKey="weight"
             nameKey="group"
             cx="50%"
@@ -54,7 +56,7 @@ export default function AssetDonut({ allocation }: Props) {
             endAngle={-270}
             isAnimationActive={false}
             label={(props) => <SliceLabel {...props} />}
-            labelLine={{ stroke: "#CBD5E1", strokeWidth: 1 }}
+            labelLine={isSingle ? false : { stroke: "#CBD5E1", strokeWidth: 1 }}
           />
         </PieChart>
       </ResponsiveContainer>

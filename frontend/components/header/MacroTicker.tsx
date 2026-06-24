@@ -7,6 +7,7 @@ import { RefreshCw } from "lucide-react";
 
 import { fetchMacroIndicators } from "@/lib/api";
 import { MACRO_INDICATORS } from "@/lib/mockData";
+import { useDashboardStore } from "@/lib/store";
 import type { IndicatorData, MacroIndicators } from "@/lib/types";
 
 interface Row {
@@ -108,6 +109,7 @@ export default function MacroTicker() {
   const [loading, setLoading] = useState(false);
   const [cooling, setCooling] = useState(false);
   const cancelledRef = useRef(false);
+  const setLiveBase = useDashboardStore((s) => s.setLiveBase);
 
   // force=true면 백엔드 5분 캐시를 무시하고 강제 재조회
   const load = (force: boolean) => {
@@ -117,6 +119,8 @@ export default function MacroTicker() {
         if (cancelledRef.current) return;
         setRows(toRows(d));
         setFetchedAt(d.fetchedAt); // 데이터 기준 시각 동기화
+        // 슬라이더 기준점을 실데이터로 업데이트 (최초 1회는 scenario도 스냅)
+        setLiveBase({ ratePct: d.baseRate.price, fxKrw: Math.round(d.krwUsd.price) });
       })
       .catch(() => {
         /* 폴백 행 유지 */

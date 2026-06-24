@@ -209,6 +209,11 @@ export interface PortfolioMetrics {
   afterTaxAmountLabel: string;
 }
 
+export interface BacktestPoint {
+  date: string; // YYYY-MM
+  value: number; // 누적 인덱스 (base = 100)
+}
+
 export interface Portfolio {
   id: "current" | "a" | "b";
   name: string;
@@ -216,6 +221,12 @@ export interface Portfolio {
   /** 11종 계산 단위 비중(%). 화면에는 assetMapping으로 6분류 합산해 표시 */
   weights: CalcUnitWeights;
   metrics: PortfolioMetrics;
+  backtest?: BacktestPoint[];
+  benchmarks?: {
+    kospi?: BacktestPoint[];
+    sp500?: BacktestPoint[];
+    msciAcwi?: BacktestPoint[];
+  };
 }
 
 // 11종 비중은 시안의 6분류 값(예: 현재 25/18/12/22/12/11)이 나오도록 가배분한 것.
