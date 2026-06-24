@@ -17,10 +17,15 @@ export interface MacroIndicator {
 }
 
 export const MACRO_INDICATORS: MacroIndicator[] = [
-  { label: "미국 기준금리", value: "3.50%", change: "0.25", direction: "down" },
-  { label: "미 10Y", value: "4.38%", change: "0.05", direction: "down" },
-  { label: "원/달러", value: "1,220", change: "20", direction: "down" },
-  { label: "미국 CPI", value: "3.2%", change: "0.25", direction: "down" },
+  {
+    label: "미국 기준금리",
+    value: "3.50%",
+    change: "0.25%p",
+    direction: "down",
+  },
+  { label: "미 10Y", value: "4.38%", change: "0.05%p", direction: "down" },
+  { label: "미국 CPI", value: "3.2%", change: "0.25%p", direction: "down" },
+  { label: "원/달러", value: "1,220", change: "20원", direction: "down" },
   { label: "KOSPI", value: "2,790", change: "31", direction: "up" },
   { label: "S&P500", value: "5,640", change: "18", direction: "up" },
 ];
@@ -308,12 +313,60 @@ export const PORTFOLIOS: Portfolio[] = [
 // ── 백테스트 (최근 5년, 100 기준 지수화 더미) ──────────────────
 // 벤치마크(kospi·sp500·msciAcwi)는 실제 시장 흐름의 근사치 — 실 API 연동 전 UI 시안용.
 export const BACKTEST_SERIES = [
-  { year: "2021", current: 100, a: 100, b: 100, kospi: 100, sp500: 100, msciAcwi: 100 },
-  { year: "2022", current: 96,  a: 103, b: 92,  kospi: 76,  sp500: 81,  msciAcwi: 80  },
-  { year: "2023", current: 108, a: 116, b: 118, kospi: 90,  sp500: 104, msciAcwi: 100 },
-  { year: "2024", current: 118, a: 131, b: 128, kospi: 97,  sp500: 134, msciAcwi: 123 },
-  { year: "2025", current: 128, a: 150, b: 156, kospi: 101, sp500: 165, msciAcwi: 148 },
-  { year: "2026", current: 140, a: 176, b: 200, kospi: 108, sp500: 190, msciAcwi: 168 },
+  {
+    year: "2021",
+    current: 100,
+    a: 100,
+    b: 100,
+    kospi: 100,
+    sp500: 100,
+    msciAcwi: 100,
+  },
+  {
+    year: "2022",
+    current: 96,
+    a: 103,
+    b: 92,
+    kospi: 76,
+    sp500: 81,
+    msciAcwi: 80,
+  },
+  {
+    year: "2023",
+    current: 108,
+    a: 116,
+    b: 118,
+    kospi: 90,
+    sp500: 104,
+    msciAcwi: 100,
+  },
+  {
+    year: "2024",
+    current: 118,
+    a: 131,
+    b: 128,
+    kospi: 97,
+    sp500: 134,
+    msciAcwi: 123,
+  },
+  {
+    year: "2025",
+    current: 128,
+    a: 150,
+    b: 156,
+    kospi: 101,
+    sp500: 165,
+    msciAcwi: 148,
+  },
+  {
+    year: "2026",
+    current: 140,
+    a: 176,
+    b: 200,
+    kospi: 108,
+    sp500: 190,
+    msciAcwi: 168,
+  },
 ];
 
 // ── 상관관계 히트맵 (6분류 기준 더미 행렬, 대칭) ────────────────
@@ -334,14 +387,14 @@ export const TAX_EFFECT = {
   subNote:
     "일반과세 대비 · 세후 수익률 +0.6%p · 해외주식 양도세 22%·공제 250만 반영",
   afterTaxReturn: { from: "5.5%", to: "6.1%", delta: "+0.6%p" },
-  effectiveTax: { from: "1,620", to: "540만", delta: "−1,080만" },
+  effectiveTax: { from: "1,620", to: "540만", delta: "-66.7%" },
   // 세금 흐름 비교 (세전 기대수익 2.59억 기준, afterTaxManwon=만원)
   flow: {
     pretaxLabel: "세전 기대수익 2.59억 기준",
     rows: [
-      { label: "기존 자산",      afterTaxManwon: 25100, taxManwon: 795 },
+      { label: "현재", afterTaxManwon: 25100, taxManwon: 795 },
       { label: "포트폴리오 전환", afterTaxManwon: 25600, taxManwon: 363 },
-      { label: "+ 절세 제안",   afterTaxManwon: 25900, taxManwon: 0   },
+      { label: "+ 절세 제안", afterTaxManwon: 25900, taxManwon: 0 },
     ],
     totalLabel: "총 절세 효과 (전환 432만 + 제안 363만)",
     totalSavingManwon: 795,
@@ -467,7 +520,7 @@ export const TAX_ADVICE = {
       ],
     },
   ],
-  totalLabel: "알고리즘 제안 적용 시 예상 추가 절감",
+  totalLabel: "절세 제안 적용 시 예상 추가 절감",
   totalSaving: "+2,341만원",
 };
 
@@ -505,7 +558,9 @@ export const SCENARIO_WARN = {
 
 // ── AI 인사이트 ────────────────────────────────────────────────
 export const INSIGHT = {
-  placeholder: "예: 금리 전망, 환율 리스크, 세액공제…",
+  placeholder: "예: 재무제표, RAG 문서, 분석 결과 요약",
+  query:
+    "현재 고객 포트폴리오의 시장 환경 대응 전략 및 최적 자산 배분 방향을 분석해 주세요.",
   defaultAnswer:
     "현재 고객 포트폴리오는 국내주식 20%, 해외배당주 22% 비중으로 선진국 배당 자산에 상대적으로 집중되어 있습니다. 최근 미 연준의 금리 동결 기조 장기화 가능성을 고려할 때, 단기 채권 듀레이션을 1~2년 이내로 유지하면서 투자등급 회사채 비중을 소폭 확대하는 전략이 유효합니다.\n\n환율 측면에서는 원/달러 환율이 1,380~1,420원 구간에서 등락하는 현 상황에서, 해외자산 중 비헤지 비중이 44%에 달해 환손실 리스크가 잠재합니다. 달러 익스포저의 30% 수준까지 환헤지 전환을 단계적으로 검토하시기 바랍니다.\n\n세후 수익률 기준으로는 포트폴리오 A(세후 5.5%)가 현재 포트폴리오(세후 4.0%) 대비 약 1.5%p 우위에 있으며, ISA 계좌 편입과 연금저축 한도 추가 납입을 통해 절세 여력이 연간 최대 1,080만원 추가로 확보 가능합니다.\n\n리스크 관리 측면에서 MDD -11.2% 수준은 VVIP 고객 손실 허용 범위(통상 -15% 이내) 내에 있으나, 글로벌 경기 둔화 시나리오 하에서 해외성장주 비중(12%)이 변동성 확대의 주요 원인이 될 수 있습니다. 포트폴리오 B의 해외성장주 22% 비중 확대안은 고수익 추구 성향 고객에 한해 선별 제안을 권고합니다.",
   sources: [

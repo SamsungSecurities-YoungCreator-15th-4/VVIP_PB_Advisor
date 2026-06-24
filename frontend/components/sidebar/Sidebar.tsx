@@ -8,7 +8,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
-  Sparkles,
   Upload,
   UserPlus,
   X,
@@ -211,19 +210,13 @@ export default function Sidebar() {
   // 사이드바가 닫혔을 때: 하나의 패널임을 시각적으로 표현하는 좁은 카드 스트립
   if (!isOpen) {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
+      <div className="flex w-10 self-start shrink-0 flex-col items-center rounded-2xl bg-card py-3 ring-1 ring-foreground/10">
         <button
           onClick={() => setIsOpen(true)}
           title="사이드바 열기"
           className="flex flex-col items-center gap-2 rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <PanelLeftOpen className="size-4" />
-          <span
-            className="text-[9px] font-bold leading-none text-muted-foreground"
-            style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
-          >
-            IPS&Test
-          </span>
         </button>
       </div>
     );
@@ -233,10 +226,7 @@ export default function Sidebar() {
     <>
       <aside className="flex w-[300px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
         {/* 패널 헤더 */}
-        <div className="flex items-center justify-between px-0.5 pb-0.5">
-          <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-            IPS&Test
-          </span>
+        <div className="flex items-center px-0.5 pb-0.5">
           <button
             onClick={() => setIsOpen(false)}
             title="사이드바 닫기"
@@ -265,14 +255,9 @@ export default function Sidebar() {
             <div className="flex-1 text-left">
               <div className="flex items-center gap-2 text-[15px] font-extrabold">
                 {customer.name}
-                <span className="rounded-md bg-brand px-1.5 py-0.5 text-[9px] font-extrabold text-white">
-                  {customer.grade}
-                </span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                <span>
-                  {customer.pbCode} · {customer.aumLabel}
-                </span>
+                <span>{customer.aumLabel}</span>
                 {customer.persisted === false && (
                   <DataSourceBadge
                     source="fallback"
@@ -317,7 +302,7 @@ export default function Sidebar() {
                 </span>
               ) : (
                 <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                  wav 지원
+                  wav 파일
                 </span>
               )}
             </button>
@@ -330,10 +315,10 @@ export default function Sidebar() {
                 <Mic className="size-4 text-brand" />
               </span>
               <span className="block text-[13px] font-bold text-brand-dark">
-                실시간 전사
+                실시간 녹음
               </span>
               <span className="mt-0.5 block text-[10px] font-semibold text-muted-foreground">
-                실시간 녹음
+                STT
               </span>
             </button>
           </div>
@@ -377,7 +362,7 @@ export default function Sidebar() {
             {transcript.map((m, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span
-                  className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[8.5px] font-extrabold ${
+                  className={`mt-0.5 inline-flex w-7 shrink-0 items-center justify-center rounded-md py-0.5 text-[8.5px] font-extrabold ${
                     m.speaker === "고객"
                       ? "bg-[#DCE9FF] text-brand-dark"
                       : "bg-[#ADB5BD] text-white"
@@ -401,7 +386,7 @@ export default function Sidebar() {
             onClick={() => setHistoryOpen(true)}
           >
             <RotateCcw />
-            지난 기록 대화 불러오기
+            지난 상담기록 불러오기
           </Button>
         </Card>
 
@@ -495,7 +480,6 @@ export default function Sidebar() {
           size="lg"
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
-          <Sparkles />
           분석하기
         </Button>
       </aside>

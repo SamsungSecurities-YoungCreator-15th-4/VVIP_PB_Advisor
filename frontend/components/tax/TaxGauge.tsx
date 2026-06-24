@@ -41,7 +41,9 @@ export default function TaxGauge() {
       return;
     }
     const parsed = parseInt(inputVal, 10);
-    const clamped = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), otherIncomeMax);
+    const clamped = isNaN(parsed)
+      ? 0
+      : Math.min(Math.max(parsed, 0), otherIncomeMax);
     setOtherIncome(clamped);
     setInputVal(String(clamped));
   };
@@ -50,6 +52,7 @@ export default function TaxGauge() {
     setOtherIncome(v);
     setInputVal(String(v));
   };
+
   const total = otherIncome + portfolioDividendManwon;
   const isOver = total > thresholdManwon;
   const totalPct = (Math.min(total, gaugeMaxManwon) / gaugeMaxManwon) * 100;
@@ -57,21 +60,24 @@ export default function TaxGauge() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-stretch gap-2.5">
-        <div className="flex-1 rounded-xl border p-3">
-          <p className="text-[12px] font-bold text-muted-foreground">
-            고객 기타 금융소득 입력 (연 이자·배당)
+      {/* 입력 + 포트폴리오 */}
+      <div className="flex items-stretch gap-3">
+        <div className="flex-1 rounded-xl border p-4">
+          <p className="text-[13px] font-bold text-muted-foreground">
+            고객 기타 금융소득 입력
           </p>
-          <div className="mt-1 flex items-baseline gap-1">
+          <div className="mt-2 flex items-baseline gap-1.5">
             <input
               type="text"
               inputMode="numeric"
               value={inputVal}
               onChange={handleInputChange}
               onBlur={handleInputBlur}
-              className="w-32 rounded-md border border-border bg-transparent px-2 py-0.5 text-lg font-extrabold tabular-nums outline-none focus:border-brand"
+              className="w-36 rounded-md border border-border bg-transparent px-2 py-1 text-xl font-extrabold tabular-nums outline-none focus:border-brand"
             />
-            <span className="text-[12px] font-bold text-muted-foreground">만원</span>
+            <span className="text-[13px] font-bold text-muted-foreground">
+              만원
+            </span>
           </div>
           <Slider
             value={[otherIncome]}
@@ -79,31 +85,31 @@ export default function TaxGauge() {
             min={0}
             max={otherIncomeMax}
             step={10}
-            className="mt-2"
+            className="mt-3"
           />
         </div>
-        <div className="w-[130px] rounded-xl border bg-brand/5 p-3">
-          <p className="text-[12px] font-bold text-muted-foreground">
-            포트폴리오 A<br />
-            예상 이자·배당
+        <div className="w-[140px] rounded-xl border bg-brand/5 p-4">
+          <p className="text-[13px] font-bold text-muted-foreground">
+            포트폴리오 A
           </p>
-          <p className="mt-1 text-sm font-extrabold tabular-nums text-brand-dark">
+          <p className="mt-2 text-[15px] font-extrabold tabular-nums text-brand-dark">
             +{fmt(portfolioDividendManwon)}
-            <span className="text-[12px]">만원</span>
+            <span className="text-[13px]">만원</span>
           </p>
-          <p className="mt-0.5 text-[12px] font-semibold text-muted-foreground">
+          <p className="mt-1 text-[13px] font-semibold text-muted-foreground">
             합산 대상 과세소득
           </p>
         </div>
       </div>
 
+      {/* 게이지 */}
       <div>
-        <div className="flex justify-between text-[12px] font-bold text-muted-foreground">
+        <div className="flex justify-between text-[13px] font-bold text-muted-foreground">
           <span>연 금융소득 합산</span>
           <span className="tabular-nums">{fmt(total)}만원</span>
         </div>
-        <div className="relative mt-1 h-9">
-          <div className="absolute inset-x-0 top-2.5 h-3 overflow-hidden rounded-md bg-muted">
+        <div className="relative mt-2 h-10">
+          <div className="absolute inset-x-0 top-3 h-4 overflow-hidden rounded-md bg-muted">
             <div
               className="absolute left-0 top-0 h-full bg-linear-to-r from-[#2C7BFF] to-brand"
               style={{ width: `${Math.min(totalPct, thresholdPct)}%` }}
@@ -119,15 +125,15 @@ export default function TaxGauge() {
             )}
           </div>
           <div
-            className="absolute top-0.5 h-8 w-0.5 bg-foreground"
+            className="absolute top-0.5 h-9 w-0.5 bg-foreground"
             style={{ left: `${thresholdPct}%` }}
           >
-            <span className="absolute -top-0.5 left-1.5 whitespace-nowrap text-[8.5px] font-extrabold">
+            <span className="absolute -top-0.5 left-1.5 whitespace-nowrap text-[10px] font-extrabold">
               기준선 {fmt(thresholdManwon)}만
             </span>
           </div>
           <span
-            className={`absolute top-6 -translate-x-1/2 whitespace-nowrap text-[9px] font-extrabold tabular-nums ${
+            className={`absolute top-7 -translate-x-1/2 whitespace-nowrap text-[11px] font-extrabold tabular-nums ${
               isOver ? "text-up" : "text-brand-dark"
             }`}
             style={{ left: `${totalPct}%` }}
@@ -138,29 +144,52 @@ export default function TaxGauge() {
         </div>
       </div>
 
+      {/* 판정 알림 */}
       {isOver ? (
-        <div className="flex items-start gap-2 rounded-xl bg-[#FEECEE] p-3">
-          <span className="text-sm">⚠️</span>
+        <div className="flex items-start gap-3 rounded-xl bg-[#FEECEE] p-4">
+          <svg
+            className="mt-0.5 size-5 shrink-0"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M10 2L1 18h18L10 2z"
+              stroke="#F04452"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <line
+              x1="10"
+              y1="8.5"
+              x2="10"
+              y2="13"
+              stroke="#F04452"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <circle cx="10" cy="15.5" r="0.85" fill="#F04452" />
+          </svg>
           <div>
-            <p className="text-[12px] font-extrabold">
+            <p className="text-[14px] font-extrabold">
               기준선 <b className="text-up">초과</b> — 금융소득종합과세 대상
             </p>
-            <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted-foreground">
-              초과분 <b>{fmt(total - thresholdManwon)}만원</b>은 다른
-              종합소득과 합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이
-              적용됩니다. <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을
-              권장합니다.
+            <p className="mt-1 text-[13px] font-semibold leading-relaxed text-muted-foreground">
+              초과분 <b>{fmt(total - thresholdManwon)}만원</b>은 다른 종합소득과
+              합산되어 최고 <b>49.5%</b>(지방소득세 포함) 누진세율이 적용됩니다.{" "}
+              <b>절세 제안</b> 탭의 자산 이전으로 분리과세 전환을 권장합니다.
             </p>
           </div>
         </div>
       ) : (
-        <div className="flex items-start gap-2 rounded-xl bg-brand/5 p-3">
-          <span className="text-sm text-brand-dark">✓</span>
+        <div className="flex items-start gap-3 rounded-xl bg-brand/5 p-4">
+          <span className="text-base text-brand-dark">✓</span>
           <div>
-            <p className="text-[12px] font-extrabold">
+            <p className="text-[14px] font-extrabold">
               기준선 <b className="text-brand-dark">이내</b> — 분리과세 유지
             </p>
-            <p className="mt-0.5 text-[12px] font-semibold leading-snug text-muted-foreground">
+            <p className="mt-1 text-[13px] font-semibold leading-relaxed text-muted-foreground">
               합산 금융소득이 기준선 {fmt(thresholdManwon)}만원 이내로,{" "}
               <b>15.4% 분리과세</b>가 적용됩니다. 여유 한도{" "}
               <b>{fmt(thresholdManwon - total)}만원</b>.
@@ -169,26 +198,35 @@ export default function TaxGauge() {
         </div>
       )}
 
+      {/* 세율 요약 바 */}
       <div className="flex gap-2">
-        <div className="flex-1 rounded-lg border p-2 text-center">
-          <p className="text-[12px] font-bold text-muted-foreground">
-            분리과세 시
-          </p>
-          <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-down">
-            {separateRateLabel}
-          </p>
-        </div>
         <div
-          className={`flex-1 rounded-lg border p-2 text-center ${
-            isOver ? "border-[#F7B2B8] bg-[#FEF4F5]" : ""
+          className={`flex flex-1 items-center justify-between rounded-lg border px-3 py-2 ${
+            !isOver
+              ? "border-brand/20 bg-brand/5"
+              : "border-transparent bg-muted/50"
           }`}
         >
-          <p className="text-[12px] font-bold text-muted-foreground">
-            종합과세 시 {isOver && "(현 상태)"}
-          </p>
-          <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-up">
+          <span className="text-[13px] font-bold text-muted-foreground">
+            분리과세 시
+          </span>
+          <span className="text-[15px] font-extrabold tabular-nums text-down">
+            {separateRateLabel}
+          </span>
+        </div>
+        <div
+          className={`flex flex-1 items-center justify-between rounded-lg border px-3 py-2 ${
+            isOver
+              ? "border-brand/20 bg-brand/5"
+              : "border-transparent bg-muted/50"
+          }`}
+        >
+          <span className="text-[13px] font-bold text-muted-foreground">
+            종합과세 시
+          </span>
+          <span className="text-[15px] font-extrabold tabular-nums text-down">
             {comprehensiveRateLabel}
-          </p>
+          </span>
         </div>
       </div>
     </div>

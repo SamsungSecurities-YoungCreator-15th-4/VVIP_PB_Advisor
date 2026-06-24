@@ -53,7 +53,11 @@ export default function BacktestChart() {
         <HelpTooltip text={BACKTEST_HELP}>
           <p className="cursor-default text-[14px] font-bold">
             <span
-              className={helpMode ? "rounded border border-brand/40 bg-brand/[0.06] px-1" : ""}
+              className={
+                helpMode
+                  ? "rounded border border-brand/40 bg-brand/[0.06] px-1"
+                  : ""
+              }
             >
               백테스트
             </span>{" "}
@@ -66,7 +70,21 @@ export default function BacktestChart() {
           </p>
         </HelpTooltip>
         <div className="flex items-center gap-3">
-          {/* 벤치마크 세그먼트 컨트롤 */}
+          {/* 현재/A/B 범례 */}
+          {LINES.map((l) => (
+            <span
+              key={l.key}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground"
+            >
+              <span
+                className="h-0.75 w-3.5 rounded-sm"
+                style={{ backgroundColor: l.color }}
+              />
+              {l.name}
+            </span>
+          ))}
+
+          {/* 벤치마크 세그먼트 컨트롤 — 가장 오른쪽 */}
           <div className="flex items-center gap-1.5">
             <span
               className="h-0.75 w-3.5 rounded-sm"
@@ -89,27 +107,13 @@ export default function BacktestChart() {
               ))}
             </div>
           </div>
-
-          {/* 기존 범례 */}
-          {LINES.map((l) => (
-            <span
-              key={l.key}
-              className="flex items-center gap-1.5 text-[12px] font-bold text-muted-foreground"
-            >
-              <span
-                className="h-0.75 w-3.5 rounded-sm"
-                style={{ backgroundColor: l.color }}
-              />
-              {l.name}
-            </span>
-          ))}
         </div>
       </div>
-      <div className="h-37.5">
+      <div className="h-60">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={BACKTEST_SERIES}
-            margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+            margin={{ top: 8, right: 8, bottom: 0, left: 16 }}
           >
             <CartesianGrid vertical={false} stroke="#F1F3F5" />
             <XAxis
@@ -117,6 +121,7 @@ export default function BacktestChart() {
               tickLine={false}
               axisLine={false}
               tick={{ fontSize: 12, fill: "#B0B8C1", fontWeight: 600 }}
+              ticks={["2021", "2022", "2023", "2024", "2025", "2026"]}
             />
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip
