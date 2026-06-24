@@ -1304,7 +1304,8 @@ def build_stress_drawdown_series(
     drawdown 이벤트로만, 곡선 끝에 별도 포인트 한 칸으로 표시한다.
         portfolio_shock = Σ wᵢ·shockᵢ  (포트폴리오 단위 연간 충격; 위기 땐 음수)
     덧붙인 포인트는 stress_event=True와 label="위기"로 표시해 프런트가 구분한다.
-    누적값은 (1+마지막누적)×(1+충격)−1 로 급락을 적용한다.
+    누적값은 (1+마지막누적)×(1+충격)−1 로 급락을 적용하되, 누적수익률은 -100%
+    (자산가치 0)가 하한이므로 max(..., -1.0)으로 막아 음수 가치·인덱스를 방지한다.
     """
     series = [dict(point) for point in base_series]
     if not series:
@@ -1312,7 +1313,7 @@ def build_stress_drawdown_series(
     last = series[-1]
     last_value = safe_float(last.get("value"))
     base_index = safe_float(last.get("base_index")) or BACKTEST_BASE_INDEX
-    crisis_value = (1.0 + last_value) * (1.0 + float(portfolio_shock)) - 1.0
+    crisis_value = max((1.0 + last_value) * (1.0 + float(portfolio_shock)) - 1.0, -1.0)
     series.append(
         {
             "date": last.get("date"),

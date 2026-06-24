@@ -228,13 +228,15 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
         # 만들어 주므로, 그 결과를 절세 최적화 페이로드로 변환만 한다(세금 재계산 없음).
         # 절대 세액(원)은 req.total_asset 단위에 비례 — base/stressed가 같은
         # total_asset을 쓰므로 둘의 차이(절세 방향)는 단위와 무관하게 일관적이다.
+        # portfolio_key는 프런트가 상태 정규화·캐싱 식별자로 쓸 수 있으므로
+        # base/stressed를 구분되는 키로 둔다(동일 키 → 덮어쓰기·오동작 방지).
         base_tax = build_tax_optimizer_payload(
-            "stress",
+            "base_tax",
             {"name": "현재 포트폴리오", "tax_breakdown": base["tax_breakdown"]},
             req,
         )
         stressed_tax = build_tax_optimizer_payload(
-            "stress",
+            "stressed_tax",
             {"name": "현재 포트폴리오", "tax_breakdown": stressed["tax_breakdown"]},
             req,
         )

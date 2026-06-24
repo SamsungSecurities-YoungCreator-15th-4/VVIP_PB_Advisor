@@ -91,6 +91,16 @@ def test_drawdown_positive_shock_rises_and_empty_is_empty():
     print("✅ 양의 충격 상승 / 빈 시계열 방어")
 
 
+def test_drawdown_value_floored_at_minus_one():
+    """극단 충격(예: -200%)에도 누적수익률은 -1.0(자산가치 0) 미만으로 안 떨어진다."""
+    base_bt = calculate_cumulative_returns(WEIGHTS, _synthetic_returns())
+    out = build_stress_drawdown_series(base_bt, -2.0)
+    crisis = out[-1]
+    assert crisis["value"] == -1.0
+    assert crisis["index_value"] == 0.0  # (1 + -1.0) * base_index
+    print("✅ 극단 충격 시 누적수익률 -1.0 하한 방어")
+
+
 def test_crisis_2008_portfolio_shock_is_negative_drop():
     shocks = _shocks()
     portfolio_shock = sum(WEIGHTS.get(a, 0.0) * s for a, s in shocks.items())
