@@ -260,6 +260,10 @@ class TestRagGeneratorDeterminism:
             normalize_insight_summary("요약: 유동성 니즈가 확인됩니다.")
             == "유동성 니즈 확인"
         )
+        assert normalize_insight_summary("상승세를 보입니다.") == "상승세 보임"
+        assert normalize_insight_summary("금리 인하가 예상됩니다.") == "금리 인하 예상"
+        assert normalize_insight_summary("시장 변동성이 높입니다.") == "시장 변동성 높임"
+        assert normalize_insight_summary("세금 부담을 줄입니다.") == "세금 부담 줄임"
 
 
 class TestRagSearchTransformDeterminism:
