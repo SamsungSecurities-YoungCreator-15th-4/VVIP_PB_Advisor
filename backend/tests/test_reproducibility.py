@@ -253,15 +253,17 @@ class TestRagGeneratorDeterminism:
         raw = (
             "## 미국 금리 동향\n"
             "- 미국 10년물 금리는 **4%** 아래로 하락했습니다.\n"
-            "1. `국채` 금리 전망"
+            "1. `국채` 금리 전망\n"
+            "```python\nprint('hello')\n```"
         )
         out = strip_markdown(raw)
         for marker in ("**", "##", "`"):
             assert marker not in out
-        # 내용(텍스트)은 보존된다.
+        # 내용(텍스트)은 보존된다(코드펜스 안쪽 코드 포함).
         assert "미국 금리 동향" in out
         assert "4%" in out
         assert "국채" in out
+        assert "print('hello')" in out
 
     def test_fallback_skips_preamble_and_list_number(self):
         answer = (

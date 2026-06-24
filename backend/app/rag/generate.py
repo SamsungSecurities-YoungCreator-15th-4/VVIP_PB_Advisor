@@ -55,6 +55,9 @@ def strip_markdown(text: str) -> str:
     """
     if not text:
         return text
+    # 코드펜스(```lang ... ```)를 먼저 제거 — 안쪽 코드는 보존하고 펜스 줄만 없앤다.
+    # (인라인 백틱 제거는 3중 백틱을 못 지우므로 펜스를 선행 처리한다.)
+    text = re.sub(r"```[a-zA-Z0-9_+-]*\n?(.*?)\n?```", r"\1", text, flags=re.DOTALL)
     # 줄머리 ATX 헤더(## 제목)·인용(> )·리스트 불릿(- / * ) 기호만 제거(내용 보존).
     lines = []
     for line in text.split("\n"):
