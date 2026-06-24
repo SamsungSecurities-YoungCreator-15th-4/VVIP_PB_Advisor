@@ -60,16 +60,28 @@ def get_current_pb_id(
             detail="인증 토큰이 필요합니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = credentials.credentials
-    pb_id = _verify_jwt_local(token)
-    if pb_id is None:
-        pb_id = _verify_jwt_remote(token)
+    pb_id = resolve_pb_id(credentials.credentials)
     if pb_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="유효하지 않은 토큰입니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    return pb_id
+
+
+def resolve_pb_id(token: str | None) -> str | None:
+    """토큰 문자열에서 pb_id 를 검증·추출한다(실패 시 None, 예외 없음).
+
+    get_current_pb_id 는 HTTP 의존성이라 실패 시 401 을 던지지만, WebSocket 등
+    비-HTTP 경로는 예외 대신 None 으로 분기해야 하므로 이 함수를 직접 쓴다.
+    검증 전략은 get_current_pb_id 와 동일(로컬 → 원격 폴백).
+    """
+    if not token:
+        return None
+    pb_id = _verify_jwt_local(token)
+    if pb_id is None:
+        pb_id = _verify_jwt_remote(token)
     return pb_id
 
 

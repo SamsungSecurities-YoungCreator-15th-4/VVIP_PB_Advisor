@@ -18,7 +18,9 @@ from datetime import datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.core.auth import get_current_pb_id
 from pydantic import BaseModel, ConfigDict
 
 from app.services.tax_insight import fallback_summary, summarize_tax_result
@@ -74,7 +76,10 @@ class TaxInsightResponse(BaseModel):
 
 
 @router.post("/insight", response_model=TaxInsightResponse)
-def create_tax_insight(request: TaxInsightRequest) -> TaxInsightResponse:
+def create_tax_insight(
+    request: TaxInsightRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> TaxInsightResponse:
     # TODO: consultation_id 존재 검증 — consultation 테이블 조회는 다음 단계(rag.py 와 동일).
     # extra='allow' 로 들어온 #30 의 나머지 필드까지 보존해 LLM 근거로 넘긴다.
     tax_result = request.tax_result.model_dump(exclude_none=True)
