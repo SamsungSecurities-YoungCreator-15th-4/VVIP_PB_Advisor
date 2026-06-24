@@ -40,6 +40,20 @@ VOL_STRESS_CAP = 1.6
 # PR #65 재현성 원칙: 모든 RNG 경로는 동일한 기본 시드를 사용한다.
 DEFAULT_RANDOM_SEED = 42
 
+# 최종 포트폴리오 지표 Range용 Monte Carlo.
+# 후보 포트폴리오 생성용 Monte Carlo와 분리된 별도 계산이다.
+MONTE_CARLO_METRIC_RANGE_VERSION = (
+    "correlated-buy-and-hold-after-tax-mdd-p20-p80-v1"
+)
+MONTE_CARLO_METRIC_RANGE_SIMULATIONS = 10_000
+MONTE_CARLO_METRIC_RANGE_MAX_HORIZON_YEARS = 5
+MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR = 12
+MONTE_CARLO_METRIC_RANGE_SEED_OFFSET = 100_003
+MONTE_CARLO_METRIC_RANGE_PERCENTILES = (10, 20, 50, 80, 90)
+MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER = 20
+MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER = 50
+MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER = 80
+
 
 # 프로젝트 가정: 약 3개월 미만의 공통 관측치로는 베타를 표시하지 않는다.
 MIN_BETA_OBSERVATIONS = 60
@@ -3443,6 +3457,414 @@ def shift_expected_returns(
 
 
 
+
+def _nearest_positive_semidefinite(
+    matrix: np.ndarray,
+) -> np.ndarray:
+    clean = np.nan_to_num(
+        np.asarray(matrix, dtype=float),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
+    )
+    symmetric = (clean + clean.T) / 2.0
+
+    try:
+        eigenvalues, eigenvectors = np.linalg.eigh(symmetric)
+        eigenvalues = np.clip(eigenvalues, 0.0, None)
+        corrected = (
+            eigenvectors
+            @ np.diag(eigenvalues)
+            @ eigenvectors.T
+        )
+        return (corrected + corrected.T) / 2.0
+    except np.linalg.LinAlgError:
+        return np.diag(
+            np.clip(np.diag(symmetric), 0.0, None)
+        )
+
+
+def _metric_percentile_payload(
+    values: np.ndarray,
+    *,
+    digits: int,
+    unit: str,
+) -> Dict[str, Any]:
+    levels = list(MONTE_CARLO_METRIC_RANGE_PERCENTILES)
+    percentile_values = np.percentile(values, levels)
+    mapped = {
+        f"p{level}": safe_round(value, digits)
+        for level, value in zip(levels, percentile_values)
+    }
+
+    return {
+        **mapped,
+        "lower": mapped[
+            f"p{MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER}"
+        ],
+        "center": mapped[
+            f"p{MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER}"
+        ],
+        "upper": mapped[
+            f"p{MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER}"
+        ],
+        "lower_percentile": (
+            MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER
+        ),
+        "center_percentile": (
+            MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER
+        ),
+        "upper_percentile": (
+            MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER
+        ),
+        "unit": unit,
+        "direction": "higher_is_better",
+    }
+
+
+def _effective_tax_rate_from_breakdown(
+    tax_breakdown: Optional[Dict[str, Any]],
+) -> float:
+    """세금 상세가 없거나 잘못된 형식이면 세율 0으로 안전하게 처리한다."""
+    if not isinstance(tax_breakdown, dict):
+        return 0.0
+
+    gross_profit = safe_float(
+        tax_breakdown.get("gross_profit")
+    )
+    total_tax_after_saving = safe_float(
+        tax_breakdown.get("total_tax_after_saving")
+    )
+    if gross_profit <= 1e-12:
+        return 0.0
+
+    return float(
+        np.clip(
+            total_tax_after_saving / gross_profit,
+            0.0,
+            1.0,
+        )
+    )
+
+
+def calculate_monte_carlo_metric_ranges(
+    weights: Dict[str, float],
+    returns: pd.DataFrame,
+    expected_returns: pd.Series,
+    total_asset: float,
+    investment_horizon_years: float,
+    tax_breakdown: Dict[str, Any],
+    random_seed: int = DEFAULT_RANDOM_SEED,
+    num_simulations: Optional[int] = None,
+) -> Dict[str, Any]:
+    # 세후수익률과 MDD를 동일한 미래 시장 경로에서 계산한다.
+    normalized_weights = normalize_weights(weights)
+    total_asset = safe_float(total_asset)
+
+    if total_asset <= 0:
+        return {
+            "available": False,
+            "reason": "total_asset_must_be_positive",
+        }
+
+    try:
+        requested_years = float(investment_horizon_years)
+    except (TypeError, ValueError):
+        requested_years = 1.0
+
+    horizon_years = max(
+        1,
+        min(
+            int(round(requested_years)),
+            MONTE_CARLO_METRIC_RANGE_MAX_HORIZON_YEARS,
+        ),
+    )
+    months = (
+        horizon_years
+        * MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
+    )
+    simulations = max(
+        int(
+            num_simulations
+            if num_simulations is not None
+            else MONTE_CARLO_METRIC_RANGE_SIMULATIONS
+        ),
+        100,
+    )
+
+    # 비중과 무관한 공통 자산 순서와 시드를 사용하므로
+    # 현재안/A/B에 같은 시장 시나리오가 적용된다.
+    assets = [
+        asset
+        for asset in ASSET_TICKERS.keys()
+        if (
+            asset in returns.columns
+            and asset in expected_returns.index
+        )
+    ]
+
+    missing_weighted_assets = [
+        asset
+        for asset, weight in normalized_weights.items()
+        if (
+            safe_float(weight) > 1e-12
+            and asset not in assets
+        )
+    ]
+    if missing_weighted_assets:
+        return {
+            "available": False,
+            "reason": "weighted_asset_data_missing",
+            "missing_assets": missing_weighted_assets,
+        }
+
+    if not assets:
+        return {
+            "available": False,
+            "reason": "no_common_assets",
+        }
+
+    clean_returns = (
+        returns[assets]
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna(how="any")
+    )
+    if len(clean_returns) < MIN_BETA_OBSERVATIONS:
+        return {
+            "available": False,
+            "reason": "insufficient_return_observations",
+            "observations": len(clean_returns),
+            "minimum_observations": MIN_BETA_OBSERVATIONS,
+        }
+
+    daily_log_returns = np.log1p(
+        clean_returns.clip(lower=-0.999999)
+    )
+    monthly_covariance = (
+        daily_log_returns.cov().to_numpy(dtype=float)
+        * TRADING_DAYS
+        / MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
+    )
+    monthly_covariance = _nearest_positive_semidefinite(
+        monthly_covariance
+    )
+
+    annual_expected = (
+        expected_returns
+        .reindex(assets)
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+    )
+    annual_expected = np.clip(
+        annual_expected,
+        -0.95,
+        None,
+    )
+
+    # 로그정규 모형에서 단순수익률 기대값이 기존 기대수익률과
+    # 최대한 맞도록 분산 보정항을 차감한다.
+    monthly_log_mean = (
+        np.log1p(annual_expected)
+        / MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
+        - 0.5 * np.diag(monthly_covariance)
+    )
+
+    weight_vector = np.array(
+        [
+            safe_float(normalized_weights.get(asset))
+            for asset in assets
+        ],
+        dtype=float,
+    )
+    weight_total = float(weight_vector.sum())
+    if weight_total <= 0:
+        return {
+            "available": False,
+            "reason": "portfolio_weight_sum_zero",
+        }
+    weight_vector = weight_vector / weight_total
+
+    scenario_seed = (
+        int(random_seed)
+        + MONTE_CARLO_METRIC_RANGE_SEED_OFFSET
+    )
+    rng = np.random.default_rng(scenario_seed)
+
+    # 모든 월·경로의 자산별 로그수익률을 한 번에 생성한다.
+    # 약 60개월 × 10,000경로 × 12자산 규모로,
+    # 월별 Python 반복 호출보다 빠르면서 메모리 사용도 제한적이다.
+    monthly_log_draws = rng.multivariate_normal(
+        mean=monthly_log_mean,
+        cov=monthly_covariance,
+        size=(months, simulations),
+        check_valid="ignore",
+    )
+
+    # Buy & Hold: 누적 로그수익률을 자산별 초기 금액에 적용한다.
+    np.cumsum(
+        monthly_log_draws,
+        axis=0,
+        out=monthly_log_draws,
+    )
+    np.exp(
+        monthly_log_draws,
+        out=monthly_log_draws,
+    )
+    monthly_log_draws *= (
+        weight_vector * total_asset
+    )
+
+    portfolio_value_history = (
+        monthly_log_draws.sum(axis=2)
+    )
+    portfolio_value_history = np.vstack(
+        [
+            np.full(
+                (1, simulations),
+                total_asset,
+                dtype=float,
+            ),
+            portfolio_value_history,
+        ]
+    )
+
+    running_peak = np.maximum.accumulate(
+        portfolio_value_history,
+        axis=0,
+    )
+    drawdown = (
+        portfolio_value_history / running_peak - 1.0
+    )
+    path_mdd = drawdown.min(axis=0)
+    gross_portfolio_value = (
+        portfolio_value_history[-1]
+    )
+
+    effective_tax_rate = _effective_tax_rate_from_breakdown(
+        tax_breakdown
+    )
+    gross_gain = gross_portfolio_value - total_asset
+    after_tax_terminal_asset = (
+        total_asset
+        + np.where(
+            gross_gain > 0,
+            gross_gain * (1.0 - effective_tax_rate),
+            gross_gain,
+        )
+    )
+    after_tax_terminal_asset = np.maximum(
+        after_tax_terminal_asset,
+        0.0,
+    )
+    after_tax_annualized_return = (
+        np.power(
+            np.maximum(
+                after_tax_terminal_asset / total_asset,
+                1e-12,
+            ),
+            1.0 / horizon_years,
+        )
+        - 1.0
+    )
+
+    start_index_value = clean_returns.index[0]
+    end_index_value = clean_returns.index[-1]
+
+    start_formatter = getattr(
+        start_index_value,
+        "strftime",
+        None,
+    )
+    end_formatter = getattr(
+        end_index_value,
+        "strftime",
+        None,
+    )
+
+    start_date_str = (
+        start_formatter("%Y-%m-%d")
+        if callable(start_formatter)
+        else str(start_index_value)
+    )
+    end_date_str = (
+        end_formatter("%Y-%m-%d")
+        if callable(end_formatter)
+        else str(end_index_value)
+    )
+
+    scenario_basis_id = (
+        f"{MONTE_CARLO_METRIC_RANGE_VERSION}:"
+        f"{scenario_seed}:{simulations}:{horizon_years}:"
+        f"{start_date_str}:{end_date_str}"
+    )
+
+    return {
+        "available": True,
+        "version": MONTE_CARLO_METRIC_RANGE_VERSION,
+        "scenario_basis_id": scenario_basis_id,
+        "simulation_count": simulations,
+        "horizon_years": horizon_years,
+        "time_step": "monthly",
+        "rebalancing": "none_buy_and_hold",
+        "common_market_scenarios": True,
+        "random_seed": scenario_seed,
+        "display_range": {
+            "lower_percentile": (
+                MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER
+            ),
+            "center_percentile": (
+                MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER
+            ),
+            "upper_percentile": (
+                MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER
+            ),
+            "central_coverage": 0.60,
+            "label": "P20-P80",
+        },
+        "after_tax_return": _metric_percentile_payload(
+            after_tax_annualized_return,
+            digits=6,
+            unit="rate",
+        ),
+        "mdd": _metric_percentile_payload(
+            path_mdd,
+            digits=6,
+            unit="rate",
+        ),
+        "effective_tax_rate_proxy": safe_round(
+            effective_tax_rate,
+            6,
+        ),
+        "assumptions": {
+            "path_model": (
+                "correlated_multivariate_log_returns"
+            ),
+            "drift_source": "asset_expected_returns",
+            "covariance_source": (
+                "historical_daily_log_return_covariance"
+            ),
+            "after_tax_method": (
+                "positive_terminal_gain_adjusted_by_"
+                "current_effective_tax_rate_proxy"
+            ),
+            "mdd_method": (
+                "minimum_drawdown_of_same_simulated_"
+                "gross_portfolio_path"
+            ),
+            "tax_on_loss": False,
+            "fees_in_simulated_paths": False,
+            "range_note": (
+                "세후수익률과 MDD는 동일한 10,000개 "
+                "Buy & Hold 시장 경로에서 계산하며, "
+                "P20~P80은 경로의 중앙 60% 범위입니다."
+            ),
+            "disclaimer": (
+                "시뮬레이션 결과는 실제 수익을 보장하지 않습니다."
+            ),
+        },
+    }
+
+
 def calculate_metric_amounts(
     metrics: Dict[str, Any],
     total_asset: float,
@@ -4500,6 +4922,33 @@ def build_portfolio_response(
         include_benchmark_metrics=True,
     )
 
+    try:
+        monte_carlo_metric_ranges = (
+            calculate_monte_carlo_metric_ranges(
+                weights=weights,
+                returns=returns,
+                expected_returns=expected_returns,
+                total_asset=request.total_asset,
+                investment_horizon_years=(
+                    request.investment_horizon_years
+                ),
+                tax_breakdown=metrics.get(
+                    "tax_breakdown"
+                ),
+                random_seed=request.random_seed,
+            )
+        )
+    except Exception:
+        # Range는 부가 지표이므로 계산 실패가 전체 추천 응답을
+        # 중단시키지 않도록 안전하게 unavailable로 내린다.
+        logger.exception(
+            "Failed to calculate Monte Carlo metric ranges"
+        )
+        monte_carlo_metric_ranges = {
+            "available": False,
+            "reason": "unexpected_simulation_error",
+        }
+
     cumulative_source_returns = (
         backtest_returns
         if backtest_returns is not None
@@ -4551,6 +5000,25 @@ def build_portfolio_response(
             ],
             "liquidity_coverage": metrics["liquidity_coverage"],
             "after_tax_return": metrics["after_tax_return"],
+            "after_tax_return_range": (
+                monte_carlo_metric_ranges.get(
+                    "after_tax_return"
+                )
+                if monte_carlo_metric_ranges.get(
+                    "available"
+                )
+                else None
+            ),
+            "mdd_range": (
+                monte_carlo_metric_ranges.get("mdd")
+                if monte_carlo_metric_ranges.get(
+                    "available"
+                )
+                else None
+            ),
+            "monte_carlo_range_basis": (
+                monte_carlo_metric_ranges
+            ),
             "krw": metrics["metric_amounts"],
             "metric_amounts": metrics["metric_amounts"],
             "taxable_financial_income": metrics[
