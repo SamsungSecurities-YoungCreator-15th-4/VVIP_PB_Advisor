@@ -124,27 +124,9 @@ export function useSttRealtime() {
       isActiveRef.current = true;
 
       try {
-        // 1) 마이크 권한 요청
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: false,
-        });
-        streamRef.current = stream;
-
-        // 2) AudioContext + WorkletNode 준비
-        const audioCtx = new AudioContext();
-        audioCtxRef.current = audioCtx;
-        if (audioCtx.state === "suspended") await audioCtx.resume();
-        await audioCtx.audioWorklet.addModule("/pcm-processor.js");
-        const workletNode = new AudioWorkletNode(audioCtx, "pcm-processor", {
-          processorOptions: { targetSampleRate: 16000 },
-        });
-        workletRef.current = workletNode;
-
-        // 3) WebSocket 연결
-        // 브라우저 WebSocket 은 Authorization 헤더를 못 실으므로, 로그인 세션의
-        // access_token 을 쿼리파라미터(?token=)로 전달한다(백엔드가 이 토큰으로 PB 인증).
-        // 토큰이 없으면 서버가 즉시 1008 로 끊으므로, 마이크를 잡은 상태에서 미리 정리한다.
+        // 1) 로그인 세션 확인 — 토큰이 없으면 백엔드 WS 가 즉시 1008 로 끊으므로,
+        // 마이크 권한 요청·오디오 리소스 생성 전에 먼저 검사해 불필요한 팝업/할당을 피한다.
+        // (브라우저 WebSocket 은 Authorization 헤더를 못 실어 ?token= 쿼리파라미터로 전달.)
         const {
           data: { session },
         } = await getSupabase().auth.getSession();
@@ -155,6 +137,25 @@ export function useSttRealtime() {
           cleanup();
           return;
         }
+
+        // 2) 마이크 권한 요청
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false,
+        });
+        streamRef.current = stream;
+
+        // 3) AudioContext + WorkletNode 준비
+        const audioCtx = new AudioContext();
+        audioCtxRef.current = audioCtx;
+        if (audioCtx.state === "suspended") await audioCtx.resume();
+        await audioCtx.audioWorklet.addModule("/pcm-processor.js");
+        const workletNode = new AudioWorkletNode(audioCtx, "pcm-processor", {
+          processorOptions: { targetSampleRate: 16000 },
+        });
+        workletRef.current = workletNode;
+
+        // 4) WebSocket 연결 — 위에서 확보한 access_token 을 ?token= 으로 전달.
         const ws = new WebSocket(
           `${WS_ENDPOINT}?token=${encodeURIComponent(token)}`,
         );
@@ -184,7 +185,7 @@ export function useSttRealtime() {
           const event = msg.event as string;
 
           if (event === "started") {
-            // 4) 오디오 그래프 연결 — analyser(시각화용) + WorkletNode(PCM→WS)
+            // 5) 오디오 그래프 연결 — analyser(시각화용) + WorkletNode(PCM→WS)
             const source = audioCtx.createMediaStreamSource(stream);
             const analyser = audioCtx.createAnalyser();
             analyser.fftSize = 256;
