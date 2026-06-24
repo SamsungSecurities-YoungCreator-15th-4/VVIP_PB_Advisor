@@ -14,6 +14,7 @@ Supabase 호출이 블로킹이라 핸들러는 동기 def 로 둔다(rag.py·ta
 import logging
 import math
 from datetime import datetime, timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -97,6 +98,249 @@ class ClientListItem(BaseModel):
 class ClientListResponse(BaseModel):
     pb_id: str
     clients: list[ClientListItem]
+
+
+class DashboardSnapshotSaveRequest(BaseModel):
+    """상담 종료 후 저장할 중앙 대시보드 전체 결과."""
+
+    consultation_id: str = Field(..., min_length=1)
+    calculation_session_id: str = Field(..., min_length=1)
+    dashboard_result: dict[str, Any] = Field(
+        ...,
+        description="POST /portfolio/calculate 응답 전체",
+    )
+    stress_test_result: dict[str, Any] = Field(
+        default_factory=dict,
+        description="중앙 대시보드 스트레스 테스트 결과 전체",
+    )
+
+
+class DashboardSnapshotResponse(BaseModel):
+    saved: bool
+    client_id: str
+    consultation_id: str
+    calculation_session_id: str
+    dashboard_result: dict[str, Any]
+    stress_test_result: dict[str, Any]
+    saved_at: str
+    message: str
+
+
+def _get_owned_client_with_meta(
+    supabase,
+    client_id: str,
+    pb_id: str,
+) -> dict | None:
+    result = (
+        supabase.table("client")
+        .select("id,meta")
+        .eq("id", client_id)
+        .eq("pb_id", pb_id)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+@router.post(
+    "/{client_id}/dashboard-snapshot",
+    response_model=DashboardSnapshotResponse,
+)
+def save_client_dashboard_snapshot(
+    client_id: str,
+    request: DashboardSnapshotSaveRequest,
+    pb_id: str = Depends(get_current_pb_id),
+) -> DashboardSnapshotResponse:
+    """현재 상담 결과를 저장한다.
+
+    상담이 끝날 때마다 previous_dashboard를 최신 결과로 덮어쓴다.
+    따라서 다음 방문 때 GET하면 자동으로 직전 상담(n-1) 결과가 된다.
+    """
+    if not request.dashboard_result:
+        raise HTTPException(
+            status_code=422,
+            detail="dashboard_result는 비어 있을 수 없습니다.",
+        )
+
+    dashboard_session_id = request.dashboard_result.get(
+        "calculation_session_id"
+    )
+    if (
+        dashboard_session_id is not None
+        and str(dashboard_session_id)
+        != request.calculation_session_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "dashboard_result.calculation_session_id와 "
+                "요청의 calculation_session_id가 일치하지 않습니다."
+            ),
+        )
+
+    dashboard_client_id = request.dashboard_result.get("client_id")
+    if (
+        dashboard_client_id is not None
+        and str(dashboard_client_id) != client_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "dashboard_result.client_id와 URL의 client_id가 "
+                "일치하지 않습니다."
+            ),
+        )
+
+    dashboard_consultation_id = request.dashboard_result.get(
+        "consultation_id"
+    )
+    if (
+        dashboard_consultation_id is not None
+        and str(dashboard_consultation_id)
+        != request.consultation_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "dashboard_result.consultation_id와 요청의 "
+                "consultation_id가 일치하지 않습니다."
+            ),
+        )
+
+    stress_session_id = request.stress_test_result.get(
+        "calculation_session_id"
+    )
+    if (
+        stress_session_id is not None
+        and str(stress_session_id)
+        != request.calculation_session_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "stress_test_result.calculation_session_id와 "
+                "요청의 calculation_session_id가 일치하지 않습니다."
+            ),
+        )
+
+    supabase = get_supabase()
+
+    try:
+        client = _get_owned_client_with_meta(
+            supabase,
+            client_id,
+            pb_id,
+        )
+    except Exception as exc:
+        logger.exception("client dashboard owner lookup failed")
+        raise HTTPException(
+            status_code=500,
+            detail="고객 정보 조회 중 오류가 발생했습니다.",
+        ) from exc
+
+    if not client:
+        raise HTTPException(
+            status_code=404,
+            detail="담당 고객을 찾을 수 없습니다.",
+        )
+
+    saved_at = datetime.now(KST).isoformat(timespec="seconds")
+    snapshot = {
+        "saved": True,
+        "client_id": client_id,
+        "consultation_id": request.consultation_id,
+        "calculation_session_id": request.calculation_session_id,
+        "dashboard_result": request.dashboard_result,
+        "stress_test_result": request.stress_test_result,
+        "saved_at": saved_at,
+        "message": "현재 상담 대시보드 결과가 저장되었습니다.",
+    }
+
+    current_meta = (
+        client.get("meta")
+        if isinstance(client.get("meta"), dict)
+        else {}
+    )
+    updated_meta = {
+        **current_meta,
+        "previous_dashboard": snapshot,
+    }
+
+    try:
+        result = (
+            supabase.table("client")
+            .update({"meta": updated_meta})
+            .eq("id", client_id)
+            .eq("pb_id", pb_id)
+            .execute()
+        )
+    except Exception as exc:
+        logger.exception("client dashboard snapshot update failed")
+        raise HTTPException(
+            status_code=500,
+            detail="대시보드 결과 저장 중 오류가 발생했습니다.",
+        ) from exc
+
+    if not result.data:
+        raise HTTPException(
+            status_code=404,
+            detail="담당 고객을 찾을 수 없습니다.",
+        )
+
+    return DashboardSnapshotResponse(**snapshot)
+
+
+@router.get(
+    "/{client_id}/previous-dashboard",
+    response_model=DashboardSnapshotResponse,
+)
+def get_client_previous_dashboard(
+    client_id: str,
+    pb_id: str = Depends(get_current_pb_id),
+) -> DashboardSnapshotResponse:
+    """고객의 가장 최근 저장 결과, 즉 현재 방문 기준 직전 상담 결과를 반환한다."""
+    supabase = get_supabase()
+
+    try:
+        client = _get_owned_client_with_meta(
+            supabase,
+            client_id,
+            pb_id,
+        )
+    except Exception as exc:
+        logger.exception("client previous dashboard lookup failed")
+        raise HTTPException(
+            status_code=500,
+            detail="이전 대시보드 결과 조회 중 오류가 발생했습니다.",
+        ) from exc
+
+    if not client:
+        raise HTTPException(
+            status_code=404,
+            detail="담당 고객을 찾을 수 없습니다.",
+        )
+
+    meta = (
+        client.get("meta")
+        if isinstance(client.get("meta"), dict)
+        else {}
+    )
+    snapshot = meta.get("previous_dashboard")
+
+    if not isinstance(snapshot, dict):
+        raise HTTPException(
+            status_code=404,
+            detail="이 고객의 이전 상담 대시보드 결과가 없습니다.",
+        )
+
+    try:
+        return DashboardSnapshotResponse(**snapshot)
+    except Exception as exc:
+        logger.exception("invalid previous_dashboard payload")
+        raise HTTPException(
+            status_code=500,
+            detail="저장된 이전 대시보드 결과 형식이 올바르지 않습니다.",
+        ) from exc
 
 
 @router.get("", response_model=ClientListResponse)
