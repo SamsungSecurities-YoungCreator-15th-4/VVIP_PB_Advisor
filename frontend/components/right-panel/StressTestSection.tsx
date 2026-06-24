@@ -60,19 +60,18 @@ export default function StressTestSection() {
     Math.abs(fxDelta) >= SCENARIO_WARN.fxDeltaKrw;
 
   // 연간 예상 평가손익(억원) = (충격 후 기대수익률 − 기준 기대수익률) × 운용자산.
-  // 백엔드 실데이터를 쓰고, 연결 실패 시에만 더미 선형 민감도로 폴백한다.
-  // 위기 시나리오 모드는 슬라이더 델타가 0이라 여기서 산출 불가 → null 반환.
-  // (실제 시나리오 손익은 분석하기 시 백엔드 stress-metrics(weights+scenario)로 산출)
+  // 백엔드 stress-metrics 실데이터를 쓴다(슬라이더·위기 시나리오 모두).
+  // expectedReturn은 %라 /100으로 소수 환산 후 운용자산(억)을 곱한다.
   const pnlEok = (id: "current" | "a" | "b"): number | null => {
-    if (activeScenario) return null;
     const live = byId[BACKEND_PORTFOLIO_ID[id]];
     if (!failed && live) {
       return (
-        ((live.stressed.expectedReturn ?? 0) -
-          (live.base.expectedReturn ?? 0)) *
+        ((live.stressed.expectedReturn - live.base.expectedReturn) / 100) *
         aumEokwon
       );
     }
+    // 백엔드 실패 폴백: 위기 시나리오는 더미 선형식으로 못 구함 → "분석 시 산출".
+    if (activeScenario) return null;
     const s = SCENARIO_SENSITIVITY[id];
     return s.perRatePct * rateDelta + s.perFxKrw * fxDelta;
   };
