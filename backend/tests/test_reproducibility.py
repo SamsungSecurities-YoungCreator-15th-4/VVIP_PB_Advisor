@@ -246,12 +246,20 @@ class TestRagGeneratorDeterminism:
         assert a == b
         assert 0 < len(a) <= 50
         assert "제공된 자료" not in a
+        assert not a.endswith(("습니다", "입니다", "됩니다"))
 
     def test_normalize_insight_summary_removes_prefix_and_bounds_length(self):
         raw = "요약: " + "절세와 유동성 니즈를 함께 고려한 보수적 상담 포인트입니다" * 2
         summary = normalize_insight_summary(raw)
         assert not summary.startswith("요약:")
         assert len(summary) <= 50
+
+    def test_normalize_insight_summary_converts_sentence_to_noun_phrase(self):
+        assert normalize_insight_summary("금리가 상승했습니다.") == "금리 상승"
+        assert (
+            normalize_insight_summary("요약: 유동성 니즈가 확인됩니다.")
+            == "유동성 니즈 확인"
+        )
 
 
 class TestRagSearchTransformDeterminism:
