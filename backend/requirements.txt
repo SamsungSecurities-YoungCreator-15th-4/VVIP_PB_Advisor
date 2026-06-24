@@ -16,7 +16,8 @@ tiktoken==0.13.0  # ingest_documents.py 청킹(cl100k_base) — openai 간접의
 httpx==0.28.1
 # JWT 검증(app/core/auth.py) — supabase 간접의존이라 깔려는 있으나 직접 핀이 없었다.
 # 비대칭(ES256) JWKS 검증에 cryptography 가 필요하므로 PyJWT[crypto] 로 직접 핀한다.
-PyJWT[crypto]==2.10.1
+# supabase-auth 가 pyjwt>=2.12.0 을 요구하므로 그 범위 안의 설치 버전으로 핀.
+PyJWT[crypto]==2.13.0
 # DB (Supabase 연동: A=supabase-py RPC 전용 / B=psycopg3 직접 SQL)
 psycopg[binary]==3.3.4
 supabase==2.31.0
