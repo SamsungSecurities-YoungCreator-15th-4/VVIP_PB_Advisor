@@ -110,6 +110,7 @@ export default function MacroTicker() {
   const [cooling, setCooling] = useState(false);
   const cancelledRef = useRef(false);
   const setLiveBase = useDashboardStore((s) => s.setLiveBase);
+  const setMacroIndicators = useDashboardStore((s) => s.setMacroIndicators);
 
   // force=true면 백엔드 5분 캐시를 무시하고 강제 재조회
   const load = (force: boolean) => {
@@ -117,7 +118,10 @@ export default function MacroTicker() {
     return fetchMacroIndicators(force)
       .then((d) => {
         if (cancelledRef.current) return;
-        setRows(toRows(d));
+        const liveRows = toRows(d);
+        setRows(liveRows);
+        // PDF 등 다른 화면이 같은 실시간 지표를 읽도록 store 에도 올린다.
+        setMacroIndicators(liveRows);
         setFetchedAt(d.fetchedAt); // 데이터 기준 시각 동기화
         // 슬라이더 기준점을 실데이터로 업데이트 (최초 1회는 scenario도 스냅)
         setLiveBase({ ratePct: d.baseRate.price, fxKrw: Math.round(d.krwUsd.price) });

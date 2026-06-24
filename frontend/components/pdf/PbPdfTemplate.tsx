@@ -8,7 +8,6 @@ import {
   TAX_EFFECT,
   TAX_ADVICE,
   INSIGHT,
-  MACRO_INDICATORS,
   BASE_TIME,
 } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
@@ -509,6 +508,8 @@ function CoverPage() {
 function MarketIpsPage() {
   const customer = useSelectedCustomer();
   const ips = useDashboardStore((s) => s.ips);
+  // 상단바와 동일한 실시간 시장 지표(store). 미로드 시엔 목 기준값으로 초기화돼 있다.
+  const macroIndicators = useDashboardStore((s) => s.macroIndicators);
   const IPS_ROWS = [
     {
       key: "GOAL",
@@ -611,7 +612,7 @@ function MarketIpsPage() {
             marginBottom: 48,
           }}
         >
-          {MACRO_INDICATORS.map((m, idx) => {
+          {macroIndicators.map((m, idx) => {
             const isUp = m.direction === "up";
             return (
               <div
@@ -620,7 +621,7 @@ function MarketIpsPage() {
                   flex: 1,
                   padding: "12px 10px",
                   borderRight:
-                    idx < MACRO_INDICATORS.length - 1
+                    idx < macroIndicators.length - 1
                       ? `1px solid ${BORDER}`
                       : "none",
                   background: "white",
@@ -1785,7 +1786,21 @@ function TaxProductsPage() {
 function AiPage() {
   const insightResult = useDashboardStore((s) => s.insightResult);
   const answer = insightResult?.data?.answer ?? INSIGHT.defaultAnswer;
-  const citationSources = insightResult?.data?.citations ?? INSIGHT.sources;
+  // 한 질의가 같은 문서의 여러 청크를 인용해 제목이 중복될 수 있다. 출처 목록은 문서당
+  // 한 번만 적는 게 보편적이고, 중복을 그대로 두면 페이지를 넘쳐 깨지므로 제목 기준으로
+  // 중복을 제거하고 안전하게 상한을 둔다(렌더 마크업은 그대로).
+  const citationSources = (() => {
+    const seen = new Set<string>();
+    const unique: { title: string; date: string | null }[] = [];
+    for (const src of insightResult?.data?.citations ?? INSIGHT.sources) {
+      const key = (src.title ?? "").trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      unique.push({ title: src.title, date: src.date ?? null });
+      if (unique.length >= 8) break;
+    }
+    return unique;
+  })();
   return (
     <div
       data-pdf-page=""

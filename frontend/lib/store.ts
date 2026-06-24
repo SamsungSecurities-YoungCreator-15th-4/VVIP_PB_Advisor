@@ -7,10 +7,12 @@ import { create } from "zustand";
 import {
   type ConsultMessage,
   type Customer,
+  type MacroIndicator,
   type Portfolio,
   CONSULT_LOG,
   CUSTOMERS,
   IPS_DEFAULT,
+  MACRO_INDICATORS,
   PORTFOLIOS,
   SCENARIO_BASE,
   TAX_THRESHOLD,
@@ -67,6 +69,12 @@ interface DashboardState {
   setStressedPortfolios: (portfolios: Portfolio[]) => void;
   setStressAnalyzing: (v: boolean) => void;
   clearStressMode: () => void;
+
+  // ── 상단바 실시간 시장 지표 ──
+  // MacroTicker 가 /api/macro-indicators 로 받은 실데이터를 여기에 올려, PDF 등
+  // 다른 화면이 같은 값을 읽게 한다(미로드·실패 시엔 목 기준값으로 시작).
+  macroIndicators: MacroIndicator[];
+  setMacroIndicators: (rows: MacroIndicator[]) => void;
 
   // ── AI 인사이트 결과 ──
   insightResult: ApiResult<InsightData> | null;
@@ -125,6 +133,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setStressAnalyzing: (v) => set({ stressAnalyzing: v }),
   clearStressMode: () =>
     set({ stressedPortfolios: [], isStressMode: false }),
+
+  macroIndicators: MACRO_INDICATORS,
+  setMacroIndicators: (rows) => set({ macroIndicators: rows }),
 
   insightResult: null,
   setInsightResult: (result) => set({ insightResult: result }),
