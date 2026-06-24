@@ -3,10 +3,11 @@
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import math
 from typing import Dict, List, Optional, Any
 
 from .constants import BACKTEST_BASE_INDEX
-from .assets import ASSET_NAMES_KR, RISK_LEVEL_NAME
+from .assets import ASSET_NAMES_KR, ASSET_TICKERS, RISK_LEVEL_NAME
 from .utils import safe_float, safe_round
 
 KST = ZoneInfo("Asia/Seoul")
@@ -16,21 +17,60 @@ def rate_to_percent(value: Any, digits: int = 2) -> float:
     return safe_round(safe_float(value) * 100.0, digits)
 
 
-def build_allocation_payload(portfolio: Dict[str, Any]) -> List[Dict[str, Any]]:
-    allocation = []
-    for asset, info in portfolio["weights"].items():
-        weight = safe_float(info.get("weight"))
-        if weight <= 1e-12:
-            continue
-        allocation.append(
-            {
-                "asset_class": asset,
-                "name": info.get("label", ASSET_NAMES_KR.get(asset, asset)),
-                "weight": safe_round(weight * 100.0, 2),
-            }
-        )
-    return allocation
+def round_allocation_percentages(
+    asset_weights: List[tuple[str, float]],
+) -> Dict[str, float]:
+    """최대잔여법으로 소수점 둘째 자리 비중 합계를 정확히 100.00으로 맞춘다."""
 
+    positive = [(asset, max(safe_float(weight), 0.0)) for asset, weight in asset_weights]
+    positive = [(asset, weight) for asset, weight in positive if weight > 1e-12]
+    total = sum(weight for _, weight in positive)
+    if total <= 0:
+        return {}
+
+    raw_units = [
+        (asset, weight / total * 10_000.0, index)
+        for index, (asset, weight) in enumerate(positive)
+    ]
+    floor_units = {
+        asset: int(math.floor(units + 1e-12))
+        for asset, units, _ in raw_units
+    }
+    remaining = 10_000 - sum(floor_units.values())
+
+    ranked = sorted(
+        raw_units,
+        key=lambda item: (-(item[1] - math.floor(item[1] + 1e-12)), item[2]),
+    )
+    for index in range(max(remaining, 0)):
+        asset = ranked[index % len(ranked)][0]
+        floor_units[asset] += 1
+
+    return {
+        asset: round(units / 100.0, 2)
+        for asset, units in floor_units.items()
+    }
+
+
+def build_allocation_payload(portfolio: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_weights = [
+        (asset, safe_float(info.get("weight")))
+        for asset, info in portfolio["weights"].items()
+        if safe_float(info.get("weight")) > 1e-12
+    ]
+    rounded = round_allocation_percentages(raw_weights)
+
+    return [
+        {
+            "asset_class": asset,
+            "name": portfolio["weights"][asset].get(
+                "label",
+                ASSET_NAMES_KR.get(asset, asset),
+            ),
+            "weight": rounded[asset],
+        }
+        for asset, _ in raw_weights
+    ]
 
 def build_backtest_payload(
     cumulative_returns: List[Dict[str, Any]],
@@ -198,26 +238,24 @@ def build_spec_portfolio_item(
         ),
         "basis": "portfolio_amount_minus_current_amount",
     }
+    benchmark_backtest = portfolio.get("benchmark_backtest") or {}
+    benchmark_backtests = portfolio.get("benchmark_backtests") or {}
+
     item = {
         "kind": kind,
         "rank": rank,
         "label": label,
         "badge": badge,
         "allocation": build_allocation_payload(portfolio),
+        "allocation_total": 100.0,
         "metrics": build_metrics_payload(portfolio),
         "metrics_krw": metrics_krw,
         "vs_current_krw": vs_current_krw,
         "backtest": build_backtest_payload(portfolio["cumulative_returns"]),
         "benchmark": {
-            "metadata": portfolio.get(
-                "benchmark_backtest",
-                {},
-            ).get("metadata", {}),
+            "metadata": benchmark_backtest.get("metadata", {}),
             "backtest": build_backtest_payload(
-                portfolio.get(
-                    "benchmark_backtest",
-                    {},
-                ).get("series", [])
+                benchmark_backtest.get("series", [])
             ),
         },
         "benchmarks": {
@@ -227,14 +265,43 @@ def build_spec_portfolio_item(
                     benchmark.get("series", [])
                 ),
             }
-            for key, benchmark in portfolio.get(
-                "benchmark_backtests",
-                {},
-            ).items()
+            for key, benchmark in benchmark_backtests.items()
         },
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
     return item
+
+
+def build_correlation_heatmap_payload(
+    full_response: Dict[str, Any],
+) -> Dict[str, Any]:
+    raw_matrix = full_response.get("correlation_matrix") or {}
+    asset_keys = [
+        asset
+        for asset in ASSET_TICKERS
+        if asset in raw_matrix
+    ]
+
+    return {
+        "assets": [
+            {
+                "asset_class": asset,
+                "name": ASSET_NAMES_KR.get(asset, asset),
+            }
+            for asset in asset_keys
+        ],
+        "matrix": [
+            [
+                safe_round(
+                    (raw_matrix.get(column_asset) or {}).get(row_asset),
+                    4,
+                )
+                for column_asset in asset_keys
+            ]
+            for row_asset in asset_keys
+        ],
+        "value_type": "correlation",
+    }
 
 
 def build_portfolio_calculate_response(
@@ -292,6 +359,7 @@ def build_portfolio_calculate_response(
                 total_asset=total_asset,
             ),
         ],
+        "correlation_heatmap": build_correlation_heatmap_payload(full_response),
         "search_summary": full_response["search_summary"],
         "scenario_summary": full_response["scenario_summary"],
         "data_snapshot": {
