@@ -9,9 +9,7 @@ import DataSourceBadge from "@/components/common/DataSourceBadge";
 import { INSIGHT, PORTFOLIOS } from "@/lib/mockData";
 import { buildDashboardInsightContext } from "@/lib/dashboardInsightContext";
 import {
-  type ApiResult,
   type InsightCitation,
-  type InsightData,
   fetchRagInsight,
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
@@ -27,10 +25,12 @@ export default function InsightSection() {
     scenario,
     selectedCustomerId,
     selectedPortfolioId,
+    insightResult,
+    setInsightResult,
   } = useDashboardStore();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ApiResult<InsightData> | null>(null);
+  const result = insightResult;
 
   const selectedCustomer =
     customers.find((customer) => customer.id === selectedCustomerId) ??
@@ -58,7 +58,7 @@ export default function InsightSection() {
           otherIncomeManwon,
         }),
       });
-      setResult(res);
+      setInsightResult(res);
     } finally {
       setLoading(false);
     }

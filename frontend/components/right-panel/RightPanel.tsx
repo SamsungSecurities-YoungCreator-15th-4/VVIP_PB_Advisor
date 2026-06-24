@@ -4,10 +4,21 @@ import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import InsightSection from "@/components/right-panel/InsightSection";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
+import { useDashboardStore } from "@/lib/store";
 
 /** 우측 패널: 시나리오 Test + AI 인사이트 — 여닫기 토글 포함 */
 export default function RightPanel() {
   const [isOpen, setIsOpen] = useAutoCollapse(1280);
+  const { insightResult, ips, setIps } = useDashboardStore();
+
+  const summary =
+    insightResult?.source !== "empty" ? insightResult?.data?.summary : null;
+
+  const handleIpsReflect = () => {
+    if (!summary) return;
+    const prev = ips.unique.trim();
+    setIps({ unique: prev ? `${prev}\n${summary}` : summary });
+  };
 
   if (!isOpen) {
     return (
@@ -40,6 +51,8 @@ export default function RightPanel() {
 
       <Button
         size="lg"
+        onClick={handleIpsReflect}
+        disabled={!summary}
         className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
       >
         IPS 반영하기

@@ -15,7 +15,7 @@ import {
   SCENARIO_BASE,
   TAX_THRESHOLD,
 } from "./mockData";
-import type { DataSource } from "./api";
+import type { ApiResult, DataSource, InsightData } from "./api";
 
 export interface IpsState {
   returnPct: number;
@@ -67,6 +67,10 @@ interface DashboardState {
   setStressedPortfolios: (portfolios: Portfolio[]) => void;
   setStressAnalyzing: (v: boolean) => void;
   clearStressMode: () => void;
+
+  // ── AI 인사이트 결과 ──
+  insightResult: ApiResult<InsightData> | null;
+  setInsightResult: (result: ApiResult<InsightData>) => void;
 
   helpMode: boolean;
   toggleHelpMode: () => void;
@@ -121,6 +125,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setStressAnalyzing: (v) => set({ stressAnalyzing: v }),
   clearStressMode: () =>
     set({ stressedPortfolios: [], isStressMode: false }),
+
+  insightResult: null,
+  setInsightResult: (result) => set({ insightResult: result }),
 
   // 초기 상담 전사는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
   transcript: CONSULT_LOG,
