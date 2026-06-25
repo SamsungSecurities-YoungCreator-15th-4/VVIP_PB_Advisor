@@ -123,13 +123,10 @@ _calculate_cache: TTLCache[Dict[str, Any]] = TTLCache(ttl_seconds=_CALCULATE_TTL
 
 
 def _calculate_cache_key(payload: Dict[str, Any]) -> str:
-    # 계산 결과에 영향 없는 식별자는 키에서 제외해 적중률을 높인다.
-    relevant = {
-        k: v
-        for k, v in payload.items()
-        if k not in ("client_id", "customer_id", "consultation_id")
-    }
-    serialized = json.dumps(relevant, sort_keys=True, default=str, ensure_ascii=False)
+    # 캐시된 응답에 요청자의 client_id·consultation_id가 그대로 담기므로(formatters
+    # build_portfolio_calculate_response), 이 식별자를 키에서 빼면 동일 파라미터의 다른
+    # 고객/세션이 남의 식별자를 받는 정보 유출이 된다. 데이터 격리를 위해 식별자를 키에 포함한다.
+    serialized = json.dumps(payload, sort_keys=True, default=str, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 

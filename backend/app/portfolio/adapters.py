@@ -541,12 +541,11 @@ def apply_unique_profile_to_ips_payload(
 
     existing_unique_profile = dict(result.get("unique_profile") or {})
     result["unique_profile"] = {
-        **profile,
+        # 원문 Unique를 다시 분석한 profile이 이전 계산에서 남은 값보다 우선한다.
+        # 그래야 PB 승인 인사이트를 Unique에 추가한 뒤 재분석할 때 새 제약·금액이 실제로 반영된다.
+        # (existing 먼저, profile 나중 → profile 키가 stale 값을 덮어쓴다. existing 전용 키는 보존.)
         **existing_unique_profile,
-        # 원문 Unique를 다시 분석한 semantic 결과는 이전 계산에서 남은 profile보다 우선한다.
-        # 그래야 PB 승인 인사이트를 Unique에 추가한 뒤 재분석할 때 새 제약이 실제로 반영된다.
-        "semantic_constraints": list(profile.get("semantic_constraints") or []),
-        "semantic_audit": dict(profile.get("semantic_audit") or {}),
+        **profile,
     }
     result["unique_items"] = result.get("unique_items") or profile["items"]
     result["client_context"] = {
