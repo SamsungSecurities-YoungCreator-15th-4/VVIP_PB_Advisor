@@ -311,6 +311,14 @@ class PortfolioCalculateResponseContract(BaseModel):
     input_adapter: InputAdapterResponse
     methodology: MethodologyResponse
     notes: List[str]
+    tax_optimizer: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "절세 최적화 페이로드. {current, portfolio_a, portfolio_b} 맵이며 각 값은 "
+            "build_tax_optimizer_payload 출력(절세 6카드 = strategy_cards 포함). "
+            "stress-metrics의 base_tax/stressed_tax와 동일 구조라 같은 코드로 렌더 가능."
+        ),
+    )
 
 
 class PortfolioStressTestResponseContract(BaseModel):
