@@ -1,4 +1,5 @@
 # ruff: noqa: E501
+# 커밋용
 """§12-2. API 명세서 ⑤ 응답 포맷터."""
 
 from datetime import datetime
