@@ -145,3 +145,19 @@ export interface ConsultationResponse {
   ips_snapshot_id: string | null;
   created_at: string; // ISO datetime (KST)
 }
+
+// ── 상담 내역 목록: GET /consultations?client_id= ──────────────
+export interface ConsultationSummary {
+  consultation_id: string;
+  customer_id: string;
+  customer_name: CustomerName;
+  consultation_date: string;
+  transcript_title: string;
+  ips_title: string;
+  created_at: string; // ISO datetime (KST)
+}
+
+export interface ConsultationListResponse {
+  customer_name: CustomerName;
+  consultations: ConsultationSummary[];
+}
