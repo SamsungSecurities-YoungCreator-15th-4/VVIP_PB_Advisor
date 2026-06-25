@@ -178,6 +178,9 @@ export default function Sidebar() {
                 customer.clientId,
                 restoredCid,
               );
+              // 비동기 동안 고객이 바뀌었으면 이전 고객 데이터를 새 화면에 반영하지 않는다.
+              if (useDashboardStore.getState().selectedCustomerId !== customer.id)
+                return;
               if (detail.source === "live") {
                 setConsultationId(detail.data.consultationId);
                 if (Object.keys(detail.data.ips).length > 0)
@@ -408,6 +411,11 @@ export default function Sidebar() {
     setLoadingId(consultationId);
     setHasFreshStt(false); // 과거 로드 시에는 스냅샷 저장 안 함
     const res = await loadConsultationDetail(customer.clientId, consultationId);
+    // 비동기 동안 고객이 바뀌었으면 이전 고객의 데이터·요청을 새 화면에 섞지 않는다.
+    if (useDashboardStore.getState().selectedCustomerId !== customer.id) {
+      setLoadingId(null);
+      return;
+    }
     if (res.source === "live") {
       setTranscript(res.data.transcript, "live");
       setConsultationId(res.data.consultationId);
