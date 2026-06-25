@@ -15,7 +15,7 @@ import { getSupabase } from "@/lib/supabaseClient";
  * 감지해 /login 으로 보낸다. 다만 네트워크 오류 등으로 signOut 이 실패해도
  * 로컬 세션은 비워지므로, 화면 전환은 성공 여부와 무관하게(finally) 수행한다.
  *
- * 실수 클릭 방지를 위해 헤더 맨 우측에 두고, 흰 배경·파란(brand) 아이콘으로
+ * 실수 클릭 방지를 위해 헤더 맨 우측에 두고, 흰 배경·연한 회색(가이드 토글과 동일) 아이콘으로
  * 비중요 액션임을 드러낸다. 글자는 빼고 호버 툴팁으로 의미를 안내한다.
  */
 export default function LogoutButton() {
@@ -44,7 +44,7 @@ export default function LogoutButton() {
         onClick={handleLogout}
         disabled={loading}
         aria-label="로그아웃"
-        className="rounded-full text-brand hover:bg-brand/5 hover:text-brand"
+        className="rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <LogOut className="size-4" />
       </Button>
