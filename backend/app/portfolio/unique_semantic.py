@@ -465,7 +465,6 @@ def _validate_constraint(text: str, raw: Dict[str, Any]) -> Tuple[Optional[Dict[
     }, None
 
 
-
 def _validate_soft_preference(
     text: str,
     raw: Dict[str, Any],
@@ -522,7 +521,6 @@ def _validate_soft_preference(
         "source_kind": "customer_unique",
         "policy": "secondary_ranking_only_no_invented_weight",
     }, None
-
 
 
 def _dedupe_soft_preferences(
@@ -1083,7 +1081,6 @@ def _normalize_current_weight_map(
 def _subject_weight(weights: Dict[str, float], constraint: Dict[str, Any]) -> float:
     assets = _constraint_subject_assets(constraint)
     return float(sum(float(weights.get(asset, 0.0)) for asset in assets))
-
 
 
 def calculate_soft_preference_alignment(
