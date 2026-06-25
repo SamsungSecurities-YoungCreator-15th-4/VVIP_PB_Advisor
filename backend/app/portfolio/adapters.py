@@ -24,6 +24,7 @@ from .assets import (
 )
 from .models import AnalysisRequest
 from .tax_parser import (
+    MONEY_EXPRESSION_PATTERN,
     apply_tax_profile_to_ips_payload,
     parse_tax_text,
     parse_money_krw,
@@ -39,7 +40,11 @@ from .utils import (
 KST = ZoneInfo("Asia/Seoul")
 
 KOREAN_MONEY_UNITS = {
+    "조": 1_000_000_000_000,
     "억": 100_000_000,
+    "천만": 10_000_000,
+    "백만": 1_000_000,
+    "십만": 100_000,
     "만": 10_000,
     "천": 1_000,
 }
@@ -50,16 +55,10 @@ _MAX_TEXT_PARSE_LEN = 2000
 
 
 def parse_amount_krw(value: Any, default: float = 0.0) -> float:
-    """숫자, dict, '3억', '2,000만 원' 같은 문자열에서 원화 금액/숫자를 추출한다.
+    """숫자, dict, 한국식 원화 표현에서 첫 번째 금액/숫자를 추출한다."""
 
-    단위가 없는 숫자 문자열은 그대로 숫자로 본다. 해석할 수 없으면 default를 반환한다.
-    """
-    if value is None:
+    if value is None or isinstance(value, bool):
         return default
-
-    if isinstance(value, bool):
-        return default
-
     if isinstance(value, (int, float)):
         return safe_float(value, default)
 
@@ -79,25 +78,23 @@ def parse_amount_krw(value: Any, default: float = 0.0) -> float:
                     return parsed
         return default
 
-    text_value = str(value).strip()
+    text_value = str(value).strip()[:_MAX_TEXT_PARSE_LEN]
     if not text_value:
         return default
 
-    normalized = text_value.replace(",", "")[:_MAX_TEXT_PARSE_LEN]
-    total = 0.0
-    matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", normalized):
-        matched_unit = True
-        total += float(number_text) * KOREAN_MONEY_UNITS[unit]
+    money = parse_money_krw(text_value)
+    if money is not None:
+        return float(money)
 
-    if matched_unit:
-        return float(total)
-
-    number_match = re.search(r"-?[0-9]+(?:\.[0-9]+)?", normalized)
+    # 투자기간 '10년'처럼 원화가 아닌 일반 숫자를 쓰는 기존 호출도 유지한다.
+    number_match = re.search(
+        r"-?[0-9]+(?:\.[0-9]+)?",
+        text_value.replace(",", ""),
+    )
     if number_match:
         return safe_float(number_match.group(0), default)
-
     return default
+
 
 
 
@@ -231,31 +228,17 @@ def parse_amount_near_keywords(text: str, keywords: List[str]) -> float:
 
 
 def parse_explicit_money_amount_krw(value: Any) -> float:
-    text_value = stringify_unique_value(value).replace(",", "").strip()[:_MAX_TEXT_PARSE_LEN]
+    text_value = stringify_unique_value(value).strip()[:_MAX_TEXT_PARSE_LEN]
     if not text_value:
         return 0.0
+    parsed = parse_money_krw(text_value)
+    return float(parsed) if parsed is not None else 0.0
 
-    total = 0.0
-    matched_unit = False
-    for number_text, unit in re.findall(r"([0-9]+(?:\.[0-9]+)?)\s*([억만천])", text_value):
-        matched_unit = True
-        total += float(number_text) * KOREAN_MONEY_UNITS[unit]
-    if matched_unit:
-        return float(total)
-
-    won_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*원", text_value)
-    if won_match:
-        return safe_float(won_match.group(1), 0.0)
-
-    return 0.0
 
 
 def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[float]:
-    """올해 납입액을 단위까지 포함해 추출한다.
+    """ISA/IRP의 올해 납입액을 복합 한국식 금액 표현까지 포함해 추출한다."""
 
-    기존 구현은 "900만 원"에서 숫자 그룹 "900"만 parse_amount_krw로 넘겨
-    900원으로 처리할 수 있었다. 금액 전체("900만 원")를 캡처한다.
-    """
     window = find_keyword_window(text, keywords, radius=140)
     if not window:
         return None
@@ -268,7 +251,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
     if re.search(r"(?:납입|입금).{0,30}(?:없|무|0\s*원)", window):
         return 0.0
 
-    money = r"([0-9][0-9,]*(?:\.[0-9]+)?\s*(?:조|억|만|천)?\s*원?)"
+    money = MONEY_EXPRESSION_PATTERN
     patterns = (
         rf"(?:올해|금년|당해).{{0,45}}?{money}.{{0,15}}?(?:납입|입금)",
         rf"{money}.{{0,15}}?(?:올해|금년|당해).{{0,15}}?(?:납입|입금)",
@@ -278,6 +261,7 @@ def parse_current_year_contribution(text: str, keywords: List[str]) -> Optional[
         if match:
             return parse_money_krw(match.group(1)) or 0.0
     return None
+
 
 def contains_negative_account_signal(text: str, keywords: List[str]) -> bool:
     window = find_keyword_window(text, keywords, radius=80)
@@ -290,10 +274,10 @@ def contains_negative_account_signal(text: str, keywords: List[str]) -> bool:
 def parse_liquidity_need_amount(unique_value: Any, text: str) -> float:
     """Unique에서 별도 확보해야 하는 유동성 금액만 추출한다.
 
-    ISA/IRP 납입액을 unique_need_amount로 오인하지 않도록,
-    주거·전세·생활비·필요자금 등 개인 유동성 신호가 있거나
-    명시 key가 있을 때만 우선 추출한다.
+    퍼센트와 금액이 같은 문장에 있어도 원화 표현만 골라낸다.
+    ISA/IRP 납입액은 개인 필요자금으로 오인하지 않는다.
     """
+
     if isinstance(unique_value, dict):
         for key in (
             "unique_need_amount",
@@ -323,20 +307,38 @@ def parse_liquidity_need_amount(unique_value: Any, text: str) -> float:
         window = find_keyword_window(text, [keyword], radius=120)
         window = truncate_at_stop_keywords(
             window,
-            ["ISA", "isa", "IRP", "irp", "개인종합자산관리", "개인형퇴직연금", "퇴직연금"],
+            [
+                "ISA",
+                "isa",
+                "IRP",
+                "irp",
+                "개인종합자산관리",
+                "개인형퇴직연금",
+                "퇴직연금",
+            ],
         )
-        amount = parse_amount_krw(window)
+        amount = parse_explicit_money_amount_krw(window)
         if amount > 0:
             return amount
 
     has_account_info = bool(
         find_keyword_window(text, ["isa", "개인종합자산관리"], radius=30)
-        or find_keyword_window(text, ["irp", "개인형퇴직연금", "퇴직연금"], radius=30)
+        or find_keyword_window(
+            text,
+            ["irp", "개인형퇴직연금", "퇴직연금"],
+            radius=30,
+        )
     )
     if has_account_info:
         return 0.0
 
-    return parse_amount_krw(unique_value)
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9,]+(?:\.[0-9]+)?", stripped):
+        return parse_amount_krw(stripped)
+
+    # '5억원 필요, 배당주 20% 이상'에서 20%는 무시하고 5억원만 추출한다.
+    return parse_explicit_money_amount_krw(stripped)
+
 
 
 def extract_generic_client_context(unique_value: Any, text: str) -> Dict[str, Any]:
@@ -529,12 +531,22 @@ def apply_unique_profile_to_ips_payload(
     unique_value: Any,
     adapter_warnings: List[str],
 ) -> Dict[str, Any]:
-    profile = extract_unique_profile(unique_value)
+    from .unique_semantic import enrich_unique_profile
+
+    profile = enrich_unique_profile(
+        extract_unique_profile(unique_value),
+        unique_value,
+    )
     result = dict(ips_payload)
 
+    existing_unique_profile = dict(result.get("unique_profile") or {})
     result["unique_profile"] = {
         **profile,
-        **(result.get("unique_profile") or {}),
+        **existing_unique_profile,
+        # 원문 Unique를 다시 분석한 semantic 결과는 이전 계산에서 남은 profile보다 우선한다.
+        # 그래야 PB 승인 인사이트를 Unique에 추가한 뒤 재분석할 때 새 제약이 실제로 반영된다.
+        "semantic_constraints": list(profile.get("semantic_constraints") or []),
+        "semantic_audit": dict(profile.get("semantic_audit") or {}),
     }
     result["unique_items"] = result.get("unique_items") or profile["items"]
     result["client_context"] = {
@@ -556,6 +568,12 @@ def apply_unique_profile_to_ips_payload(
             result["isa_account_age_years"] = isa_info["account_age_years"]
         if safe_float(result.get("isa_cumulative_contribution")) <= 0:
             result["isa_cumulative_contribution"] = isa_info["cumulative_contribution"]
+        if isa_info.get("current_year_contribution") is not None and safe_float(
+            result.get("isa_current_year_contribution")
+        ) <= 0:
+            result["isa_current_year_contribution"] = isa_info[
+                "current_year_contribution"
+            ]
 
     irp_info = profile["irp"]
     if irp_info["detected"]:
@@ -805,6 +823,16 @@ def extract_optional_age(payload: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+
+
+def apply_legal_profile_to_ips_payload(
+    ips_payload: Dict[str, Any],
+    legal_value: Any,
+) -> Dict[str, Any]:
+    from .legal_semantic import apply_legal_profile_to_ips_payload as _apply_legal
+
+    return _apply_legal(ips_payload, legal_value)
+
 def normalize_analysis_request_payload(
     payload: Dict[str, Any],
 ) -> Tuple[AnalysisRequest, Dict[str, Any]]:
@@ -868,6 +896,19 @@ def normalize_analysis_request_payload(
                 tax_value,
             )
 
+        legal_value = (
+            normalized_ips.get("legal_text")
+            or normalized_ips.get("Legal")
+            or normalized_ips.get("legal")
+        )
+        if legal_value is None and isinstance(rrttllu_payload, dict):
+            legal_value = rrttllu_payload.get("Legal")
+        if legal_value is not None:
+            normalized_ips = apply_legal_profile_to_ips_payload(
+                normalized_ips,
+                legal_value,
+            )
+
         normalized_payload["ips"] = normalized_ips
         return AnalysisRequest(**normalized_payload), {
             "source": "analysis_request",
@@ -884,9 +925,18 @@ def normalize_analysis_request_payload(
 
     investment_horizon = int(max(parse_amount_krw(flat_ips.get("Time")), 1))
     unique_value = flat_ips.get("Unique")
-    unique_profile = extract_unique_profile(unique_value)
+    from .unique_semantic import enrich_unique_profile
+
+    unique_profile = enrich_unique_profile(
+        extract_unique_profile(unique_value),
+        unique_value,
+    )
     tax_value = flat_ips.get("Tax")
     tax_profile = parse_tax_text(tax_value)
+    legal_value = flat_ips.get("Legal")
+    from .legal_semantic import parse_legal_semantic
+
+    legal_profile = parse_legal_semantic(legal_value)
     unique_need_amount = safe_float(unique_profile.get("liquidity_need_amount"))
     if unique_need_amount <= 0:
         adapter_warnings.append(
@@ -926,6 +976,8 @@ def normalize_analysis_request_payload(
             "tax_text": stringify_unique_value(tax_value),
             "tax_profile": tax_profile,
             "tax_sensitivity": None,
+            "legal_text": legal_profile.get("text", ""),
+            "legal_profile": legal_profile,
             "liquidity_need": normalize_liquidity_value(flat_ips.get("Liquidity")),
             "current_weights": current_weights_from_portfolio,
             "risk_free_rate": safe_float(
@@ -976,8 +1028,13 @@ def normalize_analysis_request_payload(
             "isa_account_exists": unique_profile["isa"]["account_exists"],
             "isa_account_age_years": unique_profile["isa"]["account_age_years"],
             "isa_cumulative_contribution": unique_profile["isa"]["cumulative_contribution"],
-            "isa_current_year_contribution": safe_float(
-                payload.get("isa_current_year_contribution"), 0.0
+            "isa_current_year_contribution": (
+                safe_float(payload.get("isa_current_year_contribution"), 0.0)
+                if payload.get("isa_current_year_contribution") is not None
+                else safe_float(
+                    unique_profile["isa"].get("current_year_contribution"),
+                    0.0,
+                )
             ),
             "irp_account_exists": unique_profile["irp"]["account_exists"],
             "irp_account_age_years": unique_profile["irp"]["account_age_years"],
