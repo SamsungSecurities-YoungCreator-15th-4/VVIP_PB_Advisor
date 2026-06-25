@@ -236,7 +236,6 @@ from .analysis import (
     run_full_analysis,
 )
 from .adapters import (
-    KOREAN_MONEY_UNITS,
     parse_amount_krw,
     stringify_unique_value,
     find_keyword_window,

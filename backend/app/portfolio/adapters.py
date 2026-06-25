@@ -885,6 +885,8 @@ def normalize_analysis_request_payload(
             normalized_ips = apply_tax_profile_to_ips_payload(
                 normalized_ips,
                 tax_value,
+                allow_llm_fallback=False,  # calculate/adapter 경로에서는 명시적으로 비활성화
+                llm_fallback_mode="conditional_non_blocking",
             )
 
         legal_value = (
@@ -1069,6 +1071,8 @@ def normalize_analysis_request_payload(
     analysis_payload["ips"] = apply_tax_profile_to_ips_payload(
         analysis_payload["ips"],
         tax_value,
+        allow_llm_fallback=False,  # calculate/adapter 경로에서는 명시적으로 비활성화
+        llm_fallback_mode="conditional_non_blocking",
     )
 
     return AnalysisRequest(**analysis_payload), {

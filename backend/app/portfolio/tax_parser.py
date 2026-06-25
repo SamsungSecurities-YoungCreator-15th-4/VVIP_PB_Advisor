@@ -949,6 +949,7 @@ def apply_tax_profile_to_ips_payload(
     tax_value: Any,
     *,
     allow_llm_fallback: bool = False,
+    llm_fallback_mode: str = "off",
 ) -> Dict[str, Any]:
     """Tax 파서 결과에서 확인된 사실만 기존 계산 입력으로 연결한다.
 
@@ -961,10 +962,25 @@ def apply_tax_profile_to_ips_payload(
 
     # /portfolio/calculate 같은 빈번한 계산 경로에서는 LLM을 호출하지 않는다.
     # 별도 명시적 분석/사전계산 액션에서만 True로 허용한다.
+    # 하위 호환: 기존 명시적 True 호출은 blocking 분석 액션으로 취급한다.
     if allow_llm_fallback:
+        llm_fallback_mode = "blocking"
+
+    if llm_fallback_mode == "blocking":
         from .tax_llm_fallback import enrich_tax_profile_with_llm
 
         profile = enrich_tax_profile_with_llm(profile)
+    elif llm_fallback_mode == "conditional_non_blocking":
+        from .tax_llm_fallback import (
+            enrich_tax_profile_with_llm_non_blocking,
+        )
+
+        profile = enrich_tax_profile_with_llm_non_blocking(profile)
+    elif llm_fallback_mode != "off":
+        raise ValueError(
+            "llm_fallback_mode는 off, blocking, "
+            "conditional_non_blocking 중 하나여야 합니다."
+        )
 
     facts = profile["facts"]
     result["tax_text"] = profile["raw_text"]

@@ -64,7 +64,6 @@ def test_public_tax_route_builder():
     assert routes[0]["missing_inputs"] == []
 
 
-
 def test_nested_rrttllu_mapping_is_preserved_exactly():
     rrttllu = {
         "Return": "연 7%",
@@ -126,3 +125,171 @@ def test_current_weights_normalization_is_cached():
 
 def test_current_weights_normalization_rejects_non_dict_input():
     assert unique_semantic._normalize_current_weight_map(["not", "a", "dict"]) is None
+
+
+def test_portfolio_logic_does_not_import_removed_money_unit_constant():
+    import ast
+    from pathlib import Path
+
+    source_path = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "portfolio"
+        / "portfolio_logic.py"
+    )
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+    imported_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "adapters"
+        for alias in node.names
+    }
+
+    assert "KOREAN_MONEY_UNITS" not in imported_names
+
+
+def test_adapters_explicitly_disable_tax_llm_on_calculate_paths():
+    import ast
+    from pathlib import Path
+
+    source_path = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "portfolio"
+        / "adapters.py"
+    )
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+    calls = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+
+        if isinstance(node.func, ast.Name):
+            function_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            function_name = node.func.attr
+        else:
+            continue
+
+        if function_name == "apply_tax_profile_to_ips_payload":
+            calls.append(node)
+
+    assert len(calls) >= 2
+
+    for call in calls:
+        keyword = next(
+            (
+                item
+                for item in call.keywords
+                if item.arg == "allow_llm_fallback"
+            ),
+            None,
+        )
+        assert keyword is not None
+        assert isinstance(keyword.value, ast.Constant)
+        assert keyword.value.value is False
+
+
+def test_adapters_use_conditional_non_blocking_tax_llm_mode():
+    import ast
+    from pathlib import Path
+
+    source_path = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "portfolio"
+        / "adapters.py"
+    )
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+    calls = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            function_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            function_name = node.func.attr
+        else:
+            continue
+        if function_name == "apply_tax_profile_to_ips_payload":
+            calls.append(node)
+
+    assert len(calls) >= 2
+    for call in calls:
+        keywords = {item.arg: item.value for item in call.keywords if item.arg}
+        assert isinstance(keywords["allow_llm_fallback"], ast.Constant)
+        assert keywords["allow_llm_fallback"].value is False
+        assert isinstance(keywords["llm_fallback_mode"], ast.Constant)
+        assert keywords["llm_fallback_mode"].value == "conditional_non_blocking"
+
+
+def test_tax_non_blocking_skips_llm_when_parser_is_sufficient(monkeypatch):
+    from app.portfolio import tax_llm_fallback
+
+    monkeypatch.setattr(
+        tax_llm_fallback,
+        "_should_call_fallback",
+        lambda profile: False,
+    )
+    monkeypatch.setattr(
+        tax_llm_fallback,
+        "enrich_tax_profile_with_llm",
+        lambda profile: (_ for _ in ()).throw(
+            AssertionError("충분한 parser 결과에는 LLM을 호출하면 안 됩니다.")
+        ),
+    )
+
+    profile = {
+        "raw_text": "금융소득 3천만원",
+        "facts": {"external_financial_income_krw": 30_000_000.0},
+    }
+    result = tax_llm_fallback.enrich_tax_profile_with_llm_non_blocking(profile)
+    assert result == profile
+
+
+def test_tax_non_blocking_runs_llm_only_for_incomplete_profile(monkeypatch):
+    from app.portfolio import tax_llm_fallback
+
+    tax_llm_fallback._TAX_LLM_BACKGROUND_FUTURES.clear()
+    tax_llm_fallback._TAX_LLM_BACKGROUND_RESULTS.clear()
+    monkeypatch.setattr(
+        tax_llm_fallback,
+        "_should_call_fallback",
+        lambda profile: True,
+    )
+
+    calls = []
+
+    def fake_enrich(profile):
+        calls.append(profile["raw_text"])
+        result = dict(profile)
+        result["facts"] = {
+            **(profile.get("facts") or {}),
+            "external_financial_income_krw": 30_000_000.0,
+        }
+        result["llm_fallback"] = {"status": "live"}
+        return result
+
+    monkeypatch.setattr(
+        tax_llm_fallback,
+        "enrich_tax_profile_with_llm",
+        fake_enrich,
+    )
+    monkeypatch.setenv("PORTFOLIO_TAX_LLM_MAX_WAIT_SECONDS", "1")
+
+    profile = {
+        "raw_text": "다른 곳에서 이자도 받았는데 정확한 분류가 필요합니다.",
+        "facts": {},
+        "unmatched_segments": [
+            "다른 곳에서 이자도 받았는데 정확한 분류가 필요합니다."
+        ],
+    }
+    result = tax_llm_fallback.enrich_tax_profile_with_llm_non_blocking(profile)
+
+    assert calls == [profile["raw_text"]]
+    assert result["facts"]["external_financial_income_krw"] == 30_000_000.0
+
