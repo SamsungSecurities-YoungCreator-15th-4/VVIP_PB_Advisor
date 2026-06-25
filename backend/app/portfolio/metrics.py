@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .assets import ALTERNATIVE_ASSETS, ASSET_DURATION_YEARS, ASSET_TICKERS, BOND_ASSETS, BOND_CASH_ASSETS, CASH_LIKE_ASSETS, CLIENT_RISK_LEVEL, FX_SENSITIVE_ASSETS, INTEREST_RATE_SENSITIVE_ASSETS, RISK_LEVEL_NAME, STOCK_ASSETS
 from .constants import BACKTEST_BASE_INDEX, BENCHMARK_CONFIGS, BENCHMARK_POLICY_VERSION, DEFAULT_RANDOM_SEED, GUIDELINE_RULES, MIN_BETA_OBSERVATIONS, MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER, MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER, MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER, MONTE_CARLO_METRIC_RANGE_MAX_HORIZON_YEARS, MONTE_CARLO_METRIC_RANGE_PERCENTILES, MONTE_CARLO_METRIC_RANGE_SEED_OFFSET, MONTE_CARLO_METRIC_RANGE_SIMULATIONS, MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR, MONTE_CARLO_METRIC_RANGE_VERSION, SELECTION_RISK_CONTROLS, SORTINO_NO_DOWNSIDE_CAP, TRADING_DAYS, VOL_STRESS_BETA, VOL_STRESS_CAP
 from .models import PortfolioRequest
-from .tax_accounts import allocate_account_buckets, calculate_after_tax_return, estimate_taxable_financial_income
+from .tax_accounts import allocate_account_buckets, calculate_after_tax_return
 from .utils import cap01, get_benchmark_config, normalize_weights, safe_float, safe_round, validate_required_assets_available
 
 # ============================================================
@@ -330,37 +330,109 @@ def calculate_risk_contribution(
     if len(assets) == 0:
         return {
             "by_asset": {},
+            "concentration_by_asset": {},
             "max_share": 0.0,
             "hhi": 0.0,
-            "method": "variance_contribution",
+            "method": (
+                "variance_contribution_"
+                "positive_renormalized"
+            ),
         }
 
-    selected_cov = cov_matrix.reindex(index=assets, columns=assets).fillna(0.0)
+    selected_cov = cov_matrix.reindex(
+        index=assets,
+        columns=assets,
+    ).fillna(0.0)
     cov_values = selected_cov.values
-    variance = float(weights_array.T @ cov_values @ weights_array)
+    variance = float(
+        weights_array.T
+        @ cov_values
+        @ weights_array
+    )
 
-    if variance <= 1e-12 or not np.isfinite(variance):
-        zero_map = {asset: 0.0 for asset in assets}
+    if (
+        variance <= 1e-12
+        or not np.isfinite(variance)
+    ):
+        zero_map = {
+            asset: 0.0
+            for asset in assets
+        }
         return {
             "by_asset": zero_map,
+            "concentration_by_asset": zero_map,
             "max_share": 0.0,
             "hhi": 0.0,
-            "method": "variance_contribution",
+            "method": (
+                "variance_contribution_"
+                "positive_renormalized"
+            ),
         }
 
     marginal = cov_values @ weights_array
     raw_contribution = weights_array * marginal
-    shares = raw_contribution / variance
-    positive_shares = np.maximum(shares, 0.0)
+    signed_shares = raw_contribution / variance
+
+    positive_shares = np.maximum(
+        signed_shares,
+        0.0,
+    )
+    positive_total = float(
+        positive_shares.sum()
+    )
+    if (
+        positive_total > 1e-12
+        and np.isfinite(positive_total)
+    ):
+        concentration_shares = (
+            positive_shares / positive_total
+        )
+    else:
+        concentration_shares = np.zeros_like(
+            positive_shares
+        )
 
     return {
         "by_asset": {
-            asset: safe_round(value, 6) for asset, value in zip(assets, shares)
+            asset: safe_round(value, 6)
+            for asset, value in zip(
+                assets,
+                signed_shares,
+            )
         },
-        "max_share": safe_round(float(positive_shares.max()), 6),
-        "hhi": safe_round(float(np.square(positive_shares).sum()), 6),
-        "method": "variance_contribution",
+        "concentration_by_asset": {
+            asset: safe_round(value, 6)
+            for asset, value in zip(
+                assets,
+                concentration_shares,
+            )
+        },
+        "max_share": safe_round(
+            float(concentration_shares.max()),
+            6,
+        ),
+        "hhi": safe_round(
+            float(
+                np.square(
+                    concentration_shares
+                ).sum()
+            ),
+            6,
+        ),
+        "method": (
+            "variance_contribution_"
+            "positive_renormalized"
+        ),
+        "signed_share_sum": safe_round(
+            float(signed_shares.sum()),
+            6,
+        ),
+        "concentration_share_sum": safe_round(
+            float(concentration_shares.sum()),
+            6,
+        ),
     }
+
 
 
 def evaluate_selection_risk_controls(
@@ -445,17 +517,38 @@ def calculate_liquidity_coverage(
     total_asset: float,
     unique_need_amount: float,
     request: PortfolioRequest,
+    account_buckets: Optional[Dict[str, Any]] = None,
 ) -> float:
     if unique_need_amount <= 0:
         return 1.0
 
-    liquid_weight = sum(weights.get(asset, 0.0) for asset in CASH_LIKE_ASSETS)
+    liquid_weight = sum(
+        weights.get(asset, 0.0)
+        for asset in CASH_LIKE_ASSETS
+    )
     liquid_amount = liquid_weight * total_asset
 
-    isa_locked_amount = calculate_isa_locked_amount(weights, total_asset, request)
-    usable_liquid_amount = max(liquid_amount - isa_locked_amount, 0.0)
+    if isinstance(account_buckets, dict):
+        isa_locked_amount = safe_float(
+            account_buckets.get("isa", {}).get(
+                "locked_amount_for_liquidity"
+            )
+        )
+    else:
+        isa_locked_amount = calculate_isa_locked_amount(
+            weights,
+            total_asset,
+            request,
+        )
 
-    return float(usable_liquid_amount / unique_need_amount)
+    usable_liquid_amount = max(
+        liquid_amount - isa_locked_amount,
+        0.0,
+    )
+    return float(
+        usable_liquid_amount / unique_need_amount
+    )
+
 
 
 def calculate_stress_test(
@@ -694,28 +787,17 @@ def _effective_tax_rate_from_breakdown(
     )
 
 
-def calculate_monte_carlo_metric_ranges(
-    weights: Dict[str, float],
+def build_monte_carlo_scenario_context(
     returns: pd.DataFrame,
     expected_returns: pd.Series,
-    total_asset: float,
     investment_horizon_years: float,
-    tax_breakdown: Dict[str, Any],
     random_seed: int = DEFAULT_RANDOM_SEED,
     num_simulations: Optional[int] = None,
 ) -> Dict[str, Any]:
-    # 세후수익률과 MDD를 동일한 미래 시장 경로에서 계산한다.
-    normalized_weights = normalize_weights(weights)
-    total_asset = safe_float(total_asset)
-
-    if total_asset <= 0:
-        return {
-            "available": False,
-            "reason": "total_asset_must_be_positive",
-        }
-
     try:
-        requested_years = float(investment_horizon_years)
+        requested_years = float(
+            investment_horizon_years
+        )
     except (TypeError, ValueError):
         requested_years = 1.0
 
@@ -739,8 +821,6 @@ def calculate_monte_carlo_metric_ranges(
         100,
     )
 
-    # 비중과 무관한 공통 자산 순서와 시드를 사용하므로
-    # 현재안/A/B에 같은 시장 시나리오가 적용된다.
     assets = [
         asset
         for asset in ASSET_TICKERS.keys()
@@ -749,22 +829,6 @@ def calculate_monte_carlo_metric_ranges(
             and asset in expected_returns.index
         )
     ]
-
-    missing_weighted_assets = [
-        asset
-        for asset, weight in normalized_weights.items()
-        if (
-            safe_float(weight) > 1e-12
-            and asset not in assets
-        )
-    ]
-    if missing_weighted_assets:
-        return {
-            "available": False,
-            "reason": "weighted_asset_data_missing",
-            "missing_assets": missing_weighted_assets,
-        }
-
     if not assets:
         return {
             "available": False,
@@ -773,27 +837,38 @@ def calculate_monte_carlo_metric_ranges(
 
     clean_returns = (
         returns[assets]
-        .replace([np.inf, -np.inf], np.nan)
+        .replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
         .dropna(how="any")
     )
     if len(clean_returns) < MIN_BETA_OBSERVATIONS:
         return {
             "available": False,
-            "reason": "insufficient_return_observations",
+            "reason": (
+                "insufficient_return_observations"
+            ),
             "observations": len(clean_returns),
-            "minimum_observations": MIN_BETA_OBSERVATIONS,
+            "minimum_observations": (
+                MIN_BETA_OBSERVATIONS
+            ),
         }
 
     daily_log_returns = np.log1p(
         clean_returns.clip(lower=-0.999999)
     )
     monthly_covariance = (
-        daily_log_returns.cov().to_numpy(dtype=float)
+        daily_log_returns
+        .cov()
+        .to_numpy(dtype=float)
         * TRADING_DAYS
         / MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
     )
-    monthly_covariance = _nearest_positive_semidefinite(
-        monthly_covariance
+    monthly_covariance = (
+        _nearest_positive_semidefinite(
+            monthly_covariance
+        )
     )
 
     annual_expected = (
@@ -807,67 +882,187 @@ def calculate_monte_carlo_metric_ranges(
         -0.95,
         None,
     )
-
-    # 로그정규 모형에서 단순수익률 기대값이 기존 기대수익률과
-    # 최대한 맞도록 분산 보정항을 차감한다.
     monthly_log_mean = (
         np.log1p(annual_expected)
         / MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR
         - 0.5 * np.diag(monthly_covariance)
     )
 
-    weight_vector = np.array(
-        [
-            safe_float(normalized_weights.get(asset))
-            for asset in assets
-        ],
-        dtype=float,
-    )
-    weight_total = float(weight_vector.sum())
-    if weight_total <= 0:
-        return {
-            "available": False,
-            "reason": "portfolio_weight_sum_zero",
-        }
-    weight_vector = weight_vector / weight_total
-
     scenario_seed = (
         int(random_seed)
         + MONTE_CARLO_METRIC_RANGE_SEED_OFFSET
     )
-    rng = np.random.default_rng(scenario_seed)
-
-    # 모든 월·경로의 자산별 로그수익률을 한 번에 생성한다.
-    # 약 60개월 × 10,000경로 × 12자산 규모로,
-    # 월별 Python 반복 호출보다 빠르면서 메모리 사용도 제한적이다.
-    monthly_log_draws = rng.multivariate_normal(
+    rng = np.random.default_rng(
+        scenario_seed
+    )
+    growth_factors = rng.multivariate_normal(
         mean=monthly_log_mean,
         cov=monthly_covariance,
         size=(months, simulations),
         check_valid="ignore",
     )
-
-    # Buy & Hold: 누적 로그수익률을 자산별 초기 금액에 적용한다.
     np.cumsum(
-        monthly_log_draws,
+        growth_factors,
         axis=0,
-        out=monthly_log_draws,
+        out=growth_factors,
     )
     np.exp(
-        monthly_log_draws,
-        out=monthly_log_draws,
-    )
-    monthly_log_draws *= (
-        weight_vector * total_asset
+        growth_factors,
+        out=growth_factors,
     )
 
-    portfolio_value_history = (
-        monthly_log_draws.sum(axis=2)
+    start_value = clean_returns.index[0]
+    end_value = clean_returns.index[-1]
+    start_formatter = getattr(
+        start_value,
+        "strftime",
+        None,
+    )
+    end_formatter = getattr(
+        end_value,
+        "strftime",
+        None,
+    )
+    start_date = (
+        start_formatter("%Y-%m-%d")
+        if callable(start_formatter)
+        else str(start_value)
+    )
+    end_date = (
+        end_formatter("%Y-%m-%d")
+        if callable(end_formatter)
+        else str(end_value)
+    )
+
+    return {
+        "available": True,
+        "assets": assets,
+        "growth_factors": growth_factors,
+        "simulation_count": simulations,
+        "horizon_years": horizon_years,
+        "random_seed": scenario_seed,
+        "data_start": start_date,
+        "data_end": end_date,
+        "scenario_basis_id": (
+            f"{MONTE_CARLO_METRIC_RANGE_VERSION}:"
+            f"{scenario_seed}:"
+            f"{simulations}:"
+            f"{horizon_years}:"
+            f"{start_date}:"
+            f"{end_date}"
+        ),
+    }
+
+def calculate_monte_carlo_metric_ranges(
+    weights: Dict[str, float],
+    returns: pd.DataFrame,
+    expected_returns: pd.Series,
+    total_asset: float,
+    investment_horizon_years: float,
+    tax_breakdown: Dict[str, Any],
+    random_seed: int = DEFAULT_RANDOM_SEED,
+    num_simulations: Optional[int] = None,
+    scenario_context: Optional[
+        Dict[str, Any]
+    ] = None,
+) -> Dict[str, Any]:
+    normalized_weights = normalize_weights(
+        weights
+    )
+    total_asset = safe_float(total_asset)
+
+    if total_asset <= 0:
+        return {
+            "available": False,
+            "reason": (
+                "total_asset_must_be_positive"
+            ),
+        }
+
+    context = scenario_context
+    if not isinstance(context, dict):
+        context = (
+            build_monte_carlo_scenario_context(
+                returns=returns,
+                expected_returns=expected_returns,
+                investment_horizon_years=(
+                    investment_horizon_years
+                ),
+                random_seed=random_seed,
+                num_simulations=num_simulations,
+            )
+        )
+
+    if not context.get("available"):
+        return dict(context)
+
+    assets = list(context["assets"])
+    missing_weighted_assets = [
+        asset
+        for asset, weight
+        in normalized_weights.items()
+        if (
+            safe_float(weight) > 1e-12
+            and asset not in assets
+        )
+    ]
+    if missing_weighted_assets:
+        return {
+            "available": False,
+            "reason": (
+                "weighted_asset_data_missing"
+            ),
+            "missing_assets": (
+                missing_weighted_assets
+            ),
+        }
+
+    weight_vector = np.array(
+        [
+            safe_float(
+                normalized_weights.get(asset)
+            )
+            for asset in assets
+        ],
+        dtype=float,
+    )
+    weight_total = float(
+        weight_vector.sum()
+    )
+    if weight_total <= 0:
+        return {
+            "available": False,
+            "reason": (
+                "portfolio_weight_sum_zero"
+            ),
+        }
+    weight_vector = (
+        weight_vector / weight_total
+    )
+
+    growth_factors = np.asarray(
+        context["growth_factors"],
+        dtype=float,
+    )
+    weighted_initial_assets = (
+        weight_vector * total_asset
+    )
+    portfolio_value_history = np.tensordot(
+        growth_factors,
+        weighted_initial_assets,
+        axes=([2], [0]),
     )
     portfolio_value_history = np.vstack(
         [
             np.full(
-                (1, simulations),
+                (
+                    1,
+                    int(
+                        context[
+                            "simulation_count"
+                        ]
+                    ),
+                ),
                 total_asset,
                 dtype=float,
             ),
@@ -880,22 +1075,30 @@ def calculate_monte_carlo_metric_ranges(
         axis=0,
     )
     drawdown = (
-        portfolio_value_history / running_peak - 1.0
+        portfolio_value_history
+        / running_peak
+        - 1.0
     )
     path_mdd = drawdown.min(axis=0)
     gross_portfolio_value = (
         portfolio_value_history[-1]
     )
 
-    effective_tax_rate = _effective_tax_rate_from_breakdown(
-        tax_breakdown
+    effective_tax_rate = (
+        _effective_tax_rate_from_breakdown(
+            tax_breakdown
+        )
     )
-    gross_gain = gross_portfolio_value - total_asset
+    gross_gain = (
+        gross_portfolio_value
+        - total_asset
+    )
     after_tax_terminal_asset = (
         total_asset
         + np.where(
             gross_gain > 0,
-            gross_gain * (1.0 - effective_tax_rate),
+            gross_gain
+            * (1.0 - effective_tax_rate),
             gross_gain,
         )
     )
@@ -903,10 +1106,16 @@ def calculate_monte_carlo_metric_ranges(
         after_tax_terminal_asset,
         0.0,
     )
+    horizon_years = int(
+        context["horizon_years"]
+    )
     after_tax_annualized_return = (
         np.power(
             np.maximum(
-                after_tax_terminal_asset / total_asset,
+                (
+                    after_tax_terminal_asset
+                    / total_asset
+                ),
                 1e-12,
             ),
             1.0 / horizon_years,
@@ -914,47 +1123,26 @@ def calculate_monte_carlo_metric_ranges(
         - 1.0
     )
 
-    start_index_value = clean_returns.index[0]
-    end_index_value = clean_returns.index[-1]
-
-    start_formatter = getattr(
-        start_index_value,
-        "strftime",
-        None,
-    )
-    end_formatter = getattr(
-        end_index_value,
-        "strftime",
-        None,
-    )
-
-    start_date_str = (
-        start_formatter("%Y-%m-%d")
-        if callable(start_formatter)
-        else str(start_index_value)
-    )
-    end_date_str = (
-        end_formatter("%Y-%m-%d")
-        if callable(end_formatter)
-        else str(end_index_value)
-    )
-
-    scenario_basis_id = (
-        f"{MONTE_CARLO_METRIC_RANGE_VERSION}:"
-        f"{scenario_seed}:{simulations}:{horizon_years}:"
-        f"{start_date_str}:{end_date_str}"
-    )
-
     return {
         "available": True,
-        "version": MONTE_CARLO_METRIC_RANGE_VERSION,
-        "scenario_basis_id": scenario_basis_id,
-        "simulation_count": simulations,
+        "version": (
+            MONTE_CARLO_METRIC_RANGE_VERSION
+        ),
+        "scenario_basis_id": (
+            context["scenario_basis_id"]
+        ),
+        "simulation_count": int(
+            context["simulation_count"]
+        ),
         "horizon_years": horizon_years,
         "time_step": "monthly",
-        "rebalancing": "none_buy_and_hold",
+        "rebalancing": (
+            "none_buy_and_hold"
+        ),
         "common_market_scenarios": True,
-        "random_seed": scenario_seed,
+        "random_seed": int(
+            context["random_seed"]
+        ),
         "display_range": {
             "lower_percentile": (
                 MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER
@@ -968,48 +1156,60 @@ def calculate_monte_carlo_metric_ranges(
             "central_coverage": 0.60,
             "label": "P20-P80",
         },
-        "after_tax_return": _metric_percentile_payload(
-            after_tax_annualized_return,
-            digits=6,
-            unit="rate",
+        "after_tax_return": (
+            _metric_percentile_payload(
+                after_tax_annualized_return,
+                digits=6,
+                unit="rate",
+            )
         ),
         "mdd": _metric_percentile_payload(
             path_mdd,
             digits=6,
             unit="rate",
         ),
-        "effective_tax_rate_proxy": safe_round(
-            effective_tax_rate,
-            6,
+        "effective_tax_rate_proxy": (
+            safe_round(
+                effective_tax_rate,
+                6,
+            )
         ),
         "assumptions": {
             "path_model": (
-                "correlated_multivariate_log_returns"
+                "correlated_multivariate_"
+                "log_returns"
             ),
-            "drift_source": "asset_expected_returns",
+            "drift_source": (
+                "asset_expected_returns"
+            ),
             "covariance_source": (
-                "historical_daily_log_return_covariance"
+                "historical_daily_log_"
+                "return_covariance"
             ),
             "after_tax_method": (
-                "positive_terminal_gain_adjusted_by_"
-                "current_effective_tax_rate_proxy"
+                "positive_terminal_gain_"
+                "adjusted_by_current_"
+                "effective_tax_rate_proxy"
             ),
             "mdd_method": (
-                "minimum_drawdown_of_same_simulated_"
-                "gross_portfolio_path"
+                "minimum_drawdown_of_same_"
+                "simulated_gross_portfolio_path"
             ),
             "tax_on_loss": False,
             "fees_in_simulated_paths": False,
             "range_note": (
-                "세후수익률과 MDD는 동일한 10,000개 "
-                "Buy & Hold 시장 경로에서 계산하며, "
-                "P20~P80은 경로의 중앙 60% 범위입니다."
+                "세후수익률과 MDD는 동일한 "
+                "10,000개 Buy & Hold 시장 "
+                "경로에서 계산하며, P20~P80은 "
+                "경로의 중앙 60% 범위입니다."
             ),
             "disclaimer": (
-                "시뮬레이션 결과는 실제 수익을 보장하지 않습니다."
+                "시뮬레이션 결과는 실제 수익을 "
+                "보장하지 않습니다."
             ),
         },
     }
+
 
 
 def calculate_metric_amounts(
@@ -1065,12 +1265,8 @@ def calculate_metrics(
     cov_matrix: Optional[pd.DataFrame] = None,
     include_benchmark_metrics: bool = False,
     shocks: Optional[Dict[str, float]] = None,
+    candidate_mode: bool = False,
 ) -> Dict[str, Any]:
-    """포트폴리오 지표의 단일 계산 진입점.
-
-    벤치마크 지표는 최종 결과 표시 단계에서만 계산한다.
-    추천 후보 계산에서는 include_benchmark_metrics=False를 유지한다.
-    """
     weights = normalize_weights(weights)
     validate_required_assets_available(
         weights,
@@ -1081,188 +1277,416 @@ def calculate_metrics(
     assets = [
         asset
         for asset in weights.keys()
-        if asset in returns.columns and weights[asset] > 1e-12
+        if (
+            asset in returns.columns
+            and weights[asset] > 1e-12
+        )
     ]
     if not assets:
-        raise ValueError("수익률 데이터에 포함된 자산의 비중이 없습니다.")
+        raise ValueError(
+            "수익률 데이터에 포함된 "
+            "자산의 비중이 없습니다."
+        )
 
-    w = np.array([weights[asset] for asset in assets], dtype=float)
+    w = np.array(
+        [
+            weights[asset]
+            for asset in assets
+        ],
+        dtype=float,
+    )
     w = w / w.sum()
 
     selected_returns = returns[assets]
-    selected_expected_returns = expected_returns.reindex(assets).fillna(0.0)
+    selected_expected_returns = (
+        expected_returns
+        .reindex(assets)
+        .fillna(0.0)
+    )
 
-    expected_returns_for_tax = expected_returns
+    expected_returns_for_tax = (
+        expected_returns
+    )
     if shocks:
-        selected_returns, selected_expected_returns = apply_return_shocks(
+        (
+            selected_returns,
+            selected_expected_returns,
+        ) = apply_return_shocks(
             selected_returns,
             selected_expected_returns,
             shocks,
         )
-        expected_returns_for_tax = shift_expected_returns(
-            expected_returns,
-            shocks,
+        expected_returns_for_tax = (
+            shift_expected_returns(
+                expected_returns,
+                shocks,
+            )
         )
         cov_matrix = None
 
     if cov_matrix is None:
-        selected_cov_matrix = selected_returns.cov() * TRADING_DAYS
+        selected_cov_matrix = (
+            selected_returns.cov()
+            * TRADING_DAYS
+        )
     else:
-        selected_cov_matrix = cov_matrix.reindex(
-            index=assets,
-            columns=assets,
-        ).fillna(0.0)
+        selected_cov_matrix = (
+            cov_matrix.reindex(
+                index=assets,
+                columns=assets,
+            ).fillna(0.0)
+        )
 
-    portfolio_return = float(np.dot(w, selected_expected_returns))
-    variance = float(
-        np.dot(w.T, np.dot(selected_cov_matrix.values, w))
+    portfolio_return = float(
+        np.dot(
+            w,
+            selected_expected_returns,
+        )
     )
-    portfolio_volatility = float(np.sqrt(max(variance, 0.0)))
-    portfolio_daily_returns = selected_returns.dot(w)
+    variance = float(
+        np.dot(
+            w.T,
+            np.dot(
+                selected_cov_matrix.values,
+                w,
+            ),
+        )
+    )
+    portfolio_volatility = float(
+        np.sqrt(max(variance, 0.0))
+    )
+    portfolio_daily_returns = (
+        selected_returns.dot(w)
+    )
 
-    if portfolio_volatility < 1e-8 or np.isnan(portfolio_volatility):
+    if (
+        portfolio_volatility < 1e-8
+        or np.isnan(portfolio_volatility)
+    ):
         sharpe = 0.0
     else:
         sharpe = float(
-            (portfolio_return - request.risk_free_rate)
+            (
+                portfolio_return
+                - request.risk_free_rate
+            )
             / portfolio_volatility
         )
 
     sortino = calculate_sortino(
-        portfolio_daily_returns=portfolio_daily_returns,
+        portfolio_daily_returns=(
+            portfolio_daily_returns
+        ),
         annual_return=portfolio_return,
-        risk_free_rate=request.risk_free_rate,
+        risk_free_rate=(
+            request.risk_free_rate
+        ),
     )
-    mdd = calculate_mdd(portfolio_daily_returns)
+    mdd = calculate_mdd(
+        portfolio_daily_returns
+    )
 
-    if include_benchmark_metrics:
-        benchmark_comparisons = calculate_benchmark_comparisons(
-            portfolio_daily_returns=portfolio_daily_returns,
-            weights=weights,
-            returns=returns,
+    if (
+        include_benchmark_metrics
+        and not candidate_mode
+    ):
+        benchmark_comparisons = (
+            calculate_benchmark_comparisons(
+                portfolio_daily_returns=(
+                    portfolio_daily_returns
+                ),
+                weights=weights,
+                returns=returns,
+            )
         )
-        selected_comparison = benchmark_comparisons[request.benchmark_key]
+        selected_comparison = (
+            benchmark_comparisons[
+                request.benchmark_key
+            ]
+        )
         beta = selected_comparison["beta"]
-        benchmark_meta = selected_comparison["metadata"]
+        benchmark_meta = (
+            selected_comparison["metadata"]
+        )
     else:
         benchmark_comparisons = {}
         beta = None
         benchmark_meta = {
-            "policy": BENCHMARK_POLICY_VERSION,
-            "benchmark_key": request.benchmark_key,
+            "policy": (
+                BENCHMARK_POLICY_VERSION
+            ),
+            "benchmark_key": (
+                request.benchmark_key
+            ),
             "applicable": None,
-            "reason": "deferred_until_final_portfolio",
-            "affects_portfolio_recommendation": False,
+            "reason": (
+                "deferred_until_final_portfolio"
+            ),
+            "affects_portfolio_recommendation": (
+                False
+            ),
         }
 
-    after_tax_return, tax_breakdown = calculate_after_tax_return(
+    (
+        after_tax_return,
+        tax_breakdown,
+    ) = calculate_after_tax_return(
         weights=weights,
-        expected_returns=expected_returns_for_tax,
+        expected_returns=(
+            expected_returns_for_tax
+        ),
         total_asset=request.total_asset,
         request=request,
+        include_details=(
+            not candidate_mode
+        ),
     )
 
-    taxable_financial_income = estimate_taxable_financial_income(
-        weights=weights,
-        expected_returns=expected_returns_for_tax,
-        total_asset=request.total_asset,
+    comprehensive_status = (
+        tax_breakdown.get(
+            "financial_income_"
+            "comprehensive_tax",
+            {},
+        )
+    )
+    taxable_financial_income = safe_float(
+        comprehensive_status.get(
+            "portfolio_financial_income"
+        )
+    )
+    account_buckets = (
+        tax_breakdown.get(
+            "account_buckets"
+        )
     )
 
-    liquidity_coverage = calculate_liquidity_coverage(
-        weights=weights,
-        total_asset=request.total_asset,
-        unique_need_amount=request.unique_need_amount,
-        request=request,
+    liquidity_coverage = (
+        calculate_liquidity_coverage(
+            weights=weights,
+            total_asset=request.total_asset,
+            unique_need_amount=(
+                request.unique_need_amount
+            ),
+            request=request,
+            account_buckets=(
+                account_buckets
+                if isinstance(
+                    account_buckets,
+                    dict,
+                )
+                else None
+            ),
+        )
     )
 
-    group_weights = calculate_asset_group_weights(weights)
-    portfolio_duration = calculate_portfolio_duration(weights)
-    target_duration = target_duration_by_horizon(
-        request.investment_horizon_years
-    )
-    duration_fit_score = calculate_duration_fit_score(
-        portfolio_duration,
-        target_duration,
+    group_weights = (
+        calculate_asset_group_weights(
+            weights
+        )
     )
 
-    stress_test = calculate_stress_test(weights, request)
-    historical_var = calculate_historical_var(portfolio_daily_returns)
-    risk_contribution = calculate_risk_contribution(
-        assets=assets,
-        weights_array=w,
-        cov_matrix=selected_cov_matrix,
+    if candidate_mode:
+        portfolio_duration = 0.0
+        target_duration = 0.0
+        duration_fit_score = 0.0
+        stress_test: Dict[str, Any] = {}
+    else:
+        portfolio_duration = (
+            calculate_portfolio_duration(
+                weights
+            )
+        )
+        target_duration = (
+            target_duration_by_horizon(
+                request
+                .investment_horizon_years
+            )
+        )
+        duration_fit_score = (
+            calculate_duration_fit_score(
+                portfolio_duration,
+                target_duration,
+            )
+        )
+        stress_test = calculate_stress_test(
+            weights,
+            request,
+        )
+
+    historical_var = (
+        calculate_historical_var(
+            portfolio_daily_returns
+        )
+    )
+    risk_contribution = (
+        calculate_risk_contribution(
+            assets=assets,
+            weights_array=w,
+            cov_matrix=(
+                selected_cov_matrix
+            ),
+        )
     )
 
     temp_metrics = {
-        "expected_return": portfolio_return,
-        "after_tax_return": after_tax_return,
-        "volatility": portfolio_volatility,
+        "expected_return": (
+            portfolio_return
+        ),
+        "after_tax_return": (
+            after_tax_return
+        ),
+        "volatility": (
+            portfolio_volatility
+        ),
         "sharpe_ratio": sharpe,
         "sortino_ratio": sortino,
         "mdd": mdd,
-        "taxable_financial_income": taxable_financial_income,
-        "liquidity_coverage": liquidity_coverage,
-        "stock_weight": group_weights["stock_weight"],
-        "bond_cash_weight": group_weights["bond_cash_weight"],
-        "alternative_weight": group_weights["alternative_weight"],
-        "historical_var_95_daily_loss": historical_var["daily_loss"],
-        "risk_contribution_max_share": risk_contribution["max_share"],
+        "taxable_financial_income": (
+            taxable_financial_income
+        ),
+        "liquidity_coverage": (
+            liquidity_coverage
+        ),
+        "stock_weight": (
+            group_weights["stock_weight"]
+        ),
+        "bond_cash_weight": (
+            group_weights[
+                "bond_cash_weight"
+            ]
+        ),
+        "alternative_weight": (
+            group_weights[
+                "alternative_weight"
+            ]
+        ),
+        "historical_var_95_daily_loss": (
+            historical_var["daily_loss"]
+        ),
+        "risk_contribution_max_share": (
+            risk_contribution["max_share"]
+        ),
     }
 
-    metric_amounts = calculate_metric_amounts(
-        temp_metrics,
-        request.total_asset,
-        tax_breakdown,
+    metric_amounts = (
+        {}
+        if candidate_mode
+        else calculate_metric_amounts(
+            temp_metrics,
+            request.total_asset,
+            tax_breakdown,
+        )
     )
 
-    risk_level = classify_portfolio_by_guidelines(temp_metrics)
-    selection_risk_control = evaluate_selection_risk_controls(
-        temp_metrics,
-        request.risk_profile,
+    risk_level = (
+        classify_portfolio_by_guidelines(
+            temp_metrics
+        )
+    )
+    selection_risk_control = (
+        evaluate_selection_risk_controls(
+            temp_metrics,
+            request.risk_profile,
+        )
     )
 
     return {
-        "expected_return": safe_round(portfolio_return, 6),
-        "after_tax_return": safe_round(after_tax_return, 6),
-        "volatility": safe_round(portfolio_volatility, 6),
-        "sharpe_ratio": safe_round(sharpe, 6),
-        "sortino_ratio": safe_round(sortino, 6),
+        "expected_return": safe_round(
+            portfolio_return,
+            6,
+        ),
+        "after_tax_return": safe_round(
+            after_tax_return,
+            6,
+        ),
+        "volatility": safe_round(
+            portfolio_volatility,
+            6,
+        ),
+        "sharpe_ratio": safe_round(
+            sharpe,
+            6,
+        ),
+        "sortino_ratio": safe_round(
+            sortino,
+            6,
+        ),
         "mdd": safe_round(mdd, 6),
         "beta": beta,
         "beta_benchmark": benchmark_meta,
-        "selected_benchmark_key": request.benchmark_key,
-        "benchmark_comparisons": benchmark_comparisons,
-        "taxable_financial_income": safe_round(
-            taxable_financial_income,
-            0,
+        "selected_benchmark_key": (
+            request.benchmark_key
         ),
-        "liquidity_coverage": safe_round(liquidity_coverage, 6),
-        "stock_weight": safe_round(group_weights["stock_weight"], 6),
+        "benchmark_comparisons": (
+            benchmark_comparisons
+        ),
+        "taxable_financial_income": (
+            safe_round(
+                taxable_financial_income,
+                0,
+            )
+        ),
+        "liquidity_coverage": (
+            safe_round(
+                liquidity_coverage,
+                6,
+            )
+        ),
+        "stock_weight": safe_round(
+            group_weights["stock_weight"],
+            6,
+        ),
         "bond_cash_weight": safe_round(
-            group_weights["bond_cash_weight"],
+            group_weights[
+                "bond_cash_weight"
+            ],
             6,
         ),
         "alternative_weight": safe_round(
-            group_weights["alternative_weight"],
+            group_weights[
+                "alternative_weight"
+            ],
             6,
         ),
-        "portfolio_duration": safe_round(portfolio_duration, 6),
-        "target_duration": safe_round(target_duration, 6),
-        "duration_fit_score": safe_round(duration_fit_score, 6),
-        "historical_var_95": historical_var,
-        "historical_var_95_daily_loss": historical_var["daily_loss"],
-        "risk_contribution": risk_contribution,
-        "risk_contribution_max_share": risk_contribution["max_share"],
-        "selection_risk_control": selection_risk_control,
+        "portfolio_duration": safe_round(
+            portfolio_duration,
+            6,
+        ),
+        "target_duration": safe_round(
+            target_duration,
+            6,
+        ),
+        "duration_fit_score": safe_round(
+            duration_fit_score,
+            6,
+        ),
+        "historical_var_95": (
+            historical_var
+        ),
+        "historical_var_95_daily_loss": (
+            historical_var["daily_loss"]
+        ),
+        "risk_contribution": (
+            risk_contribution
+        ),
+        "risk_contribution_max_share": (
+            risk_contribution["max_share"]
+        ),
+        "selection_risk_control": (
+            selection_risk_control
+        ),
         "stress_test": stress_test,
         "risk_level": risk_level,
-        "risk_level_label": RISK_LEVEL_NAME.get(
-            risk_level,
-            "기준 미충족",
+        "risk_level_label": (
+            RISK_LEVEL_NAME.get(
+                risk_level,
+                "기준 미충족",
+            )
         ),
         "metric_amounts": metric_amounts,
         "tax_breakdown": tax_breakdown,
     }
+
 
 
 def calculate_cumulative_returns(

@@ -43,6 +43,9 @@ def build_portfolio_response(
     correlation_with_recommended_1: Optional[float] = None,
     cov_matrix: Optional[pd.DataFrame] = None,
     backtest_returns: Optional[pd.DataFrame] = None,
+    monte_carlo_scenario_context: Optional[
+        Dict[str, Any]
+    ] = None,
 ) -> Dict[str, Any]:
     metrics = calculate_metrics(
         weights=weights,
@@ -67,6 +70,9 @@ def build_portfolio_response(
                     "tax_breakdown"
                 ),
                 random_seed=request.random_seed,
+                scenario_context=(
+                    monte_carlo_scenario_context
+                ),
             )
         )
     except Exception:

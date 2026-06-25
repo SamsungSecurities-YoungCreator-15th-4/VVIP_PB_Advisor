@@ -703,6 +703,7 @@ def calculate_six_strategy_tax_model(
     account_buckets: Optional[
         Dict[str, Any]
     ] = None,
+    include_standalone: bool = True,
 ) -> Dict[str, Any]:
     try:
         from .tax_advice import (
@@ -715,9 +716,7 @@ def calculate_six_strategy_tax_model(
             calc_tax_advice,
         )
 
-    normalized = normalize_weights(
-        weights
-    )
+    normalized = normalize_weights(weights)
     portfolio = [
         {
             "asset_class": asset,
@@ -796,6 +795,7 @@ def calculate_six_strategy_tax_model(
         "isa_opened": (
             request.isa_account_exists
         ),
+        "isa_type": request.isa_type,
         "isa_can_open_new": (
             isa_status.get(
                 "can_open_new",
@@ -825,20 +825,34 @@ def calculate_six_strategy_tax_model(
         ),
     }
 
-    standalone = calc_tax_advice(
-        portfolio,
-        expected_return,
-        total_asset / 1e8,
-        **kwargs,
-    )
-    combined = (
-        calc_combined_tax_saving(
+    if include_standalone:
+        standalone = calc_tax_advice(
             portfolio,
             expected_return,
             total_asset / 1e8,
             **kwargs,
         )
-    )
+        combined = (
+            calc_combined_tax_saving(
+                portfolio,
+                expected_return,
+                total_asset / 1e8,
+                standalone_cards=standalone,
+                **kwargs,
+            )
+        )
+    else:
+        standalone = []
+        combined = (
+            calc_combined_tax_saving(
+                portfolio,
+                expected_return,
+                total_asset / 1e8,
+                calculate_standalone_cards=False,
+                **kwargs,
+            )
+        )
+
     return {
         "model_version": (
             "six_strategy_combined_v1"
@@ -847,11 +861,13 @@ def calculate_six_strategy_tax_model(
         "combined": combined,
     }
 
+
 def calculate_after_tax_return(
     weights: Dict[str, float],
     expected_returns: pd.Series,
     total_asset: float,
     request: PortfolioRequest,
+    include_details: bool = True,
 ) -> Tuple[float, Dict[str, Any]]:
     weights = normalize_weights(weights)
     gross_profit = 0.0
@@ -875,7 +891,9 @@ def calculate_after_tax_return(
             estimate_income_profit_for_asset(
                 asset=asset,
                 weight=weight,
-                expected_return=asset_expected_return,
+                expected_return=(
+                    asset_expected_return
+                ),
                 total_asset=total_asset,
             )
         )
@@ -906,7 +924,8 @@ def calculate_after_tax_return(
                 external_financial_income
             ),
             marginal_income_tax_rate=(
-                request.marginal_income_tax_rate
+                request
+                .marginal_income_tax_rate
             ),
         )
     )
@@ -920,41 +939,65 @@ def calculate_after_tax_return(
                 request
                 .overseas_stock_realized_gain_rate
             ),
-            realized_gain_krw=request.overseas_realized_gain_krw,
-            realized_loss_krw=request.overseas_realized_loss,
+            realized_gain_krw=(
+                request
+                .overseas_realized_gain_krw
+            ),
+            realized_loss_krw=(
+                request.overseas_realized_loss
+            ),
         )
     )
 
-    account_buckets = allocate_account_buckets(
-        weights,
-        total_asset,
-        request,
-    )
-
-    legacy_tax_saving_effect = (
-        estimate_tax_saving_effect(
-            weights=weights,
-            expected_returns=expected_returns,
-            total_asset=total_asset,
-            request=request,
-            account_buckets=account_buckets,
+    account_buckets = (
+        allocate_account_buckets(
+            weights,
+            total_asset,
+            request,
         )
     )
-    legacy_account_only_tax_saving = (
-        safe_float(
-            legacy_tax_saving_effect.get(
-                "estimated_total_tax_saving"
+
+    if include_details:
+        legacy_tax_saving_effect = (
+            estimate_tax_saving_effect(
+                weights=weights,
+                expected_returns=(
+                    expected_returns
+                ),
+                total_asset=total_asset,
+                request=request,
+                account_buckets=(
+                    account_buckets
+                ),
             )
         )
-    )
+        legacy_account_only_tax_saving = (
+            safe_float(
+                legacy_tax_saving_effect.get(
+                    "estimated_total_tax_saving"
+                )
+            )
+        )
+    else:
+        legacy_tax_saving_effect = {}
+        legacy_account_only_tax_saving = (
+            0.0
+        )
 
     six_strategy_tax_model = (
         calculate_six_strategy_tax_model(
             weights=weights,
-            expected_returns=expected_returns,
+            expected_returns=(
+                expected_returns
+            ),
             total_asset=total_asset,
             request=request,
-            account_buckets=account_buckets,
+            account_buckets=(
+                account_buckets
+            ),
+            include_standalone=(
+                include_details
+            ),
         )
     )
     calculated_six_strategy_saving = (
@@ -965,11 +1008,13 @@ def calculate_after_tax_return(
         )
     )
 
-    additional_comprehensive_tax = safe_float(
-        comprehensive_tax_status[
-            "estimated_additional_tax_"
-            "attributable_to_portfolio"
-        ]
+    additional_comprehensive_tax = (
+        safe_float(
+            comprehensive_tax_status[
+                "estimated_additional_tax_"
+                "attributable_to_portfolio"
+            ]
+        )
     )
 
     total_tax_before_saving = (
@@ -977,10 +1022,12 @@ def calculate_after_tax_return(
         + overseas_tax["estimated_tax"]
         + additional_comprehensive_tax
     )
-
     modeled_tax_reduction = min(
         calculated_six_strategy_saving,
-        max(total_tax_before_saving, 0.0),
+        max(
+            total_tax_before_saving,
+            0.0,
+        ),
     )
     total_tax_after_saving = max(
         total_tax_before_saving
@@ -997,6 +1044,42 @@ def calculate_after_tax_return(
         if total_asset > 0
         else 0.0
     )
+
+    if not include_details:
+        return (
+            float(after_tax_return),
+            {
+                "gross_profit": safe_round(
+                    gross_profit,
+                    0,
+                ),
+                "financial_income_"
+                "comprehensive_tax": (
+                    comprehensive_tax_status
+                ),
+                "account_buckets": (
+                    account_buckets
+                ),
+                "total_tax_after_saving": (
+                    safe_round(
+                        total_tax_after_saving,
+                        0,
+                    )
+                ),
+                "after_tax_profit": (
+                    safe_round(
+                        after_tax_profit,
+                        0,
+                    )
+                ),
+                "after_tax_return": (
+                    safe_round(
+                        after_tax_return,
+                        6,
+                    )
+                ),
+            },
+        )
 
     tax_saving_effect = {
         **legacy_tax_saving_effect,
@@ -1021,9 +1104,11 @@ def calculate_after_tax_return(
                 0,
             )
         ),
-        "modeled_tax_reduction": safe_round(
-            modeled_tax_reduction,
-            0,
+        "modeled_tax_reduction": (
+            safe_round(
+                modeled_tax_reduction,
+                0,
+            )
         ),
         "unapplied_credit_or_saving": (
             safe_round(
@@ -1048,41 +1133,53 @@ def calculate_after_tax_return(
                 0,
             )
         ),
-        "financial_income_comprehensive_tax": (
+        "financial_income_"
+        "comprehensive_tax": (
             comprehensive_tax_status
         ),
-        "additional_comprehensive_tax_estimate": (
+        "additional_comprehensive_"
+        "tax_estimate": (
             safe_round(
                 additional_comprehensive_tax,
                 0,
             )
         ),
-        "additional_comprehensive_tax_total_estimate": (
+        "additional_comprehensive_"
+        "tax_total_estimate": (
             comprehensive_tax_status[
-                "estimated_additional_tax_total"
+                "estimated_additional_"
+                "tax_total"
             ]
         ),
-        "additional_comprehensive_tax_external_baseline": (
+        "additional_comprehensive_"
+        "tax_external_baseline": (
             comprehensive_tax_status[
                 "estimated_additional_tax_"
                 "external_baseline"
             ]
         ),
-        "overseas_stock_capital_gains_tax": (
-            overseas_tax
+        "overseas_stock_"
+        "capital_gains_tax": overseas_tax,
+        "account_buckets": (
+            account_buckets
         ),
-        "account_buckets": account_buckets,
-        "tax_saving_effect": tax_saving_effect,
+        "tax_saving_effect": (
+            tax_saving_effect
+        ),
         "six_strategy_tax_model": (
             six_strategy_tax_model
         ),
-        "total_tax_before_saving": safe_round(
-            total_tax_before_saving,
-            0,
+        "total_tax_before_saving": (
+            safe_round(
+                total_tax_before_saving,
+                0,
+            )
         ),
-        "total_tax_after_saving": safe_round(
-            total_tax_after_saving,
-            0,
+        "total_tax_after_saving": (
+            safe_round(
+                total_tax_after_saving,
+                0,
+            )
         ),
         "after_tax_profit": safe_round(
             after_tax_profit,
@@ -1094,9 +1191,9 @@ def calculate_after_tax_return(
         ),
         "tax_disclaimer": (
             "세금 계산은 프로젝트용 간이 "
-            "추정입니다. 실제 세액은 전체 소득, "
-            "실현손익, 공제 및 상품별 요건에 따라 "
-            "달라집니다."
+            "추정입니다. 실제 세액은 전체 "
+            "소득, 실현손익, 공제 및 상품별 "
+            "요건에 따라 달라집니다."
         ),
     }
 
@@ -1104,3 +1201,4 @@ def calculate_after_tax_return(
         float(after_tax_return),
         tax_breakdown,
     )
+
