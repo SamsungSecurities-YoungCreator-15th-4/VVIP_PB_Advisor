@@ -132,8 +132,6 @@ export default function Sidebar() {
   const [newAum, setNewAum] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  // STT(업로드·실시간) 완료 후 첫 분석하기 때만 스냅샷 저장하기 위한 플래그
-  const [hasFreshStt, setHasFreshStt] = useState(false);
 
   const {
     status: realtimeStatus,
@@ -247,15 +245,6 @@ export default function Sidebar() {
     };
   }, [setCustomers]);
 
-  // 실시간 STT가 "done"으로 전환될 때만 플래그 설정 (마운트 시 초기값은 무시)
-  const prevRealtimeStatusRef = useRef(realtimeStatus);
-  useEffect(() => {
-    if (prevRealtimeStatusRef.current !== "done" && realtimeStatus === "done") {
-      setHasFreshStt(true);
-    }
-    prevRealtimeStatusRef.current = realtimeStatus;
-  }, [realtimeStatus]);
-
   const handleAnalyze = async () => {
     if (!customer || analyzing) return;
 
@@ -311,14 +300,9 @@ export default function Sidebar() {
         if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
         // 절세 제안·종합과세 게이지는 calculate의 tax_optimizer를 기본 소스로 쓴다.
         setTaxOptimizer(result.data.taxOptimizer);
-        // STT 직후 첫 분석하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
-        if (
-          hasFreshStt &&
-          customer.clientId &&
-          consultationId &&
-          result.source === "live"
-        ) {
-          setHasFreshStt(false);
+        // 첫 라이브 분석 결과를 스냅샷으로 저장 (백엔드가 consultation_id 기준
+        // first-write-wins로 중복 방지 → 회차당 첫 분석만 보존됨).
+        if (customer.clientId && consultationId && result.source === "live") {
           void saveDashboardSnapshot(customer.clientId, {
             consultation_id: consultationId,
             calculation_session_id: result.data.calculationSessionId,
@@ -407,7 +391,6 @@ export default function Sidebar() {
     if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
     if (res.source === "live") {
       setSttStatus("done");
-      setHasFreshStt(true);
       clearCustomerNew(customer.id); // 상담 확보 → 더 이상 신규(빈) 상태 아님
     } else {
       setSttStatus("error", res.note);
@@ -435,7 +418,6 @@ export default function Sidebar() {
   const loadPast = async (consultationId: string) => {
     if (!customer.clientId || loadingId) return;
     setLoadingId(consultationId);
-    setHasFreshStt(false); // 과거 로드 시에는 스냅샷 저장 안 함
     const res = await loadConsultationDetail(customer.clientId, consultationId);
     // 비동기 동안 고객이 바뀌었으면 이전 고객의 데이터·요청을 새 화면에 섞지 않는다.
     if (useDashboardStore.getState().selectedCustomerId !== customer.id) {

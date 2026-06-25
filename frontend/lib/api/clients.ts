@@ -123,8 +123,15 @@ export async function saveDashboardSnapshot(
       `/clients/${encodeURIComponent(clientId)}/dashboard-snapshot`,
       payload,
     );
-  } catch {
-    // 저장 실패는 조용히 처리 — 화면 흐름을 막지 않는다
+  } catch (err) {
+    // 저장 실패는 화면 흐름을 막지 않되, 원인 파악을 위해 경고는 남긴다.
+    // (이전 분석 복원이 안 될 때 스냅샷 저장 실패가 원인인지 콘솔에서 확인 가능)
+    console.warn(
+      "[saveDashboardSnapshot] 대시보드 스냅샷 저장 실패:",
+      err instanceof ApiError
+        ? `${err.status} ${err.message}`
+        : err,
+    );
   }
 }
 
@@ -138,6 +145,8 @@ export async function getPreviousDashboard(
   opts?: { consultationId?: string },
 ): Promise<ApiResult<DashboardSnapshotResult | null>> {
   try {
+    // 특정 회차 복원 시 그 회차의 스냅샷을 요청한다(백엔드: consultation_id = 그 회차).
+    // current_consultation_id(현재 회차 제외)와 의미가 다르므로 파라미터명을 바꾸지 말 것.
     const query = opts?.consultationId
       ? `?consultation_id=${encodeURIComponent(opts.consultationId)}`
       : "";

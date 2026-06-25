@@ -256,17 +256,17 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         isStressMode: false,
         stressPreset: "current",
         scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분석는 항상 calculate
-        // 신규 고객(상담 전)은 IPS·상담 내역·상담 ID까지 전부 빈 상태로 시작 — 더미 데이터 노출 금지
-        ...(target?.isNew
-          ? {
-              ips: EMPTY_IPS,
-              transcript: [] as ConsultMessage[],
-              transcriptSource: "empty" as DataSource,
-              consultationId: "",
-              sttStatus: "idle" as SttStatus,
-              sttNote: undefined,
-            }
-          : {}),
+        // 고객 전환 시 이전 고객의 상담 내역·상담 ID·STT 상태는 신규/기존 구분 없이 항상 초기화한다.
+        // (이전 고객의 transcript·consultationId가 새 고객 화면에 노출되거나, 새 고객 clientId와
+        //  이전 consultationId 조합으로 스냅샷이 잘못 저장되는 것을 방지)
+        transcript: [] as ConsultMessage[],
+        transcriptSource: "empty" as DataSource,
+        consultationId: "",
+        sttStatus: "idle" as SttStatus,
+        sttNote: undefined,
+        // 신규 고객(상담 전)은 IPS도 빈 상태로 시작 — 더미 데이터 노출 금지.
+        // 기존 고객의 IPS는 직후 자동 복원(getPreviousDashboard→loadConsultationDetail)이 채운다.
+        ...(target?.isNew ? { ips: EMPTY_IPS } : {}),
       };
     }),
   clearCustomerNew: (id) =>
