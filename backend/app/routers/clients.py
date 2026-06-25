@@ -220,6 +220,8 @@ def _pick_first_dashboard_snapshot(
     스냅샷이 없으면 None.
     """
     for row in rows or []:
+        if not isinstance(row, dict):
+            continue
         row_consultation_id = str(row.get("consultation_id") or "")
         if consultation_id is not None:
             # 특정 회차 조회: 그 회차만 본다. current 제외 규칙보다 우선한다

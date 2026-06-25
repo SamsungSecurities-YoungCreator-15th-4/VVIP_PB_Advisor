@@ -62,6 +62,14 @@ class PickFirstDashboardSnapshotTest(unittest.TestCase):
         )
         self.assertEqual(snap["consultation_id"], "c3")
 
+    def test_non_dict_rows_are_skipped(self):
+        # 예상치 못한 None·비-dict 행이 섞여도 AttributeError 없이 건너뛴다.
+        rows = [None, "bad", _row("c1")]
+        snap = _pick_first_dashboard_snapshot(
+            rows, consultation_id=None, current_consultation_id=None
+        )
+        self.assertEqual(snap["consultation_id"], "c1")
+
     def test_empty_rows_returns_none(self):
         self.assertIsNone(
             _pick_first_dashboard_snapshot(
