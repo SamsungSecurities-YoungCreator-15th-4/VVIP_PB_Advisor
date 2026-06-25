@@ -47,6 +47,8 @@ export default function BacktestChart() {
   const helpMode = useDashboardStore((s) => s.helpMode);
   const portfolios = useDashboardStore((s) => s.portfolios);
   const portfolioSource = useDashboardStore((s) => s.portfolioSource);
+  const portfolioNote = useDashboardStore((s) => s.portfolioNote);
+  const analyzing = useDashboardStore((s) => s.analyzing);
 
   const displayPortfolios = portfolios;
 
@@ -107,7 +109,7 @@ export default function BacktestChart() {
       })()
     : ["2021", "2022", "2023", "2024", "2025", "2026"];
 
-  if (portfolioSource === "fallback") {
+  if (portfolioSource === "fallback" && portfolioNote === undefined && !analyzing) {
     return (
       <Card className="flex min-h-[200px] items-center justify-center gap-0 p-3">
         <p className="text-[14px] font-semibold text-muted-foreground">

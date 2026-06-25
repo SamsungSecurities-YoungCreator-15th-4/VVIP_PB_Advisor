@@ -100,6 +100,7 @@ export default function Sidebar() {
     setSttStatus,
     scenario,
     liveBase,
+    liveBaseLoaded,
     basePortfolios,
     setPortfolios,
     setStressPortfolios,
@@ -113,7 +114,6 @@ export default function Sidebar() {
     setAnalyzing,
     setAnalysisBaseline,
     consultationId,
-    liveBaseLoaded,
     portfolioSource,
   } = useDashboardStore();
   const customer =
@@ -148,11 +148,12 @@ export default function Sidebar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  // 자동 분析하기: 페이지 첫 로드 또는 고객 전환 시 handleAnalyze 자동 실행
+  // 자동 분석하기: 페이지 첫 로드 또는 고객 전환 시 handleAnalyze 자동 실행
   const handleAnalyzeRef = useRef<(() => Promise<void>) | null>(null);
   const autoAnalyzedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!customer || !liveBaseLoaded || analyzing) return;
+    // clientId 없는 mock 고객은 스킵 — listClients() 응답 후 실 고객으로 바뀌면 실행
+    if (!customer || !customer.clientId || !liveBaseLoaded || analyzing) return;
     if (portfolioSource === "live") return;
     const cid = customer.id;
     if (autoAnalyzedForRef.current === cid) return;
@@ -179,7 +180,9 @@ export default function Sidebar() {
                 restoredCid,
               );
               // 비동기 동안 고객이 바뀌었으면 이전 고객 데이터를 새 화면에 반영하지 않는다.
-              if (useDashboardStore.getState().selectedCustomerId !== customer.id)
+              if (
+                useDashboardStore.getState().selectedCustomerId !== customer.id
+              )
                 return;
               if (detail.source === "live") {
                 setConsultationId(detail.data.consultationId);
@@ -194,7 +197,18 @@ export default function Sidebar() {
       // 스냅샷 없거나 clientId 미보유 → 신규 분석하기
       void handleAnalyzeRef.current?.();
     })();
-  }, [customer, liveBaseLoaded, portfolioSource, analyzing, setPortfolios, setCorrelationHeatmap, setPortfolioTax, setTaxOptimizer, setConsultationId, setIps]);
+  }, [
+    customer,
+    liveBaseLoaded,
+    portfolioSource,
+    analyzing,
+    setPortfolios,
+    setCorrelationHeatmap,
+    setPortfolioTax,
+    setTaxOptimizer,
+    setConsultationId,
+    setIps,
+  ]);
 
   // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
@@ -267,6 +281,11 @@ export default function Sidebar() {
         );
         setStressPortfolios(stressResult.portfolios);
         if (stressResult.stressTax) setStressTax(stressResult.stressTax);
+        if (stressResult.correlationHeatmap)
+          setCorrelationHeatmap(stressResult.correlationHeatmap);
+        if (stressResult.portfolioTax)
+          setPortfolioTax(stressResult.portfolioTax);
+        setTaxOptimizer(stressResult.taxOptimizer);
       } else {
         clearStressMode();
         const result = await fetchPortfolioCalculate({
@@ -287,7 +306,7 @@ export default function Sidebar() {
         if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
         // 절세 제안·종합과세 게이지는 calculate의 tax_optimizer를 기본 소스로 쓴다.
         setTaxOptimizer(result.data.taxOptimizer);
-        // STT 직후 첫 분析하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
+        // STT 직후 첫 분석하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
         if (
           hasFreshStt &&
           customer.clientId &&

@@ -9,13 +9,20 @@ import { ApiError, apiPost } from "@/lib/api";
 import { PORTFOLIOS, type BacktestPoint, type Portfolio, type PortfolioMetrics } from "@/lib/mockData";
 import type { CalcUnitWeights } from "@/lib/assetMapping";
 import { type ApiResult, fallback, live } from "./result";
-import type { CorrelationHeatmapResponse, PortfolioTaxResponse, StressTaxData, TaxWaterfallResponse } from "./types";
+import type { CorrelationHeatmapResponse, PortfolioTaxResponse, StressTaxData, StressTaxGauge, TaxWaterfallResponse } from "./types";
 
 // ── 백엔드 응답 타입 ───────────────────────────────────────────
 interface BackendAllocationItem {
   asset_class: string;
   name: string;
   weight: number; // 이미 % 단위
+}
+
+interface BackendMetricsRange {
+  lower: number;
+  center: number;
+  upper: number;
+  unit: string;
 }
 
 interface BackendMetrics {
@@ -25,6 +32,8 @@ interface BackendMetrics {
   sortino: number | null;
   mdd: number | null; // % (음수, 예: -11.2)
   after_tax_return: number | null;
+  after_tax_return_range?: BackendMetricsRange | null;
+  mdd_range?: BackendMetricsRange | null;
 }
 
 interface BackendMetricsKrw {
@@ -57,6 +66,7 @@ interface BackendPortfolioTax {
   saved_vs_current?: number;
   summary?: string;
   calculation_notes?: string[];
+  financial_income_tax_gauge?: StressTaxGauge | null;
 }
 
 interface BackendPortfolioItem {
@@ -143,12 +153,20 @@ function mapAllocationToWeights(allocation: BackendAllocationItem[]): CalcUnitWe
   return weights;
 }
 
+// ── 범위 데이터가 붙은 확장 메트릭 타입 (mockData 미수정, 캐스트용) ──
+type MetricsWithRange = PortfolioMetrics & {
+  afterTaxReturnRangeLabel?: string;
+  mddRangeLabel?: string;
+};
+
 // ── 원화 금액 레이블 포맷 ─────────────────────────────────────
 function formatKrwLabel(amount: number | undefined | null, sign: string): string {
   if (amount == null || !Number.isFinite(amount)) return "–";
   const abs = Math.abs(amount);
-  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(2)}억원`;
-  return `${sign}${Math.round(abs / 10_000).toLocaleString()}만원`;
+  // 실제 값이 음수이면 sign 파라미터를 무시하고 "-"로 덮어쓴다
+  const effectiveSign = amount < 0 ? "-" : sign;
+  if (abs >= 100_000_000) return `${effectiveSign}${(abs / 100_000_000).toFixed(2)}억원`;
+  return `${effectiveSign}${Math.round(abs / 10_000).toLocaleString()}만원`;
 }
 
 // ── 응답 → Portfolio 매핑 ──────────────────────────────────────
@@ -167,16 +185,27 @@ function mapPortfolioItem(item: BackendPortfolioItem): Portfolio {
   const m = item.metrics;
   const krw = item.metrics_krw ?? {};
 
-  const metrics: PortfolioMetrics = {
+  const afterTaxRange = m.after_tax_return_range ?? null;
+  const mddRange = m.mdd_range ?? null;
+
+  const toRangeLabel = (range: BackendMetricsRange | null): string | undefined => {
+    if (!range) return undefined;
+    const half = Math.abs(range.upper - range.lower) / 2;
+    return `±${half.toFixed(1)}%p`;
+  };
+
+  const metrics: MetricsWithRange = {
     expectedReturnPct:    m.expected_return ?? 0,
     volatilityPct:        m.volatility ?? 0,
     sharpe:               m.sharpe ?? 0,
     sortino:              m.sortino ?? 0,
-    mddPct:               Math.abs(m.mdd ?? 0),
-    afterTaxReturnPct:    m.after_tax_return ?? 0,
+    mddPct:               Math.abs(mddRange?.center ?? m.mdd ?? 0),
+    afterTaxReturnPct:    afterTaxRange?.center ?? m.after_tax_return ?? 0,
     volatilityAmountLabel: formatKrwLabel(krw.volatility_band, "±"),
     mddAmountLabel:        formatKrwLabel(krw.mdd, "-"),
     afterTaxAmountLabel:   formatKrwLabel(krw.after_tax_return, "+"),
+    afterTaxReturnRangeLabel: toRangeLabel(afterTaxRange),
+    mddRangeLabel: toRangeLabel(mddRange),
   };
 
   const toPoints = (arr?: BackendBacktestPoint[]): BacktestPoint[] =>
@@ -186,7 +215,8 @@ function mapPortfolioItem(item: BackendPortfolioItem): Portfolio {
     id,
     name: id === "current" ? "현재" : item.label,
     badge,
-    weights: mapAllocationToWeights(item.allocation),
+    allocation: item.allocation,           // 백엔드 8개 자산군 원본 (도넛용)
+    weights: mapAllocationToWeights(item.allocation), // 구형 CalcUnitWeights (히트맵 필터링용)
     metrics,
     backtest: toPoints(item.backtest),
     benchmarks: item.benchmarks
@@ -243,6 +273,7 @@ function extractPortfolioTax(
         saved_vs_current: item.tax.saved_vs_current ?? 0,
         summary: item.tax.summary ?? "",
         calculation_notes: item.tax.calculation_notes ?? [],
+        gauge: item.tax.financial_income_tax_gauge ?? null,
       };
       hasAny = true;
     }
@@ -308,20 +339,32 @@ interface StressMetricsBackendMetrics {
   mdd?: number | null;
   after_tax_return?: number | null;
   volatility?: number | null;
+  sharpe?: number | null;
+  sortino?: number | null;
 }
 
 interface StressMetricsBackendResponse {
-  base: StressMetricsBackendMetrics;
-  stressed: StressMetricsBackendMetrics;
-  portfolio_shock: number;
+  // calculate와 동일한 전체 포트폴리오 데이터
+  portfolios?: BackendPortfolioItem[];
+  correlation_heatmap?: PortfolioCalculateResponse["correlation_heatmap"];
+  tax_optimizer?: Record<string, StressTaxData>;
+  // 구형 충격 지표 (portfolios 없을 때 폴백용)
+  base?: StressMetricsBackendMetrics;
+  stressed?: StressMetricsBackendMetrics;
+  portfolio_shock?: number;
   base_tax?: StressTaxData | null;
   stressed_tax?: StressTaxData | null;
+  // 구형 응답에서의 current 포트폴리오 스트레스 백테스트
+  stressed_backtest?: BackendBacktestPoint[];
 }
 
-/** fetchStressMetrics 반환값 — 스트레스 포트폴리오 배열 + 절세 세금 데이터 쌍 */
+/** fetchStressMetrics 반환값 — calculate와 동일한 전체 대시보드 데이터 */
 export interface StressMetricsResult {
   portfolios: Portfolio[];
   stressTax: { base: StressTaxData; stressed: StressTaxData } | null;
+  correlationHeatmap: PortfolioCalcData["correlationHeatmap"];
+  portfolioTax: PortfolioCalcData["portfolioTax"];
+  taxOptimizer: PortfolioCalcData["taxOptimizer"];
 }
 
 export interface StressMetricsOptions {
@@ -341,11 +384,27 @@ export interface StressMetricsOptions {
   stressPreset: "current" | "crisis" | "war" | null;
 }
 
+/** CalcUnitWeights(% 단위) → 백엔드 stress-metrics weights(소수 단위) 변환 */
+function mapFrontendWeightsToBackend(weights: CalcUnitWeights): Record<string, number> {
+  return {
+    domestic_equity:    weights.domesticEquity         / 100,
+    overseas_dividend:  weights.overseasDividendEquity / 100,
+    overseas_blue_chip: weights.overseasGrowthEquity   / 100,
+    overseas_growth:    weights.emergingEquity          / 100,
+    general_bond:       weights.domesticBond            / 100,
+    separate_tax_bond:  weights.separateTaxBond         / 100,
+    low_coupon_bond:    weights.lowCouponBond           / 100,
+    reit:               weights.reits                   / 100,
+    gold:               weights.gold                    / 100,
+    commodity:          weights.infraFund               / 100,
+    dollar:             weights.overseasBond            / 100,
+  };
+}
+
 /**
  * POST /portfolio/stress-metrics
  * 충격 후 기준/스트레스 지표를 받아 stressedPortfolios(Portfolio[])로 변환한다.
- * - current 포트폴리오: 백엔드 stressed 값 직접 사용
- * - A/B 포트폴리오: portfolio_shock(소수)를 기준 수익률에 가산해 근사
+ * weights 미전송 시 백엔드가 cash 100%로 폴백해 충격량이 0이 되므로 반드시 전송.
  */
 export async function fetchStressMetrics(
   opts: StressMetricsOptions,
@@ -366,7 +425,14 @@ export async function fetchStressMetrics(
     ? 0
     : (opts.fxKrw - opts.liveFxKrw) / Math.max(opts.liveFxKrw, 1); // 상대 변화율
 
+  // 현재 포트폴리오 비중을 백엔드 포맷으로 변환해서 전송 — 없으면 백엔드가 cash 100% 폴백
+  const currentPortfolio = currentPortfolios.find((p) => p.id === "current");
+  const backendWeights = currentPortfolio
+    ? mapFrontendWeightsToBackend(currentPortfolio.weights)
+    : undefined;
+
   const body = {
+    weights: backendWeights,
     portfolio: {
       total_asset: opts.aumEokwon * 100_000_000,
       unique_need_amount: 0,
@@ -389,43 +455,59 @@ export async function fetchStressMetrics(
     { timeoutMs: 60_000 },
   );
 
-  const portfolioShockDeltaPct = (res.portfolio_shock ?? 0) * 100; // 소수 → %p
-
-  const portfolios = currentPortfolios.map((p) => {
-    if (p.id === "current") {
+  // 백엔드가 calculate와 동일한 전체 portfolios를 반환하면 그대로 사용.
+  // 구형 응답(portfolio_shock 근사)은 portfolios 필드가 없을 때만 폴백.
+  let portfolios: Portfolio[];
+  if (res.portfolios?.length) {
+    portfolios = res.portfolios.map(mapPortfolioItem);
+  } else {
+    const stressed = res.stressed ?? {};
+    const portfolioShockDeltaPct = (res.portfolio_shock ?? 0) * 100;
+    portfolios = currentPortfolios.map((p) => {
+      if (p.id === "current") {
+        return {
+          ...p,
+          metrics: {
+            ...p.metrics,
+            expectedReturnPct: stressed.expected_return ?? p.metrics.expectedReturnPct,
+            mddPct: Math.abs(stressed.mdd ?? -p.metrics.mddPct),
+            afterTaxReturnPct: stressed.after_tax_return ?? p.metrics.afterTaxReturnPct,
+            volatilityPct: stressed.volatility ?? p.metrics.volatilityPct,
+            sharpe: stressed.sharpe ?? p.metrics.sharpe,
+            sortino: stressed.sortino ?? p.metrics.sortino,
+          },
+          backtest: res.stressed_backtest
+            ? res.stressed_backtest.map((pt) => ({ date: pt.date, value: pt.value }))
+            : p.backtest,
+        };
+      }
+      // 구형 응답에서 A/B는 per-portfolio 값이 없으므로 current 기준 충격 비율로 근사
+      const shockRatio = (res.portfolio_shock ?? 0); // 소수 단위
       return {
         ...p,
         metrics: {
           ...p.metrics,
-          expectedReturnPct:
-            res.stressed.expected_return ?? p.metrics.expectedReturnPct,
-          mddPct: Math.abs(res.stressed.mdd ?? -p.metrics.mddPct),
-          afterTaxReturnPct:
-            res.stressed.after_tax_return ?? p.metrics.afterTaxReturnPct,
-          volatilityPct:
-            res.stressed.volatility ?? p.metrics.volatilityPct,
+          expectedReturnPct: p.metrics.expectedReturnPct + portfolioShockDeltaPct,
+          afterTaxReturnPct: p.metrics.afterTaxReturnPct + portfolioShockDeltaPct,
+          volatilityPct: p.metrics.volatilityPct * (1 + Math.abs(shockRatio)),
+          mddPct: p.metrics.mddPct * (1 + Math.abs(shockRatio)),
         },
       };
-    }
-    // A/B: portfolio_shock 근사 적용
-    return {
-      ...p,
-      metrics: {
-        ...p.metrics,
-        expectedReturnPct:
-          p.metrics.expectedReturnPct + portfolioShockDeltaPct,
-        afterTaxReturnPct:
-          p.metrics.afterTaxReturnPct + portfolioShockDeltaPct,
-      },
-    };
-  });
+    });
+  }
 
   const stressTax =
     res.base_tax && res.stressed_tax
       ? { base: res.base_tax, stressed: res.stressed_tax }
       : null;
 
-  return { portfolios, stressTax };
+  return {
+    portfolios,
+    stressTax,
+    correlationHeatmap: (res.correlation_heatmap as PortfolioCalcData["correlationHeatmap"]) ?? null,
+    portfolioTax: res.portfolios ? extractPortfolioTax(res.portfolios) : null,
+    taxOptimizer: res.tax_optimizer ?? null,
+  };
 }
 
 // ── 스트레스 테스트 (슬라이더 시나리오 값으로 전체 재계산) ──────

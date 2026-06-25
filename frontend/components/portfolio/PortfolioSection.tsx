@@ -5,8 +5,12 @@ import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import AssetDonut from "@/components/portfolio/AssetDonut";
 import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
-import { toDisplayAllocation } from "@/lib/assetMapping";
-import { type Portfolio } from "@/lib/mockData";
+import {
+  BACKEND_ASSET_COLORS,
+  DISPLAY_GROUP_COLORS,
+  toDisplayAllocation,
+} from "@/lib/assetMapping";
+import { type Portfolio, type PortfolioMetrics } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 import HelpTooltip from "@/components/common/HelpTooltip";
 
@@ -52,21 +56,21 @@ export default function PortfolioSection() {
           {analyzing ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
-              분석中...
+              분석...
             </div>
           ) : portfolioSource === "live" ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
               <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
               연동 완료
             </div>
-          ) : portfolioSource === "fallback" ? null : (
+          ) : portfolioNote !== undefined ? (
             <div
               className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700"
               title={portfolioNote}
             >
               ⚠ 데모
             </div>
-          )}
+          ) : null}
         </div>
         {portfolioSource !== "fallback" && (
           <span
@@ -78,7 +82,9 @@ export default function PortfolioSection() {
         )}
       </div>
 
-      {portfolioSource === "fallback" && !analyzing ? (
+      {portfolioSource === "fallback" &&
+      portfolioNote === undefined &&
+      !analyzing ? (
         <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-muted-foreground/20 bg-muted/30">
           <p className="text-[14px] font-semibold text-muted-foreground">
             분석 결과가 존재하지 않습니다
@@ -113,8 +119,24 @@ function PortfolioCard({
   selectable: boolean;
 }) {
   const [view, setView] = useState<"donut" | "heatmap">("donut");
-  const allocation = toDisplayAllocation(pf.weights);
-  const m = pf.metrics;
+  // 백엔드 8개 자산군이 있으면 직접 사용, 없으면 구형 6분류 변환으로 폴백
+  const allocation = pf.allocation
+    ? pf.allocation
+        .filter((a) => a.weight > 0)
+        .map((a) => ({
+          label: a.name,
+          weight: a.weight,
+          color: BACKEND_ASSET_COLORS[a.asset_class] ?? "#8899AA",
+        }))
+    : toDisplayAllocation(pf.weights).map((a) => ({
+        label: a.group,
+        weight: a.weight,
+        color: DISPLAY_GROUP_COLORS[a.group],
+      }));
+  const m = pf.metrics as PortfolioMetrics & {
+    afterTaxReturnRangeLabel?: string;
+    mddRangeLabel?: string;
+  };
 
   const portfolioType =
     pf.id === "a" ? "수익추구형" : pf.id === "b" ? "안정추구형" : null;
@@ -175,7 +197,7 @@ function PortfolioCard({
 
       <div className="flex h-72 items-stretch gap-2.5">
         {view === "donut" ? (
-          <div className="flex flex-1 flex-col items-center justify-center">
+          <div className="flex flex-1 flex-col items-center">
             <AssetDonut allocation={allocation} />
           </div>
         ) : (
@@ -184,7 +206,7 @@ function PortfolioCard({
       </div>
 
       <div className="mt-2.5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-muted">
-        <Metric k="기대수익률" v={`${m.expectedReturnPct}%`} />
+        <Metric k="기대수익률" v={`${m.expectedReturnPct.toFixed(2)}%`} />
         <Metric k="샤프지수" v={m.sharpe != null ? m.sharpe.toFixed(2) : "-"} />
         <Metric
           k="소르티노"
@@ -192,22 +214,30 @@ function PortfolioCard({
         />
         <Metric
           k="세후수익률"
-          v={`${m.afterTaxReturnPct.toFixed(1)}%`}
+          v={`${Math.abs(m.afterTaxReturnPct).toFixed(1)}%`}
+          rangeSub={m.afterTaxReturnRangeLabel}
           sub={m.afterTaxAmountLabel}
-          tone="up"
+          tone={
+            m.afterTaxReturnPct > 0
+              ? "up"
+              : m.afterTaxReturnPct < 0
+                ? "down"
+                : undefined
+          }
           value={m.afterTaxReturnPct}
         />
         <Metric
           k="변동성"
-          v={`${m.volatilityPct}%`}
+          v={`${m.volatilityPct.toFixed(2)}%`}
           sub={m.volatilityAmountLabel}
           value={m.volatilityPct}
         />
         <Metric
           k="MDD"
-          v={`${m.mddPct}%`}
+          v={`${m.mddPct.toFixed(1)}%`}
+          rangeSub={m.mddRangeLabel}
           sub={m.mddAmountLabel}
-          tone="down"
+          tone={m.mddPct > 0 ? "down" : undefined}
           value={m.mddPct}
         />
       </div>
@@ -218,12 +248,14 @@ function PortfolioCard({
 function Metric({
   k,
   v,
+  rangeSub,
   sub,
   tone,
   value,
 }: {
   k: string;
   v: string;
+  rangeSub?: string;
   sub?: string;
   tone?: "up" | "down";
   value?: number;
@@ -256,8 +288,15 @@ function Metric({
           {arrow && <span className="mr-0.5 text-[14px]">{arrow}</span>}
           {v}
         </div>
+        {rangeSub && (
+          <div className="mt-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+            {rangeSub}
+          </div>
+        )}
         {sub && (
-          <div className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}>
+          <div
+            className={`mt-0.5 text-[12px] font-bold tabular-nums ${toneCls}`}
+          >
             {value === 0 ? sub.replace(/^[+\-±]/, "") : sub}
           </div>
         )}

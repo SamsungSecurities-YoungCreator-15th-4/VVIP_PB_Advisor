@@ -14,7 +14,7 @@
  *   - flow(세금 흐름 3행 표)는 calculate에 3분할 소스가 없어 mock 유지 — 백엔드 분할 노출 후 연결 예정(TODO).
  */
 import { TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
-import type { StressTaxData } from "@/lib/api/types";
+import type { PortfolioTaxResponse, StressTaxData } from "@/lib/api/types";
 
 // selectedPortfolioId("current"|"a"|"b") → tax_optimizer 맵 키
 const PDF_TAX_OPT_KEY: Record<string, string> = {
@@ -110,6 +110,79 @@ export function buildPdfTaxEffect(
     },
     accounts: buildAccounts(taxOptimizer),
   };
+}
+
+// ── 세금 효과 비교 흐름 행 (flow rows) ────────────────────────────────────────
+
+export type PdfFlowRow = { label: string; afterTaxManwon: number; taxManwon: number };
+
+export type PdfTaxFlow = {
+  pretaxLabel: string;
+  totalLabel: string;
+  totalSavingManwon: number;
+  rows: PdfFlowRow[];
+} | null;
+
+/** portfolioTax(calculate 결과)에서 portfolioId에 맞는 항목을 꺼낸다. */
+export function extractPortfolioTaxEntry(
+  portfolioTax: Record<string, PortfolioTaxResponse> | null,
+  selectedPortfolioId: string,
+): PortfolioTaxResponse | null {
+  if (!portfolioTax) return null;
+  const keyMap: Record<string, string> = { current: "current", a: "A", b: "B" };
+  const key = keyMap[selectedPortfolioId] ?? "A";
+  return portfolioTax[key] ?? portfolioTax["A"] ?? null;
+}
+
+/**
+ * 세금 효과 비교 흐름 행 — TaxWaterfall 동일 로직.
+ *   우선순위 1: portfolioTax.waterfall (calculate 결과)
+ *   우선순위 2: taxOptimizer.headline + aumEokwon (tax_optimizer 결과)
+ *   데이터 없으면 null 반환 → PDF에서 섹션 숨김.
+ */
+export function buildPdfTaxFlow(
+  taxOptimizer: StressTaxData | null,
+  aumEokwon: number,
+  portfolioTax: PortfolioTaxResponse | null,
+): PdfTaxFlow {
+  if (portfolioTax) {
+    const wf = portfolioTax.waterfall;
+    const grossManwon     = Math.round(wf.gross_return / 10000);
+    const afterTaxManwon  = Math.round(wf.after_tax / 10000);
+    const actualTaxManwon = grossManwon - afterTaxManwon;
+    const savingManwon    = Math.round(portfolioTax.saved_vs_current / 10000);
+    const baselineTax     = actualTaxManwon + savingManwon;
+    const baselineAfter   = grossManwon - baselineTax;
+    return {
+      pretaxLabel: `세전 총수익 ${grossManwon.toLocaleString()}만원`,
+      totalLabel: "연간 절세 효과",
+      totalSavingManwon: savingManwon,
+      rows: [
+        { label: "전략 전",        afterTaxManwon: baselineAfter,  taxManwon: baselineTax     },
+        { label: "절세 전략 적용",  afterTaxManwon,                  taxManwon: actualTaxManwon },
+      ],
+    };
+  }
+  if (taxOptimizer?.headline && aumEokwon > 0) {
+    const h           = taxOptimizer.headline;
+    const aumManwon   = aumEokwon * 10000;
+    const beforeAfter = Math.round(h.after_tax_return_before * aumManwon);
+    const afterAfter  = Math.round(h.after_tax_return_after  * aumManwon);
+    const beforeTax   = Math.round(h.tax_amount_before / 10000);
+    const afterTax    = Math.round(h.tax_amount_after  / 10000);
+    const totalSaving = Math.round(h.annual_tax_saving  / 10000);
+    const pretax      = beforeAfter + beforeTax;
+    return {
+      pretaxLabel: `세전 총수익 ${pretax.toLocaleString()}만원`,
+      totalLabel: "연간 절세 효과",
+      totalSavingManwon: totalSaving,
+      rows: [
+        { label: "현재 포트폴리오", afterTaxManwon: beforeAfter, taxManwon: beforeTax },
+        { label: "절세 제안 적용",  afterTaxManwon: afterAfter,  taxManwon: afterTax  },
+      ],
+    };
+  }
+  return null;
 }
 
 /** TAX_ADVICE(절세 제안) shape으로 변환. live 카드 제목·절감액·적용여부 override, 카피·상품은 mock 유지. */

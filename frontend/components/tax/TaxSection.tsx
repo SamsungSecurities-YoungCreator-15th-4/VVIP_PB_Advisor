@@ -46,12 +46,14 @@ export default function TaxSection() {
     selectedPortfolioId,
     portfolios,
     portfolioSource,
+    portfolioNote,
     portfolioTax,
     stressTax,
     taxOptimizer,
     customers,
     selectedCustomerId,
     analyzing,
+    isStressMode,
   } = useDashboardStore();
 
   const customer =
@@ -78,8 +80,10 @@ export default function TaxSection() {
       null)
     : null;
 
-  // 절세 화면 소스: 스트레스 모드면 stressTax.stressed, 아니면 calculate의 tax_optimizer 해당 포트폴리오.
-  const taxSource = stressTax?.stressed ?? taxOptEntry;
+  // 절세 화면 소스: 스트레스 모드면 taxOptimizer(포트폴리오별 stressed) 우선, 아니면 calculate 결과
+  const taxSource = isStressMode
+    ? (taxOptEntry ?? stressTax?.stressed ?? null)
+    : taxOptEntry;
 
   const isLive =
     portfolioSource === "live" && selectedTax != null && taxSource != null;
@@ -88,10 +92,14 @@ export default function TaxSection() {
   const currentAfterTax = currentPortfolio?.metrics.afterTaxReturnPct ?? null;
   const selectedAfterTax = selectedPortfolio?.metrics.afterTaxReturnPct ?? null;
 
-  // 절세 효과 헤드라인
-  const annualSavingManwon = selectedTax
-    ? Math.round(selectedTax.saved_vs_current / 10000)
-    : null;
+  // 절세 효과 헤드라인: 스트레스 모드면 taxSource(stressed) headline, 아니면 calculate saved_vs_current
+  const annualSavingManwon = isStressMode
+    ? (taxSource?.headline.annual_tax_saving != null
+        ? Math.round(taxSource.headline.annual_tax_saving / 10000)
+        : null)
+    : (selectedTax
+        ? Math.round(selectedTax.saved_vs_current / 10000)
+        : null);
 
   // 실효세 절감: taxSource.headline의 세전→세후 실효세 (만원)
   const effectiveTaxBeforeMan =
@@ -119,15 +127,20 @@ export default function TaxSection() {
       }
     : null;
 
-  // 종합과세 게이지
-  const gaugeData = taxSource?.financial_income_tax_gauge ?? null;
+  // 종합과세 게이지: 스트레스 모드면 포트폴리오별 taxOptEntry gauge 우선, 아니면 calculate gauge
+  const gaugeData =
+    (isStressMode
+      ? (taxOptEntry?.financial_income_tax_gauge ?? stressTax?.stressed?.financial_income_tax_gauge)
+      : null) ??
+    selectedTax?.gauge ??
+    null;
 
   // 절세 제안 카드: 소스가 있으면 strategy_cards, 없으면 mock
   const liveStrategyCards = taxSource?.strategy_cards ?? null;
 
   const baseLabel = selectedPortfolio?.name ?? "포트폴리오";
 
-  if (portfolioSource === "fallback" && !analyzing) {
+  if (portfolioSource === "fallback" && portfolioNote === undefined && !analyzing) {
     return (
       <section>
         <div className="mb-2 px-0.5">
@@ -250,7 +263,8 @@ export default function TaxSection() {
 
           <div className="grid grid-cols-2 items-start gap-4">
             <TaxWaterfall
-              waterfallData={waterfallData}
+              waterfallData={isStressMode ? null : waterfallData}
+              liveHeadline={isStressMode ? (taxSource?.headline ?? null) : null}
               liveAumEokwon={customer?.aumEokwon}
             />
             <AccountAllocation />
