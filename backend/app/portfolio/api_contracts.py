@@ -249,13 +249,17 @@ class CorrelationAssetResponse(BaseModel):
 
 class CorrelationHeatmapResponse(BaseModel):
     assets: List[CorrelationAssetResponse]
-    matrix: List[List[Optional[float]]]
+    matrix: List[List[float]]
     value_type: Literal["correlation"] = "correlation"
     grouping_method: Literal[
         "equal_weighted_constituent_daily_returns"
     ] = "equal_weighted_constituent_daily_returns"
-    null_value_reason: str
-
+    null_value_reason: str = Field(
+        default=(
+            "정의되지 않은 상관계수(예: 분산이 0인 시계열)는 null 대신 0.0으로 반환합니다."
+        ),
+        description="분산 0 등으로 상관계수가 정의되지 않는 경우의 반환 정책",
+    )
 
 class RejectionCountsResponse(ExtensibleModel):
     suitability: int = 0

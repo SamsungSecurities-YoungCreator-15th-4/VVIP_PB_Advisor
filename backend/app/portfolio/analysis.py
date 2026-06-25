@@ -2,12 +2,11 @@
 """§12. 전체 분석 실행 — run_analysis_core / run_full_analysis."""
 
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
-import pandas as pd
 
 from .constants import TRADING_DAYS
-from .assets import ASSET_NAMES_KR, CLIENT_RISK_LEVEL, DASHBOARD_ASSET_GROUPS
+from .assets import ASSET_NAMES_KR, CLIENT_RISK_LEVEL
 from .models import AnalysisRequest, PortfolioRequest
 from .utils import (
     validate_unique_asset,
@@ -43,63 +42,8 @@ from .responses import (
     build_tax_optimizer_map,
     extract_tax_inputs_payload,
 )
-from .dashboard_views import calculate_dashboard_group_correlation_matrix as build_dashboard_group_correlation_matrix
+from .dashboard_views import calculate_dashboard_group_correlation_matrix
 
-
-
-def calculate_dashboard_group_correlation_matrix(
-    returns: pd.DataFrame,
-) -> Dict[str, Dict[str, Optional[float]]]:
-    '''12개 자산 일별수익률을 8개 대시보드 그룹으로 묶어 상관행렬을 계산한다.
-
-    여러 자산이 속한 해외주식·채권 그룹은 구성 자산의 일별수익률을
-    동일가중 평균하여 하나의 그룹 수익률 시계열로 만든다.
-
-    이 행렬은 시장 자산군 간 상관관계이므로 포트폴리오 A/B 비중과 무관하며,
-    동일 분석 요청 안의 현재/A/B 포트폴리오가 공통으로 사용한다.
-
-    수익률이 상수인 시계열(현재 현금)은 피어슨 상관계수가 정의되지 않으므로
-    해당 셀을 None으로 반환한다. 0으로 치환하지 않는다.
-    '''
-    grouped_series: Dict[str, pd.Series] = {}
-
-    for group_key, group_config in DASHBOARD_ASSET_GROUPS.items():
-        member_assets = [
-            asset
-            for asset in group_config["assets"]
-            if asset in returns.columns
-        ]
-        if not member_assets:
-            continue
-
-        grouped_series[group_key] = (
-            returns.loc[:, member_assets]
-            .mean(axis=1, skipna=True)
-            .rename(group_key)
-        )
-
-    if not grouped_series:
-        return {}
-
-    grouped_returns = (
-        pd.concat(grouped_series.values(), axis=1)
-        .replace([float("inf"), float("-inf")], pd.NA)
-        .dropna(how="all")
-    )
-    correlation = grouped_returns.corr()
-
-    matrix: Dict[str, Dict[str, Optional[float]]] = {}
-    for column_group in grouped_returns.columns:
-        matrix[column_group] = {}
-        for row_group in grouped_returns.columns:
-            value = correlation.loc[row_group, column_group]
-            matrix[column_group][row_group] = (
-                None
-                if pd.isna(value)
-                else round(float(value), 4)
-            )
-
-    return matrix
 
 
 def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
@@ -226,7 +170,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         backtest_returns=analysis_backtest_returns,
     )
 
-    correlation_matrix = build_dashboard_group_correlation_matrix(returns)
+    correlation_matrix = calculate_dashboard_group_correlation_matrix(returns)
     asset_summary = build_asset_summary(returns, expected_returns)
 
     unique_ratio = request.unique_need_amount / request.total_asset

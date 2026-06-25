@@ -257,26 +257,17 @@ def build_spec_portfolio_item(
         },
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
-    item["risk_contribution_heatmap"] = (
+    risk_contribution_heatmap = (
         portfolio.get("risk_contribution_heatmap")
         or portfolio.get("dashboard_risk_contribution_heatmap")
-        or {}
     )
+    if risk_contribution_heatmap is None:
+        raise ValueError(
+            "포트폴리오 응답에 risk_contribution_heatmap이 없습니다."
+        )
+    item["risk_contribution_heatmap"] = risk_contribution_heatmap
     return item
 
-
-
-def _round_optional_correlation(value: Any) -> Optional[float]:
-    '''정의되지 않은 상관계수는 0으로 위조하지 않고 None으로 유지한다.'''
-    if value is None:
-        return None
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    if not math.isfinite(numeric):
-        return None
-    return round(numeric, 4)
 
 
 def build_correlation_heatmap_payload(

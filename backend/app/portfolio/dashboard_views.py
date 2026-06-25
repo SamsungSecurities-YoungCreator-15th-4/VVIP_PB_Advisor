@@ -13,52 +13,11 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
+from .assets import DASHBOARD_ASSET_GROUPS
 from .constants import TRADING_DAYS
 from .utils import safe_float, safe_round
 
 
-DASHBOARD_ASSET_GROUPS: Dict[str, Dict[str, Any]] = {
-    "domestic_equity": {
-        "label": "국내주식",
-        "assets": ("domestic_equity",),
-    },
-    "overseas_equity": {
-        "label": "해외주식",
-        "assets": (
-            "overseas_blue_chip",
-            "overseas_growth",
-            "overseas_dividend",
-        ),
-    },
-    "bond": {
-        "label": "채권",
-        "assets": (
-            "general_bond",
-            "low_coupon_bond",
-            "separate_tax_bond",
-        ),
-    },
-    "gold": {
-        "label": "금",
-        "assets": ("gold",),
-    },
-    "reit": {
-        "label": "리츠",
-        "assets": ("reit",),
-    },
-    "commodity": {
-        "label": "원자재",
-        "assets": ("commodity",),
-    },
-    "dollar": {
-        "label": "달러",
-        "assets": ("dollar",),
-    },
-    "cash": {
-        "label": "현금",
-        "assets": ("cash",),
-    },
-}
 
 
 def _extract_weight(raw: Any) -> float:
@@ -187,6 +146,11 @@ def calculate_dashboard_group_correlation_matrix(
 def build_common_correlation_heatmap_payload(
     full_response: Dict[str, Any],
 ) -> Dict[str, Any]:
+    """Build the common 8-group correlation payload.
+
+    Undefined Pearson correlations, such as correlations involving a
+    zero-variance cash series, are consistently represented as 0.0.
+    """
     raw = full_response.get("correlation_matrix") or {}
     group_keys = list(DASHBOARD_ASSET_GROUPS)
     return {
@@ -208,8 +172,11 @@ def build_common_correlation_heatmap_payload(
             for row_key in group_keys
         ],
         "value_type": "correlation",
+        "grouping_method": "equal_weighted_constituent_daily_returns",
+        "null_value_reason": (
+            "정의되지 않은 상관계수(예: 분산이 0인 시계열)는 null 대신 0.0으로 반환합니다."
+        ),
     }
-
 
 def calculate_portfolio_risk_contribution_heatmap(
     weights: Dict[str, float],
