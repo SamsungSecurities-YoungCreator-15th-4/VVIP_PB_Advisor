@@ -103,7 +103,7 @@ export default function StressTestSection() {
         label="금리"
         valueLabel={`${scenario.ratePct.toFixed(2)}%`}
         delta={rateDelta}
-        deltaLabel={`${rateDelta >= 0 ? "+" : ""}${rateDelta.toFixed(2)}%p`}
+        deltaLabel={`${rateDelta > 0 ? "+" : ""}${rateDelta.toFixed(2)}%p`}
         value={scenario.ratePct}
         min={SCENARIO_BASE.rateMin}
         max={SCENARIO_BASE.rateMax}
@@ -117,7 +117,7 @@ export default function StressTestSection() {
         label="환율"
         valueLabel={`${scenario.fxKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`}
         delta={fxDelta}
-        deltaLabel={`${fxDelta >= 0 ? "+" : ""}${fxDelta.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`}
+        deltaLabel={`${fxDelta > 0 ? "+" : ""}${fxDelta.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`}
         value={scenario.fxKrw}
         min={SCENARIO_BASE.fxMin}
         max={SCENARIO_BASE.fxMax}
@@ -133,7 +133,8 @@ export default function StressTestSection() {
           <p className="text-[13px] font-extrabold">예상 평가손익 (연간)</p>
         </div>
         {PORTFOLIOS.map((pf) => {
-          const v = pnlEok(pf.id);
+          const raw = pnlEok(pf.id);
+          const v = parseFloat(raw.toFixed(1));
           const label = pf.id === "current" ? "현재" : `제안 ${pf.id.toUpperCase()}`;
           return (
             <div key={pf.id} className="flex items-center justify-between py-1 text-[13px]">
@@ -165,7 +166,7 @@ function ScenarioSlider({
         <span className="text-[12px] font-bold text-muted-foreground">{label}</span>
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-extrabold">{valueLabel}</span>
-          <span className={`text-[11px] font-bold ${delta === 0 ? "text-muted-foreground" : delta > 0 ? "text-down" : "text-up"}`}>
+          <span className={`text-[11px] font-bold ${delta === 0 ? "text-foreground" : delta > 0 ? "text-up" : "text-down"}`}>
             {deltaLabel}
           </span>
         </div>

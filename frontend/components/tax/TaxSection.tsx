@@ -140,10 +140,10 @@ export default function TaxSection() {
                 </span>
               </div>
               {annualSavingManwon != null ? (
-                <p className="mt-1.5 flex items-baseline gap-1.5 text-[13px] font-bold text-up">
+                <p className={`mt-1.5 flex items-baseline gap-1.5 text-[13px] font-bold ${annualSavingManwon > 0 ? "text-up" : "text-foreground"}`}>
                   연간 절세 효과
                   <b className="text-3xl font-extrabold tabular-nums tracking-tight">
-                    +{annualSavingManwon.toLocaleString()}
+                    {annualSavingManwon > 0 ? "+" : ""}{annualSavingManwon.toLocaleString()}
                   </b>
                   <span className="text-[12px] font-extrabold">만원</span>
                 </p>
@@ -163,7 +163,8 @@ export default function TaxSection() {
                 <SummaryStat
                   k="세후 수익률"
                   v={`${currentAfterTax.toFixed(1)}% → ${selectedAfterTax.toFixed(1)}%`}
-                  d={`+${(selectedAfterTax - currentAfterTax).toFixed(1)}%p`}
+                  d={`${(selectedAfterTax - currentAfterTax) > 0 ? "+" : ""}${(selectedAfterTax - currentAfterTax).toFixed(1)}%p`}
+                  delta={selectedAfterTax - currentAfterTax}
                 />
                 {annualSavingManwon != null && (
                   <SummaryStat
@@ -313,12 +314,18 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
   );
 }
 
-function SummaryStat({ k, v, d }: { k: string; v: string; d: string }) {
+function SummaryStat({ k, v, d, delta }: { k: string; v: string; d: string; delta?: number }) {
+  const dCls =
+    delta === undefined || delta > 0
+      ? "text-up"
+      : delta < 0
+        ? "text-down"
+        : "text-foreground";
   return (
     <div className="min-w-29.5 rounded-xl border bg-white px-3 py-2">
       <p className="text-[13px] font-bold text-muted-foreground">{k}</p>
       <p className="mt-1 text-[13px] font-extrabold tabular-nums">{v}</p>
-      <p className="mt-0.5 text-[13px] font-extrabold tabular-nums text-up">{d}</p>
+      <p className={`mt-0.5 text-[13px] font-extrabold tabular-nums ${dCls}`}>{d}</p>
     </div>
   );
 }

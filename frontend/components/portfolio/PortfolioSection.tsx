@@ -201,7 +201,7 @@ function PortfolioCard({
             <AssetDonut allocation={allocation} />
           </div>
         ) : (
-          <CorrelationHeatmap />
+          <CorrelationHeatmap portfolio={pf} />
         )}
       </div>
 
@@ -217,13 +217,15 @@ function PortfolioCard({
           v={`${m.afterTaxReturnPct.toFixed(1)}%`}
           sub={m.afterTaxAmountLabel}
           tone="up"
+          value={m.afterTaxReturnPct}
         />
         <Metric
           k="변동성"
           v={`${m.volatilityPct}%`}
           sub={m.volatilityAmountLabel}
+          value={m.volatilityPct}
         />
-        <Metric k="MDD" v={`${m.mddPct}%`} sub={m.mddAmountLabel} tone="down" />
+        <Metric k="MDD" v={`${m.mddPct}%`} sub={m.mddAmountLabel} tone="down" value={m.mddPct} />
       </div>
     </Card>
   );
@@ -234,16 +236,19 @@ function Metric({
   v,
   sub,
   tone,
+  value,
 }: {
   k: string;
   v: string;
   sub?: string;
   tone?: "up" | "down";
+  value?: number;
 }) {
   const helpMode = useDashboardStore((s) => s.helpMode);
+  const effectiveTone = value === 0 ? undefined : tone;
   const toneCls =
-    tone === "up" ? "text-up" : tone === "down" ? "text-down" : "";
-  const arrow = tone === "up" ? "▲" : tone === "down" ? "▼" : null;
+    effectiveTone === "up" ? "text-up" : effectiveTone === "down" ? "text-down" : "";
+  const arrow = effectiveTone === "up" ? "▲" : effectiveTone === "down" ? "▼" : null;
   return (
     <HelpTooltip text={METRIC_HELP[k] ?? ""}>
       <div className="h-full bg-card px-2 py-1.5">
@@ -264,7 +269,7 @@ function Metric({
         </div>
         {sub && (
           <div className={`mt-1 text-[12px] font-bold tabular-nums ${toneCls}`}>
-            {sub}
+            {value === 0 ? sub.replace(/^[+\-±]/, "") : sub}
           </div>
         )}
       </div>

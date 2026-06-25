@@ -232,7 +232,8 @@ export default function Sidebar() {
           clientId: customer.clientId,
         });
         setPortfolios(result.data.portfolios, result.source, result.note);
-        if (result.data.correlationHeatmap) setCorrelationHeatmap(result.data.correlationHeatmap);
+        if (result.data.correlationHeatmap)
+          setCorrelationHeatmap(result.data.correlationHeatmap);
         if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
       }
       setAnalysisBaseline(ips, scenario);
@@ -326,7 +327,8 @@ export default function Sidebar() {
     setHistoryLoading(true);
     const res = await listConsultations(customer.clientId);
     setPastList(res.data);
-    if (res.source !== "live") setHistoryError(res.note ?? "불러오지 못했습니다.");
+    if (res.source !== "live")
+      setHistoryError(res.note ?? "불러오지 못했습니다.");
     setHistoryLoading(false);
   };
 
@@ -518,8 +520,8 @@ export default function Sidebar() {
                 {realtimeStatus === "recording"
                   ? "클릭해 종료"
                   : customer.clientId
-                    ? "WebSocket STT"
-                    : "DB 고객 필요"}
+                    ? "STT"
+                    : "고객 ID 필요"}
               </span>
             </button>
           </div>
@@ -687,7 +689,9 @@ export default function Sidebar() {
         <Button
           size="lg"
           disabled={analyzing}
-          onClick={() => { void handleAnalyze(); }}
+          onClick={() => {
+            void handleAnalyze();
+          }}
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
           {analyzing ? (
@@ -812,7 +816,9 @@ export default function Sidebar() {
                       disabled={loadingId !== null}
                       onClick={() => loadPast(c.consultationId)}
                     >
-                      {loadingId === c.consultationId ? "불러오는 중" : "불러오기"}
+                      {loadingId === c.consultationId
+                        ? "불러오는 중"
+                        : "불러오기"}
                     </Button>
                   </div>
                 ))
