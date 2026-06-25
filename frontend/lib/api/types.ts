@@ -31,6 +31,46 @@ export interface RagInsightResponse {
   as_of: string; // ISO datetime
 }
 
+// ── DART 재무: POST /dart/insight ──────────────────────────────
+// 기업 재무제표(매출·영업이익 등)는 RAG 코퍼스에 없으므로 DART 전자공시에서
+// 실시간 조회한다. 수치는 원문 그대로(접수번호로 감사추적), LLM 은 요약만 한다.
+export interface DartInsightRequest {
+  corp_name?: string | null;
+  corp_code?: string | null;
+  bsns_year?: number | null; // 미지정 시 최신 확정 사업보고서
+}
+
+export interface DartFinancialsPayload {
+  revenue?: number | null;
+  operating_income?: number | null;
+  net_income?: number | null;
+  total_assets?: number | null;
+  total_liabilities?: number | null;
+  total_equity?: number | null;
+}
+
+export interface DartSource {
+  corp_code: string;
+  bsns_year: number;
+  reprt_code: string;
+  rcept_no: string; // 공시 원문 접수번호(감사추적)
+  fs_label: string; // 연결/별도
+  currency: string;
+  note: string;
+}
+
+export interface DartInsightResponse {
+  query: string;
+  resolve_status: string; // matched/disambiguated/excluded_delisted/manual_review/not_found
+  resolve_reason: string;
+  corp_code: string | null;
+  corp_name: string | null;
+  financials: DartFinancialsPayload | null;
+  source: DartSource | null;
+  summary: string;
+  as_of: string; // ISO datetime
+}
+
 // ── 절세: POST /tax/insight ────────────────────────────────────
 // tax_result 는 #30(build_tax_optimizer_payload) 출력 형태. extra 허용이라 부분 전송 가능.
 export interface TaxHeadline {

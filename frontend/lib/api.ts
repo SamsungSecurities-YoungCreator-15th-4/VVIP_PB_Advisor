@@ -224,6 +224,8 @@ export * from "./api/types";
 export { fetchRagInsight } from "./api/rag";
 export type { InsightData, InsightCitation, FetchInsightOptions } from "./api/rag";
 
+export { fetchDartInsight, detectFinancialQuery } from "./api/dart";
+
 export { fetchTaxInsight, buildTaxResultFromMock } from "./api/tax";
 export type { TaxInsightData } from "./api/tax";
 
