@@ -112,9 +112,17 @@ def test_current_weights_normalization_is_cached():
     unique_semantic._normalize_weight_items.cache_clear()
     weights = {"domestic_equity": 0.5, "cash": 0.5}
 
-    first = unique_semantic._normalize_current_weight_map(weights)
-    second = unique_semantic._normalize_current_weight_map(dict(weights))
+    first = unique_semantic._normalize_current_weight_map(
+        {**weights, "request_id": "first-request"}
+    )
+    second = unique_semantic._normalize_current_weight_map(
+        {**weights, "request_id": "second-request"}
+    )
     cache_info = unique_semantic._normalize_weight_items.cache_info()
 
     assert first == second
     assert cache_info.hits >= 1
+
+
+def test_current_weights_normalization_rejects_non_dict_input():
+    assert unique_semantic._normalize_current_weight_map(["not", "a", "dict"]) is None

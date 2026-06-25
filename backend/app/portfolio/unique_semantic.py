@@ -805,13 +805,23 @@ def _normalize_current_weight_map(
 ) -> Optional[Dict[str, float]]:
     """동일한 current_weights를 시뮬레이션 후보마다 다시 정규화하지 않는다."""
 
-    if not weights:
+    if not isinstance(weights, dict) or not weights:
         return None
+
     try:
+        # 실제 정규화에 사용되는 자산군만 캐시 키에 포함한다.
+        # request_id 같은 무관한 메타데이터가 달라도 동일한 비중이면 캐시를 재사용한다.
         cache_key = tuple(
-            sorted((str(asset), float(value)) for asset, value in weights.items())
+            sorted(
+                (asset, float(value))
+                for asset, value in weights.items()
+                if asset in ASSET_TICKERS
+            )
         )
     except (TypeError, ValueError):
+        return _normalize_weight_map(weights)
+
+    if not cache_key:
         return _normalize_weight_map(weights)
 
     cached = _normalize_weight_items(cache_key)
