@@ -9,6 +9,12 @@ LLM은 허용된 tax fact만 제안하고, 원문 인용·금액·세율·연도
 
 from __future__ import annotations
 
+
+
+
+import hashlib
+import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import copy
 import json
 import logging
@@ -341,13 +347,13 @@ def enrich_tax_profile_with_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
     result["facts"] = facts
 
     # fallback 적용 전 상태가 routes에 남지 않도록 다시 계산한다.
-    from .tax_parser import _build_routes
+    from .tax_parser import build_tax_routes
 
     all_mentions = [
         *(result.get("tax_mentions") or []),
         *(result.get("cost_mentions") or []),
     ]
-    result["routes"] = _build_routes(all_mentions, facts)
+    result["routes"] = build_tax_routes(all_mentions, facts)
 
     result["llm_fallback"] = {
         "status": fallback.get("status"),
@@ -368,4 +374,104 @@ def enrich_tax_profile_with_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
         "원문 검증을 통과한 허용 tax fact만 빈 필드에 보완합니다."
     ).strip()
     return result
+
+_TAX_LLM_BACKGROUND_EXECUTOR = ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="tax-llm-fallback",
+)
+_TAX_LLM_BACKGROUND_LOCK = threading.Lock()
+_TAX_LLM_BACKGROUND_FUTURES = {}
+_TAX_LLM_BACKGROUND_RESULTS = {}
+_TAX_LLM_BACKGROUND_CACHE_MAX = 256
+
+
+def _tax_llm_background_key(profile):
+    raw_text = str(
+        profile.get("raw_text")
+        or profile.get("raw")
+        or profile.get("text")
+        or ""
+    )
+    version = str(profile.get("version") or "")
+    payload = f"{version}\0{raw_text}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _tax_llm_max_wait_seconds():
+    raw = os.getenv("PORTFOLIO_TAX_LLM_MAX_WAIT_SECONDS", "0.75")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = 0.75
+    return max(0.0, min(value, 2.0))
+
+
+def _store_tax_llm_background_result(cache_key, result):
+    with _TAX_LLM_BACKGROUND_LOCK:
+        _TAX_LLM_BACKGROUND_RESULTS[cache_key] = copy.deepcopy(result)
+        _TAX_LLM_BACKGROUND_FUTURES.pop(cache_key, None)
+        while len(_TAX_LLM_BACKGROUND_RESULTS) > _TAX_LLM_BACKGROUND_CACHE_MAX:
+            oldest_key = next(iter(_TAX_LLM_BACKGROUND_RESULTS))
+            _TAX_LLM_BACKGROUND_RESULTS.pop(oldest_key, None)
+
+
+def enrich_tax_profile_with_llm_non_blocking(profile):
+    """Parser가 부족할 때만 LLM을 실행하고 calculate 지연을 제한한다."""
+
+    result = copy.deepcopy(profile)
+    if not _should_call_fallback(result):
+        return result
+
+    cache_key = _tax_llm_background_key(result)
+
+    with _TAX_LLM_BACKGROUND_LOCK:
+        cached = _TAX_LLM_BACKGROUND_RESULTS.get(cache_key)
+        if cached is not None:
+            cached_result = copy.deepcopy(cached)
+            audit = dict(cached_result.get("llm_fallback") or {})
+            audit["delivery"] = "background_cache_hit"
+            cached_result["llm_fallback"] = audit
+            return cached_result
+
+        future = _TAX_LLM_BACKGROUND_FUTURES.get(cache_key)
+        if future is None:
+            future = _TAX_LLM_BACKGROUND_EXECUTOR.submit(
+                enrich_tax_profile_with_llm,
+                copy.deepcopy(result),
+            )
+            _TAX_LLM_BACKGROUND_FUTURES[cache_key] = future
+
+    try:
+        enriched = future.result(timeout=_tax_llm_max_wait_seconds())
+    except FutureTimeoutError:
+        audit = dict(result.get("llm_fallback") or {})
+        audit.update(
+            {
+                "status": "scheduled",
+                "delivery": "conditional_non_blocking",
+                "input_hash": cache_key,
+            }
+        )
+        result["llm_fallback"] = audit
+        return result
+    except Exception:
+        with _TAX_LLM_BACKGROUND_LOCK:
+            _TAX_LLM_BACKGROUND_FUTURES.pop(cache_key, None)
+        audit = dict(result.get("llm_fallback") or {})
+        audit.update(
+            {
+                "status": "failed_background",
+                "delivery": "conditional_non_blocking",
+                "input_hash": cache_key,
+            }
+        )
+        result["llm_fallback"] = audit
+        return result
+
+    _store_tax_llm_background_result(cache_key, enriched)
+    enriched_result = copy.deepcopy(enriched)
+    audit = dict(enriched_result.get("llm_fallback") or {})
+    audit["delivery"] = "completed_within_budget"
+    enriched_result["llm_fallback"] = audit
+    return enriched_result
 

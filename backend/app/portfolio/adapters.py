@@ -39,15 +39,6 @@ from .utils import (
 
 KST = ZoneInfo("Asia/Seoul")
 
-KOREAN_MONEY_UNITS = {
-    "조": 1_000_000_000_000,
-    "억": 100_000_000,
-    "천만": 10_000_000,
-    "백만": 1_000_000,
-    "십만": 100_000,
-    "만": 10_000,
-    "천": 1_000,
-}
 
 # 금액·연도 파싱 정규식의 ReDoS 방어 상한. 정상 IPS·상담 텍스트는 이보다 훨씬 짧다.
 # 비정상적으로 긴 입력은 잘라 정규식의 위치 재스캔(O(N^2))을 상수 시간으로 묶는다.
@@ -893,6 +884,8 @@ def normalize_analysis_request_payload(
             normalized_ips = apply_tax_profile_to_ips_payload(
                 normalized_ips,
                 tax_value,
+                allow_llm_fallback=False,  # calculate/adapter 경로에서는 명시적으로 비활성화
+                llm_fallback_mode="conditional_non_blocking",
             )
 
         legal_value = (
@@ -1077,6 +1070,8 @@ def normalize_analysis_request_payload(
     analysis_payload["ips"] = apply_tax_profile_to_ips_payload(
         analysis_payload["ips"],
         tax_value,
+        allow_llm_fallback=False,  # calculate/adapter 경로에서는 명시적으로 비활성화
+        llm_fallback_mode="conditional_non_blocking",
     )
 
     return AnalysisRequest(**analysis_payload), {
