@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 
 from app.portfolio.dashboard_views import (
-    DASHBOARD_ASSET_GROUPS,
     build_dashboard_allocation_payload,
     calculate_dashboard_group_correlation_matrix,
     calculate_portfolio_risk_contribution_heatmap,

@@ -7,7 +7,7 @@ import math
 from typing import Dict, List, Optional, Any
 
 from .constants import BACKTEST_BASE_INDEX
-from .assets import ASSET_NAMES_KR, DASHBOARD_ASSET_GROUPS, RISK_LEVEL_NAME
+from .assets import RISK_LEVEL_NAME
 from .utils import safe_float, safe_round
 from .dashboard_views import build_dashboard_allocation_payload as build_grouped_allocation_payload
 from .dashboard_views import build_common_correlation_heatmap_payload as build_grouped_correlation_payload
