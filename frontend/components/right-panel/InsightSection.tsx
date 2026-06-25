@@ -88,7 +88,7 @@ export default function InsightSection() {
   const citations: InsightCitation[] = showInitial ? [] : result.data.citations;
 
   return (
-    <Card className="flex flex-1 flex-col gap-0 p-3.5">
+    <Card className="flex flex-1 flex-col gap-0 p-3.5 min-h-0">
       {/* 헤더 */}
       <div className="mb-2.5 flex shrink-0 items-center justify-between">
         <HelpTooltip text={INSIGHT_HELP}>
@@ -129,7 +129,7 @@ export default function InsightSection() {
       {/* 분석 결과 + 요약 + 출처 */}
       <div className="flex flex-1 flex-col gap-2.5 min-h-0">
         {/* 분석 결과 */}
-        <div className="flex flex-1 flex-col rounded-xl border border-brand/15 bg-brand/5 p-3 min-h-0">
+        <div className="flex flex-[2] flex-col rounded-xl border border-brand/15 bg-brand/5 p-3 min-h-[150px]">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
             <Sparkles className="size-3 text-brand" />
             <span className="text-[13px] font-extrabold tracking-wide text-brand-dark">
@@ -144,7 +144,7 @@ export default function InsightSection() {
               </span>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto pr-1 min-h-[120px]">
+          <div className="flex-1 overflow-y-auto pr-1 min-h-0">
             {showInitial ? (
               <p className="text-[13px] font-medium text-muted-foreground">
                 질문을 입력하면 AI가 실데이터로 답합니다.
@@ -162,14 +162,14 @@ export default function InsightSection() {
         </div>
 
         {/* 분석 요약 */}
-        <div className="flex flex-col rounded-xl border border-brand/15 bg-brand/5 p-3">
+        <div className="flex flex-1 flex-col rounded-xl border border-brand/15 bg-brand/5 p-3 min-h-[130px]">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
             <Sparkles className="size-3 text-brand" />
             <span className="text-[13px] font-extrabold tracking-wide text-brand-dark">
               분석 요약
             </span>
           </div>
-          <div className="max-h-[100px] overflow-y-auto pr-1">
+          <div className="flex-1 overflow-y-auto pr-1 min-h-0">
             {showInitial || isEmpty ? (
               <p className="text-[13px] font-medium text-muted-foreground">
                 요약 정보가 없습니다.
@@ -183,9 +183,9 @@ export default function InsightSection() {
         </div>
 
         {/* 출처 / 인용 목록 */}
-        <div>
-          <p className="mb-1 text-[14px] font-bold">출처 / 인용 목록</p>
-          <div className="max-h-[160px] overflow-y-auto">
+        <div className="flex flex-1 flex-col min-h-[130px]">
+          <p className="mb-1 shrink-0 text-[14px] font-bold">출처 / 인용 목록</p>
+          <div className="flex-1 overflow-y-auto min-h-0">
             {citations.length === 0 ? (
               <p className="py-1.5 text-[12px] font-medium text-muted-foreground">
                 표시할 출처가 없습니다.
