@@ -12,7 +12,6 @@ import type { CorrelationHeatmapResponse } from "@/lib/api/types";
 import {
   BACKEND_ASSET_COLORS,
   DISPLAY_GROUP_COLORS,
-  DISPLAY_GROUPS,
   toDisplayAllocation,
 } from "@/lib/assetMapping";
 
@@ -178,50 +177,91 @@ export function buildPdfPerfRows(portfolios: Portfolio[]): PdfPerfRow[] {
 }
 
 // ── 상관관계 히트맵 ───────────────────────────────────────────────────────────
+// 대시보드 CorrelationHeatmap.tsx 와 동일한 로직: 선택 포트폴리오의 비중>0 자산만
+// 골라 store 상관계수 행렬에서 부분행렬을 뽑는다. 실데이터가 없으면 학술 추정치 폴백.
 
-// 백엔드 asset_class → DISPLAY_GROUPS 인덱스 매핑
-const DISPLAY_GROUP_BACKEND: Record<string, string[]> = {
-  국내주식: ["domestic_equity"],
-  해외배당주: ["overseas_dividend"],
-  해외성장주: ["overseas_blue_chip", "overseas_growth"],
-  일반채권: ["general_bond", "cash"],
-  저쿠폰채: ["low_coupon_bond"],
-  분리과세: ["separate_tax_bond"],
+// 백엔드 heatmap asset_class(snake_case) 별 약칭 (CorrelationHeatmap.tsx 동일)
+const ASSET_ABBR: Record<string, string> = {
+  domestic_equity: "국내주",
+  overseas_dividend: "해배주",
+  overseas_blue_chip: "해성주",
+  overseas_growth: "신흥주",
+  general_bond: "국내채",
+  dollar: "해외채",
+  low_coupon_bond: "저쿠폰",
+  separate_tax_bond: "분리채",
+  reit: "리츠",
+  gold: "금",
+  commodity: "원자재",
+  cash: "현금",
 };
 
-// 분석 전 참고 상관계수 행렬 (DISPLAY_GROUPS 순서와 동일)
+// CalcUnitId(camelCase) → 백엔드 asset_class(snake_case) 역매핑 (CorrelationHeatmap.tsx 동일)
+const CALC_TO_BACKEND: Record<string, string[]> = {
+  domesticEquity: ["domestic_equity"],
+  overseasDividendEquity: ["overseas_dividend"],
+  overseasGrowthEquity: ["overseas_blue_chip"],
+  emergingEquity: ["overseas_growth"],
+  domesticBond: ["general_bond", "cash"],
+  overseasBond: ["dollar"],
+  lowCouponBond: ["low_coupon_bond"],
+  separateTaxBond: ["separate_tax_bond"],
+  reits: ["reit"],
+  gold: ["gold"],
+  infraFund: ["commodity"],
+};
+
+// 폴백 라벨(분석 전) — DISPLAY_GROUPS 순서와 동일
+const FALLBACK_LABELS = ["국내주식", "해외배당", "해외성장", "일반채권", "저쿠폰채", "분리과세"];
+
+// 분석 전 참고 상관계수 행렬 (FALLBACK_LABELS 순서와 동일)
 // 출처: 국내 금융시장 기반 학술 추정치 (주식-채권 상관관계 참고)
 const FALLBACK_CORR: number[][] = [
   [ 1.00,  0.55,  0.60, -0.10, -0.35,  0.05], // 국내주식
-  [ 0.55,  1.00,  0.65, -0.05, -0.25,  0.10], // 해외배당주
-  [ 0.60,  0.65,  1.00, -0.15, -0.40,  0.00], // 해외성장주
+  [ 0.55,  1.00,  0.65, -0.05, -0.25,  0.10], // 해외배당
+  [ 0.60,  0.65,  1.00, -0.15, -0.40,  0.00], // 해외성장
   [-0.10, -0.05, -0.15,  1.00,  0.45,  0.30], // 일반채권
   [-0.35, -0.25, -0.40,  0.45,  1.00,  0.40], // 저쿠폰채
   [ 0.05,  0.10,  0.00,  0.30,  0.40,  1.00], // 분리과세
 ];
 
+export type PdfCorrHeatmap = {
+  labels: string[];
+  matrix: number[][];
+  isFallback: boolean;
+};
+
 /**
- * correlationHeatmap(store) → 6×6 DISPLAY_GROUPS 기준 상관계수 행렬.
- * 실데이터가 없으면 학술 추정치 폴백을 사용하고 isFallback=true 를 반환한다.
+ * correlationHeatmap(store) + 선택 포트폴리오 → 히트맵 라벨·부분행렬.
+ * 대시보드 CorrelationHeatmap 과 동일하게 비중>0 자산만 추려 부분행렬을 만든다.
+ * 실데이터가 없거나 매칭 자산이 없으면 학술 추정치 폴백(isFallback=true).
  */
-export function buildPdfCorrMatrix(
+export function buildPdfCorrHeatmap(
   heatmap: CorrelationHeatmapResponse | null,
-): { matrix: number[][]; isFallback: boolean } {
-  if (!heatmap) return { matrix: FALLBACK_CORR, isFallback: true };
-  const matrix = DISPLAY_GROUPS.map((g1) => {
-    const i1 = heatmap.assets.findIndex((a) =>
-      (DISPLAY_GROUP_BACKEND[g1] ?? []).includes(a.asset_class),
+  portfolio: Portfolio | null | undefined,
+): PdfCorrHeatmap {
+  if (heatmap && portfolio) {
+    const nonZeroIds = new Set(
+      Object.entries(portfolio.weights ?? {})
+        .filter(([, w]) => (w ?? 0) > 0)
+        .flatMap(([calcId]) => CALC_TO_BACKEND[calcId] ?? []),
     );
-    return DISPLAY_GROUPS.map((g2) => {
-      if (g1 === g2) return 1;
-      const i2 = heatmap.assets.findIndex((a) =>
-        (DISPLAY_GROUP_BACKEND[g2] ?? []).includes(a.asset_class),
+    const indices = heatmap.assets
+      .map((a, i) => ({ ...a, i }))
+      .filter(({ asset_class }) => nonZeroIds.has(asset_class));
+
+    if (indices.length > 0) {
+      const labels = indices.map(
+        ({ asset_class, name }) =>
+          ASSET_ABBR[asset_class] ?? name?.slice(0, 3) ?? "",
       );
-      if (i1 === -1 || i2 === -1) return 0;
-      return heatmap.matrix[i1]?.[i2] ?? 0;
-    });
-  });
-  return { matrix, isFallback: false };
+      const matrix = indices.map(({ i }) =>
+        indices.map(({ i: j }) => heatmap.matrix[i]?.[j] ?? 0),
+      );
+      return { labels, matrix, isFallback: false };
+    }
+  }
+  return { labels: FALLBACK_LABELS, matrix: FALLBACK_CORR, isFallback: true };
 }
 
 /** 히트맵 셀 배경색 (CorrelationHeatmap.tsx와 동일 공식) */
