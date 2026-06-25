@@ -62,6 +62,20 @@ const DEFAULT_CLIENT_TAX_PROFILE = {
   | "isaOpened"
 >;
 
+// 신규/미상담 고객의 중립 IPS 폴백. 백엔드 DEFAULT_IPS_TEMPLATE(clients.py)와 동일 취지다.
+// 주의: lib/mockData의 IPS_DEFAULT는 김성삼 페르소나 값이라 신규 고객 폴백으로 쓰면 안 된다
+// (이전 고객 IPS 누수 = 이 변경이 고치려는 버그). 그래서 별도 중립 상수를 둔다.
+const NEUTRAL_IPS = {
+  goal: "안정적 자산 운용 및 장기 수익 추구",
+  returnPct: 5,
+  risk: "균형형",
+  timeYears: 10,
+  tax: "금융소득종합과세 대비",
+  liquidity: "중간",
+  legal: "특이사항 없음",
+  unique: "사전 상담 전 기본 프로파일",
+} as const;
+
 function toDashboardCustomer(client: ListedClient): Customer {
   const persona = CUSTOMERS.find((c) => c.name === client.name);
   const safeClientId = client.clientId || "";
@@ -195,9 +209,18 @@ export default function Sidebar() {
       // 스냅샷 없음(신규/미상담 고객) → IPS 조율기가 이전 고객·페르소나 값으로
       // 남지 않도록 백엔드 최초 IPS(DEFAULT_IPS_TEMPLATE)를 불러와 채운 뒤 분석한다.
       // handleAnalyze는 store의 최신 IPS를 읽으므로 setIps 직후 호출해도 반영된다.
+      // 불러오기 실패·clientId 없음(데모 고객) 시에는 중립 IPS로 명시 초기화해
+      // 이전 고객 값이 남지 않게 한다. 부분 응답도 중립값 위에 병합해 누락 필드를 막는다.
       if (customer.clientId) {
         const initial = await fetchInitialIps(customer.clientId);
-        if (initial.source === "live" && initial.data) setIps(initial.data);
+        if (useDashboardStore.getState().selectedCustomerId !== customer.id) return;
+        setIps(
+          initial.source === "live" && initial.data
+            ? { ...NEUTRAL_IPS, ...initial.data }
+            : NEUTRAL_IPS,
+        );
+      } else {
+        setIps(NEUTRAL_IPS);
       }
       void handleAnalyzeRef.current?.();
     })();
