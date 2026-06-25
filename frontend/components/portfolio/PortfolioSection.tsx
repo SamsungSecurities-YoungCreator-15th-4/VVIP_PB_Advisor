@@ -63,13 +63,6 @@ export default function PortfolioSection() {
               <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
               연동 완료
             </div>
-          ) : portfolioNote !== undefined ? (
-            <div
-              className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700"
-              title={portfolioNote}
-            >
-              ⚠ 데모
-            </div>
           ) : null}
         </div>
         {portfolioSource !== "fallback" && (

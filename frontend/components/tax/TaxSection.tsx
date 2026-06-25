@@ -94,12 +94,12 @@ export default function TaxSection() {
 
   // 절세 효과 헤드라인: 스트레스 모드면 taxSource(stressed) headline, 아니면 calculate saved_vs_current
   const annualSavingManwon = isStressMode
-    ? (taxSource?.headline.annual_tax_saving != null
-        ? Math.round(taxSource.headline.annual_tax_saving / 10000)
-        : null)
-    : (selectedTax
-        ? Math.round(selectedTax.saved_vs_current / 10000)
-        : null);
+    ? taxSource?.headline.annual_tax_saving != null
+      ? Math.round(taxSource.headline.annual_tax_saving / 10000)
+      : null
+    : selectedTax
+      ? Math.round(selectedTax.saved_vs_current / 10000)
+      : null;
 
   // 실효세 절감: taxSource.headline의 세전→세후 실효세 (만원)
   const effectiveTaxBeforeMan =
@@ -130,7 +130,8 @@ export default function TaxSection() {
   // 종합과세 게이지: 스트레스 모드면 포트폴리오별 taxOptEntry gauge 우선, 아니면 calculate gauge
   const gaugeData =
     (isStressMode
-      ? (taxOptEntry?.financial_income_tax_gauge ?? stressTax?.stressed?.financial_income_tax_gauge)
+      ? (taxOptEntry?.financial_income_tax_gauge ??
+        stressTax?.stressed?.financial_income_tax_gauge)
       : null) ??
     selectedTax?.gauge ??
     null;
@@ -140,7 +141,11 @@ export default function TaxSection() {
 
   const baseLabel = selectedPortfolio?.name ?? "포트폴리오";
 
-  if (portfolioSource === "fallback" && portfolioNote === undefined && !analyzing) {
+  if (
+    portfolioSource === "fallback" &&
+    portfolioNote === undefined &&
+    !analyzing
+  ) {
     return (
       <section>
         <div className="mb-2 px-0.5">
@@ -170,11 +175,7 @@ export default function TaxSection() {
               <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
               연동 완료
             </div>
-          ) : (
-            <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-              ⚠ 데모
-            </div>
-          )}
+          ) : null}
         </div>
         <TabsList className="h-auto rounded-lg bg-muted p-0.5">
           <TabsTrigger
