@@ -12,6 +12,8 @@ app = FastAPI(title="VVIP Asset Advisor Hub API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
+    # 고정 목록(localhost 등) 외에 Vercel 배포 도메인은 정규식으로 허용(프리뷰 URL 가변).
+    allow_origin_regex=settings.allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
