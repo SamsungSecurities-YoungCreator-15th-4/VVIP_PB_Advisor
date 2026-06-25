@@ -22,6 +22,7 @@ from app.core.auth import get_current_pb_id
 from pydantic import BaseModel, model_validator
 
 from app.core.azure_openai import get_llm_client, get_llm_deployment
+from app.rag.generate import strip_markdown
 from app.services.dart_finance import FINANCE_FIELDS, FinancialResult, fetch_financials
 from app.services.dart_resolve import resolve_corp_code
 
@@ -107,7 +108,9 @@ def _summarize(corp_name: str, fin: FinancialResult) -> str:
             temperature=0,
         )
         if resp.choices and resp.choices[0].message.content:
-            return resp.choices[0].message.content.strip()
+            # 프롬프트로 마크다운을 금지해도 모델이 ###·**를 내보낼 때가 있어
+            # rag 인사이트와 동일하게 서버에서 한 번 더 기호를 제거한다.
+            return strip_markdown(resp.choices[0].message.content)
         raise RuntimeError("LLM 응답이 비어 있음")
     except Exception:
         # 키·민감정보가 섞일 수 있으나 우리 RuntimeError 는 값을 담지 않는다. 스택만 남김.
