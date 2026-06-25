@@ -171,6 +171,22 @@ export default function Sidebar() {
               setCorrelationHeatmap(dr.correlationHeatmap);
             if (dr.portfolioTax) setPortfolioTax(dr.portfolioTax);
             setTaxOptimizer(dr.taxOptimizer ?? null);
+            // 대시보드와 같은 회차의 IPS도 함께 복원(IPS 조율기가 빈 채로 남지 않도록).
+            const restoredCid = dashRes.data.consultation_id;
+            if (restoredCid) {
+              const detail = await loadConsultationDetail(
+                customer.clientId,
+                restoredCid,
+              );
+              // 비동기 동안 고객이 바뀌었으면 이전 고객 데이터를 새 화면에 반영하지 않는다.
+              if (useDashboardStore.getState().selectedCustomerId !== customer.id)
+                return;
+              if (detail.source === "live") {
+                setConsultationId(detail.data.consultationId);
+                if (Object.keys(detail.data.ips).length > 0)
+                  setIps(detail.data.ips);
+              }
+            }
             return; // 스냅샷 복원 성공 → 신규 분석 스킵
           }
         }
@@ -178,7 +194,7 @@ export default function Sidebar() {
       // 스냅샷 없거나 clientId 미보유 → 신규 분석하기
       void handleAnalyzeRef.current?.();
     })();
-  }, [customer, liveBaseLoaded, portfolioSource, analyzing, setPortfolios, setCorrelationHeatmap, setPortfolioTax, setTaxOptimizer]);
+  }, [customer, liveBaseLoaded, portfolioSource, analyzing, setPortfolios, setCorrelationHeatmap, setPortfolioTax, setTaxOptimizer, setConsultationId, setIps]);
 
   // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
@@ -395,12 +411,19 @@ export default function Sidebar() {
     setLoadingId(consultationId);
     setHasFreshStt(false); // 과거 로드 시에는 스냅샷 저장 안 함
     const res = await loadConsultationDetail(customer.clientId, consultationId);
+    // 비동기 동안 고객이 바뀌었으면 이전 고객의 데이터·요청을 새 화면에 섞지 않는다.
+    if (useDashboardStore.getState().selectedCustomerId !== customer.id) {
+      setLoadingId(null);
+      return;
+    }
     if (res.source === "live") {
       setTranscript(res.data.transcript, "live");
       setConsultationId(res.data.consultationId);
       if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
-      // 가장 최근 저장된 대시보드 스냅샷으로 중앙 대시보드 복원
-      const dashRes = await getPreviousDashboard(customer.clientId);
+      // 선택한 '그 회차'의 대시보드 스냅샷으로 복원(최신이 아니라 해당 회차).
+      const dashRes = await getPreviousDashboard(customer.clientId, {
+        consultationId,
+      });
       if (dashRes.source === "live" && dashRes.data) {
         const dr = dashRes.data
           .dashboard_result as unknown as PortfolioCalcData;
