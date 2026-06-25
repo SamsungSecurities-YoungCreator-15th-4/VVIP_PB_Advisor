@@ -195,6 +195,12 @@ def build_tax_payload(
         },
         "saved_vs_current": safe_round(saved_vs_current, 0),
         "summary": build_tax_summary(portfolio, saved_vs_current),
+        # 종합과세 임계선 게이지 — 프론트 TaxGauge 컴포넌트가 포트폴리오 선택 시
+        # mock(520만원 고정) 대신 실계산 금융소득을 표시하는 데 사용.
+        # 출처: tax_accounts.calculate_financial_income_comprehensive_tax_status()["gauge"]
+        "financial_income_tax_gauge": (
+            tax_breakdown.get("financial_income_comprehensive_tax") or {}
+        ).get("gauge"),
         "calculation_notes": [
             "transaction_cost와 fx_cost는 현재 계산 로직에 별도 모델이 없어 0으로 표시합니다.",
             "세금 계산은 하드코딩 규칙표 기반 간이 추정입니다.",
