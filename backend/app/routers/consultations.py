@@ -314,7 +314,9 @@ async def create_realtime_stt_consultation(websocket: WebSocket) -> None:
         logger.info("Realtime STT websocket disconnected")
         await _stop_realtime_transcript_task(transcript_task)
         if transcriber:
-            await run_in_threadpool(transcriber.stop)
+            # 안전 래퍼로 정리한다. 클라이언트가 이미 떠난 상태라 stop() 실패를
+            # 다시 올리면 ASGI 500 만 남으므로 로그만 남기고 삼킨다.
+            await _stop_realtime_transcriber(transcriber)
     except ValueError as exc:
         await _stop_realtime_transcript_task(transcript_task)
         if transcriber:

@@ -143,20 +143,26 @@ class RealtimeConversationTranscriber:
 
         # 입력 스트림을 먼저 닫아 더 이상 들어올 오디오가 없음을 알린다.
         self._push_stream.close()
-        started_at = time.monotonic()
 
+        # 세션 종료를 '먼저' 요청해야 session_stopped 가 발생한다. 스트림 close 만으로는
+        # session_stopped 가 안 와 대기가 매번 타임아웃됐다. stop_transcribing_async().get()
+        # 은 종료까지 블로킹하므로 반환 시점엔 보통 _done 이 이미 설정돼 있다.
         try:
-            while not self._done:
-                if time.monotonic() - started_at > timeout_seconds:
-                    raise RuntimeError(
-                        "실시간 STT 전사 종료가 제한 시간을 초과했습니다."
-                    )
-                time.sleep(0.1)
-        finally:
-            try:
-                self._transcriber.stop_transcribing_async().get()
-            except Exception as cleanup_error:
-                logger.warning("Realtime STT session cleanup failed: %s", cleanup_error)
+            self._transcriber.stop_transcribing_async().get()
+        except Exception as cleanup_error:
+            logger.warning("Realtime STT session cleanup failed: %s", cleanup_error)
+
+        # 콜백(_done)이 약간 늦을 수 있어 짧게 대기한다. 초과해도 '예외 없이' 부분 결과로
+        # 종료한다 — 인식된 세그먼트는 transcribed 콜백으로 이미 모두 수집돼 있으므로
+        # session_stopped 미수신만으로 전사 결과를 버리거나 500 을 내지 않는다.
+        started_at = time.monotonic()
+        while not self._done and time.monotonic() - started_at <= timeout_seconds:
+            time.sleep(0.05)
+        if not self._done:
+            logger.warning(
+                "Realtime STT: session_stopped 미수신 — 부분 결과(%s건)로 종료합니다.",
+                len(self._results),
+            )
 
         cancellation_error = self._cancellation_error
         if cancellation_error is not None:
