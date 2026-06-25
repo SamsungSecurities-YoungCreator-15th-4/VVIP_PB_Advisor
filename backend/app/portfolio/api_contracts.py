@@ -160,6 +160,24 @@ class BenchmarkComparisonsResponse(ExtensibleModel):
     msci_acwi: Optional[BenchmarkComparisonResponse] = None
 
 
+class MetricRangeResponse(ExtensibleModel):
+    """Monte Carlo 지표 분위수의 프론트 표시용 퍼센트 응답."""
+
+    p10: Optional[float] = Field(None, description="%")
+    p20: Optional[float] = Field(None, description="%")
+    p50: Optional[float] = Field(None, description="%")
+    p80: Optional[float] = Field(None, description="%")
+    p90: Optional[float] = Field(None, description="%")
+    lower: Optional[float] = Field(None, description="표시 범위 하단값(%)")
+    center: Optional[float] = Field(None, description="표시 범위 중앙값(%)")
+    upper: Optional[float] = Field(None, description="표시 범위 상단값(%)")
+    lower_percentile: Optional[int] = None
+    center_percentile: Optional[int] = None
+    upper_percentile: Optional[int] = None
+    unit: Literal["percent"] = "percent"
+    direction: Literal["higher_is_better"] = "higher_is_better"
+
+
 class PortfolioMetricsResponse(ExtensibleModel):
     expected_return: float = Field(description="%")
     volatility: float = Field(description="%")
@@ -171,6 +189,8 @@ class PortfolioMetricsResponse(ExtensibleModel):
     selected_benchmark_key: Optional[str] = None
     benchmark_comparisons: BenchmarkComparisonsResponse = Field(default_factory=BenchmarkComparisonsResponse)
     after_tax_return: float = Field(description="%")
+    after_tax_return_range: Optional[MetricRangeResponse] = None
+    mdd_range: Optional[MetricRangeResponse] = None
 
 
 class PortfolioMetricsKRWResponse(ExtensibleModel):

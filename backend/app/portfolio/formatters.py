@@ -19,6 +19,52 @@ def rate_to_percent(value: Any, digits: int = 2) -> float:
     return safe_round(safe_float(value) * 100.0, digits)
 
 
+def build_metric_range_payload(
+    range_payload: Any,
+) -> Optional[Dict[str, Any]]:
+    """내부 rate Range를 프론트 표시용 percent 응답으로 제한해 변환한다."""
+    if not isinstance(range_payload, dict) or not range_payload:
+        return None
+
+    rate_value_keys = (
+        "p10",
+        "p20",
+        "p50",
+        "p80",
+        "p90",
+        "lower",
+        "center",
+        "upper",
+    )
+    metadata_keys = (
+        "lower_percentile",
+        "center_percentile",
+        "upper_percentile",
+        "direction",
+    )
+
+    if not any(
+        range_payload.get(key) is not None
+        for key in rate_value_keys
+    ):
+        return None
+
+    # 프론트에는 분위수 % 값과 표시 메타데이터만 전달한다.
+    # 내부 rate 원본, 원화 금액 및 예상치 못한 추가 키는 노출하지 않는다.
+    payload = {
+        key: range_payload[key]
+        for key in (*rate_value_keys, *metadata_keys)
+        if range_payload.get(key) is not None
+    }
+
+    for key in rate_value_keys:
+        if key in payload:
+            payload[key] = rate_to_percent(payload[key])
+
+    payload["unit"] = "percent"
+    return payload
+
+
 def round_allocation_percentages(
     asset_weights: List[tuple[str, float]],
 ) -> Dict[str, float]:
@@ -104,6 +150,12 @@ def build_metrics_payload(
             {},
         ),
         "after_tax_return": rate_to_percent(metrics["after_tax_return"]),
+        "after_tax_return_range": build_metric_range_payload(
+            metrics.get("after_tax_return_range")
+        ),
+        "mdd_range": build_metric_range_payload(
+            metrics.get("mdd_range")
+        ),
     }
 
 
