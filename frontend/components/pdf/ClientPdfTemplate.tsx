@@ -3,7 +3,7 @@
  * 구조: 표지 → 시장&IPS → 포트폴리오 비교&지표 → 절세&계좌 → 분산투자&상관관계
  */
 
-import { DISPLAY_GROUPS } from "@/lib/assetMapping";
+import { DISPLAY_GROUPS, toDisplayAllocation } from "@/lib/assetMapping";
 import { useDashboardStore } from "@/lib/store";
 import { buildPdfTaxEffect, buildPdfTaxAdvice, extractTaxOptimizerEntry } from "@/lib/pdfTaxData";
 
@@ -58,9 +58,13 @@ const ASSET_GROUPS = [
   { label: "저쿠폰채", color: "#6FA8FF" },
   { label: "분리과세", color: "#93BEFF" },
 ];
-const WEIGHTS = {
-  a: [20, 22, 12, 18, 14, 14],
-};
+// 포트폴리오 비중을 화면 6분류(DISPLAY_GROUPS 순서) 정수 비중(%)으로 변환.
+// 대시보드 도넛과 동일한 매핑을 써 PDF 수치를 대시보드와 일치시킨다.
+function allocationPct(
+  weights: Parameters<typeof toDisplayAllocation>[0],
+): number[] {
+  return toDisplayAllocation(weights).map((d) => Math.round(d.weight));
+}
 
 const getTodayShort = () =>
   new Date()
@@ -678,15 +682,6 @@ function MarketIpsPage() {
 
 // ── Page 3: 포트폴리오 비교 & 지표 설명 ───────────────────────────
 
-const ASSET_LABELS_A = [
-  "국내주식 20%",
-  "해외배당주 22%",
-  "해외성장주 12%",
-  "일반채권 18%",
-  "저쿠폰채 14%",
-  "분리과세 ETF 14%",
-];
-
 const METRIC_CARDS = [
   {
     num: "①",
@@ -739,6 +734,18 @@ function PortfolioPage() {
   if (!portCurrent || !portA) return null;
   const cur = portCurrent.metrics;
   const a = portA.metrics;
+  const C = useSelectedCustomer();
+  // 추천(포트폴리오 A)의 자산 배분 칩 — 대시보드 도넛과 동일 매핑으로 store에서 생성.
+  const assetLabelsA = toDisplayAllocation(portA.weights).map(
+    (d) => `${d.group} ${Math.round(d.weight)}%`,
+  );
+  // 포트폴리오 A 선택 시 현재 대비 연간 세후수익 개선액(만원) = 세후수익률 차이 × 운용자산.
+  // 세후수익률은 %, 운용자산은 억원 → 억원×10000=만원.
+  const afterTaxImproveManwon = Math.round(
+    ((a.afterTaxReturnPct - cur.afterTaxReturnPct) / 100) *
+      (C?.aumEokwon ?? 0) *
+      10000,
+  );
 
   return (
     <div
@@ -1008,7 +1015,7 @@ function PortfolioPage() {
             <span style={{ fontSize: 10, fontWeight: 700, color: MUTED }}>
               자산 배분 구성
             </span>
-            {ASSET_LABELS_A.map((t) => (
+            {assetLabelsA.map((t) => (
               <span
                 key={t}
                 style={{
@@ -1045,7 +1052,8 @@ function PortfolioPage() {
             포트폴리오 A 선택 시 현재 대비 연간 세후수익
           </span>
           <span style={{ fontSize: 13, fontWeight: 800, color: BRAND }}>
-            +2,700만원 개선
+            {afterTaxImproveManwon >= 0 ? "+" : ""}
+            {afterTaxImproveManwon.toLocaleString()}만원 개선
           </span>
           <span style={{ fontSize: 10, color: MUTED }}>예상됩니다.</span>
         </div>
@@ -1122,6 +1130,13 @@ function TaxPage() {
   const C = useSelectedCustomer();
   const taxOptimizerMap = useDashboardStore((s) => s.taxOptimizer);
   const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  // 절세 계좌 배치 바는 절세 화면과 동일하게 '선택한 포트폴리오'의 자산배분을 따른다.
+  const selectedPf =
+    storePortfolios.find((p) => p.id === selectedPortfolioId) ??
+    storePortfolios.find((p) => p.id === "a") ??
+    storePortfolios[0];
+  const selectedAlloc = selectedPf ? allocationPct(selectedPf.weights) : [];
   const taxOptimizerEntry = extractTaxOptimizerEntry(taxOptimizerMap, selectedPortfolioId);
   const taxEffect = buildPdfTaxEffect(taxOptimizerEntry);
   const taxAdvice = buildPdfTaxAdvice(taxOptimizerEntry);
@@ -1403,7 +1418,7 @@ function TaxPage() {
                     <div
                       key={g.label}
                       style={{
-                        width: `${WEIGHTS.a[i]}%`,
+                        width: `${selectedAlloc[i] ?? 0}%`,
                         height: "100%",
                         background: g.color,
                       }}
@@ -1443,7 +1458,7 @@ function TaxPage() {
                         flexShrink: 0,
                       }}
                     />
-                    {g.label} {WEIGHTS.a[i]}%
+                    {g.label} {selectedAlloc[i] ?? 0}%
                   </span>
                 ))}
               </div>
