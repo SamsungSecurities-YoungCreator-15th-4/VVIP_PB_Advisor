@@ -17,7 +17,14 @@ import {
   SCENARIO_BASE,
   TAX_THRESHOLD,
 } from "./mockData";
-import type { ApiResult, DataSource, InsightData } from "./api";
+import type {
+  ApiResult,
+  DataSource,
+  InsightData,
+  CorrelationHeatmapResponse,
+  PortfolioTaxResponse,
+  StressTaxData,
+} from "./api";
 
 export interface IpsState {
   returnPct: number;
@@ -57,18 +64,44 @@ interface DashboardState {
   sttNote?: string;
 
   // ── 포트폴리오 계산 결과 ──
+  /** 항상 화면에 표시되는 단일 포트폴리오 배열 (base·stress 모드 모두 여기서 읽는다) */
   portfolios: Portfolio[];
+  /** 마지막 /portfolio/calculate 결과 — stress PnL 델타 계산의 기준선 */
+  basePortfolios: Portfolio[];
   portfolioSource: DataSource;
   portfolioNote?: string;
+  /** calculate 결과로 portfolios·basePortfolios 동시 갱신, isStressMode: false */
   setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
+  /** stress-metrics 결과를 portfolios에 반영 (basePortfolios는 유지), isStressMode: true */
+  setStressPortfolios: (portfolios: Portfolio[]) => void;
 
-  // ── 스트레스 테스트 결과 ──
-  stressedPortfolios: Portfolio[];
+  // ── 스트레스 모드 상태 ──
   isStressMode: boolean;
-  stressAnalyzing: boolean;
-  setStressedPortfolios: (portfolios: Portfolio[]) => void;
-  setStressAnalyzing: (v: boolean) => void;
+  stressPreset: "current" | "crisis" | "war" | null;
+  setStressPreset: (preset: "current" | "crisis" | "war" | null) => void;
+  /** portfolios를 basePortfolios로 복원, isStressMode: false */
   clearStressMode: () => void;
+
+  // ── 히트맵·절세 데이터 ──
+  correlationHeatmap: CorrelationHeatmapResponse | null;
+  setCorrelationHeatmap: (h: CorrelationHeatmapResponse | null) => void;
+  /** 포트폴리오 kind("current" | "A" | "B") 별 절세 데이터 */
+  portfolioTax: Record<string, PortfolioTaxResponse> | null;
+  setPortfolioTax: (tax: Record<string, PortfolioTaxResponse>) => void;
+  /** stress-metrics 응답의 base_tax/stressed_tax 쌍 — TaxSection 연동용 */
+  stressTax: { base: StressTaxData; stressed: StressTaxData } | null;
+  setStressTax: (tax: { base: StressTaxData; stressed: StressTaxData } | null) => void;
+
+  // ── 분析하기 버튼 상태 ──
+  analyzing: boolean;
+  setAnalyzing: (v: boolean) => void;
+  /** IPS·시나리오 기준선 — 마지막 분석 시점을 기록해 다음 분析 시 변화 여부 판단에 사용 */
+  lastAnalyzedIps: IpsState | null;
+  lastAnalyzedScenario: { ratePct: number; fxKrw: number } | null;
+  setAnalysisBaseline: (
+    ips: IpsState,
+    scenario: { ratePct: number; fxKrw: number },
+  ) => void;
 
   // ── 상단바 실시간 시장 지표 ──
   // MacroTicker 가 /api/macro-indicators 로 받은 실데이터를 여기에 올려, PDF 등
@@ -120,19 +153,33 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
   // 초기 포트폴리오는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
   portfolios: PORTFOLIOS,
+  basePortfolios: PORTFOLIOS,
   portfolioSource: "fallback" as DataSource,
   portfolioNote: "포트폴리오를 계산 중입니다.",
   setPortfolios: (portfolios, source, note) =>
-    set({ portfolios, portfolioSource: source, portfolioNote: note }),
+    set({ portfolios, basePortfolios: portfolios, portfolioSource: source, portfolioNote: note, isStressMode: false }),
+  setStressPortfolios: (portfolios) =>
+    set({ portfolios, isStressMode: true }),
 
-  stressedPortfolios: [],
   isStressMode: false,
-  stressAnalyzing: false,
-  setStressedPortfolios: (portfolios) =>
-    set({ stressedPortfolios: portfolios, isStressMode: true }),
-  setStressAnalyzing: (v) => set({ stressAnalyzing: v }),
+  stressPreset: "current",
+  setStressPreset: (preset) => set({ stressPreset: preset }),
   clearStressMode: () =>
-    set({ stressedPortfolios: [], isStressMode: false }),
+    set((s) => ({ portfolios: s.basePortfolios, isStressMode: false })),
+
+  correlationHeatmap: null,
+  setCorrelationHeatmap: (h) => set({ correlationHeatmap: h }),
+  portfolioTax: null,
+  setPortfolioTax: (tax) => set({ portfolioTax: tax }),
+  stressTax: null,
+  setStressTax: (tax) => set({ stressTax: tax }),
+
+  analyzing: false,
+  setAnalyzing: (v) => set({ analyzing: v }),
+  lastAnalyzedIps: null,
+  lastAnalyzedScenario: null,
+  setAnalysisBaseline: (ips, scenario) =>
+    set({ lastAnalyzedIps: ips, lastAnalyzedScenario: scenario }),
 
   macroIndicators: MACRO_INDICATORS,
   setMacroIndicators: (rows) => set({ macroIndicators: rows }),

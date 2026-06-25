@@ -9,6 +9,7 @@ import { ApiError, apiPost } from "@/lib/api";
 import { PORTFOLIOS, type BacktestPoint, type Portfolio, type PortfolioMetrics } from "@/lib/mockData";
 import type { CalcUnitWeights } from "@/lib/assetMapping";
 import { type ApiResult, fallback, live } from "./result";
+import type { CorrelationHeatmapResponse, PortfolioTaxResponse, StressTaxData, TaxWaterfallResponse } from "./types";
 
 // ── 백엔드 응답 타입 ───────────────────────────────────────────
 interface BackendAllocationItem {
@@ -44,6 +45,20 @@ interface BackendBenchmarkItem {
   backtest: BackendBacktestPoint[];
 }
 
+interface BackendPortfolioTax {
+  waterfall?: {
+    gross_return: number;
+    dividend_interest_tax: number;
+    capital_gains_tax: number;
+    transaction_cost: number;
+    fx_cost: number;
+    after_tax: number;
+  };
+  saved_vs_current?: number;
+  summary?: string;
+  calculation_notes?: string[];
+}
+
 interface BackendPortfolioItem {
   kind: string; // "current" | "A" | "B"
   label: string;
@@ -57,6 +72,7 @@ interface BackendPortfolioItem {
     sp500?: BackendBenchmarkItem;
     msci_acwi?: BackendBenchmarkItem;
   };
+  tax?: BackendPortfolioTax;
 }
 
 interface PortfolioCalculateResponse {
@@ -64,6 +80,11 @@ interface PortfolioCalculateResponse {
   calculation_session_id: string;
   risk_profile: string;
   as_of: string;
+  correlation_heatmap?: {
+    assets: { asset_class: string; name: string }[];
+    matrix: number[][];
+    value_type?: string;
+  };
 }
 
 // ── IPS 값 변환 ────────────────────────────────────────────────
@@ -184,6 +205,7 @@ interface PortfolioStressTestResponse {
   as_of: string;
 }
 
+
 // ── 요청 옵션 ─────────────────────────────────────────────────
 export interface PortfolioCalcOptions {
   aumEokwon: number;
@@ -201,6 +223,27 @@ export interface PortfolioCalcOptions {
 export interface PortfolioCalcData {
   portfolios: Portfolio[];
   calculationSessionId: string;
+  correlationHeatmap: CorrelationHeatmapResponse | null;
+  portfolioTax: Record<string, PortfolioTaxResponse> | null;
+}
+
+function extractPortfolioTax(
+  items: BackendPortfolioItem[],
+): Record<string, PortfolioTaxResponse> | null {
+  const result: Record<string, PortfolioTaxResponse> = {};
+  let hasAny = false;
+  for (const item of items) {
+    if (item.tax?.waterfall) {
+      result[item.kind] = {
+        waterfall: item.tax.waterfall as TaxWaterfallResponse,
+        saved_vs_current: item.tax.saved_vs_current ?? 0,
+        summary: item.tax.summary ?? "",
+        calculation_notes: item.tax.calculation_notes ?? [],
+      };
+      hasAny = true;
+    }
+  }
+  return hasAny ? result : null;
 }
 
 // ── 메인 함수 ─────────────────────────────────────────────────
@@ -239,14 +282,145 @@ export async function fetchPortfolioCalculate(
     return live({
       portfolios: res.portfolios.map(mapPortfolioItem),
       calculationSessionId: res.calculation_session_id,
+      correlationHeatmap: (res.correlation_heatmap as CorrelationHeatmapResponse) ?? null,
+      portfolioTax: extractPortfolioTax(res.portfolios),
     });
   } catch (err) {
     const note =
       err instanceof ApiError && err.isTimeout
         ? "응답 시간 초과로 데모 포트폴리오를 표시합니다."
         : "백엔드 연결 실패로 데모 포트폴리오를 표시합니다.";
-    return fallback({ portfolios: PORTFOLIOS, calculationSessionId: "" }, note);
+    return fallback(
+      { portfolios: PORTFOLIOS, calculationSessionId: "", correlationHeatmap: null, portfolioTax: null },
+      note,
+    );
   }
+}
+
+// ── stress-metrics (금리·환율 충격 → 기준/스트레스 지표 비교) ──
+interface StressMetricsBackendMetrics {
+  expected_return?: number | null;
+  mdd?: number | null;
+  after_tax_return?: number | null;
+  volatility?: number | null;
+}
+
+interface StressMetricsBackendResponse {
+  base: StressMetricsBackendMetrics;
+  stressed: StressMetricsBackendMetrics;
+  portfolio_shock: number;
+  base_tax?: StressTaxData | null;
+  stressed_tax?: StressTaxData | null;
+}
+
+/** fetchStressMetrics 반환값 — 스트레스 포트폴리오 배열 + 절세 세금 데이터 쌍 */
+export interface StressMetricsResult {
+  portfolios: Portfolio[];
+  stressTax: { base: StressTaxData; stressed: StressTaxData } | null;
+}
+
+export interface StressMetricsOptions {
+  aumEokwon: number;
+  returnPct: number;
+  risk: "안정형" | "균형형" | "공격형";
+  timeYears: number;
+  liquidity: "낮음" | "중간" | "높음";
+  tax: string;
+  /** 현재 시나리오 슬라이더 값 */
+  ratePct: number;
+  fxKrw: number;
+  /** 실시간 기준값 — 슬라이더 충격 계산의 기준점 */
+  liveRatePct: number;
+  liveFxKrw: number;
+  /** 프리셋 버튼 선택 여부: crisis → crisis_2008, war → crisis_ru_war, null → 슬라이더 */
+  stressPreset: "current" | "crisis" | "war" | null;
+}
+
+/**
+ * POST /portfolio/stress-metrics
+ * 충격 후 기준/스트레스 지표를 받아 stressedPortfolios(Portfolio[])로 변환한다.
+ * - current 포트폴리오: 백엔드 stressed 값 직접 사용
+ * - A/B 포트폴리오: portfolio_shock(소수)를 기준 수익률에 가산해 근사
+ */
+export async function fetchStressMetrics(
+  opts: StressMetricsOptions,
+  currentPortfolios: Portfolio[],
+): Promise<StressMetricsResult> {
+  const scenarioKey =
+    opts.stressPreset === "crisis"
+      ? ("crisis_2008" as const)
+      : opts.stressPreset === "war"
+        ? ("crisis_ru_war" as const)
+        : null;
+
+  // 슬라이더 모드: 슬라이더 값과 실시간 기준값의 차이를 충격으로 변환
+  const rateShock = scenarioKey
+    ? 0
+    : (opts.ratePct - opts.liveRatePct) / 100; // %p → 소수
+  const fxShock = scenarioKey
+    ? 0
+    : (opts.fxKrw - opts.liveFxKrw) / Math.max(opts.liveFxKrw, 1); // 상대 변화율
+
+  const body = {
+    portfolio: {
+      total_asset: opts.aumEokwon * 100_000_000,
+      unique_need_amount: 0,
+      unique_asset: "general_bond",
+      target_after_tax_return:
+        opts.returnPct > 0 ? opts.returnPct / 100 : undefined,
+      risk_profile: mapRisk(opts.risk),
+      investment_horizon_years: Math.max(1, Math.min(50, opts.timeYears)),
+      tax_sensitivity: mapTax(opts.tax),
+      liquidity_need: mapLiquidity(opts.liquidity),
+      stress_interest_rate_shock: rateShock,
+      stress_fx_shock: fxShock,
+    },
+    scenario: scenarioKey,
+  };
+
+  const res = await apiPost<StressMetricsBackendResponse>(
+    "/portfolio/stress-metrics",
+    body,
+    { timeoutMs: 60_000 },
+  );
+
+  const portfolioShockDeltaPct = (res.portfolio_shock ?? 0) * 100; // 소수 → %p
+
+  const portfolios = currentPortfolios.map((p) => {
+    if (p.id === "current") {
+      return {
+        ...p,
+        metrics: {
+          ...p.metrics,
+          expectedReturnPct:
+            res.stressed.expected_return ?? p.metrics.expectedReturnPct,
+          mddPct: Math.abs(res.stressed.mdd ?? -p.metrics.mddPct),
+          afterTaxReturnPct:
+            res.stressed.after_tax_return ?? p.metrics.afterTaxReturnPct,
+          volatilityPct:
+            res.stressed.volatility ?? p.metrics.volatilityPct,
+        },
+      };
+    }
+    // A/B: portfolio_shock 근사 적용
+    return {
+      ...p,
+      metrics: {
+        ...p.metrics,
+        expectedReturnPct:
+          p.metrics.expectedReturnPct + portfolioShockDeltaPct,
+        afterTaxReturnPct:
+          p.metrics.afterTaxReturnPct + portfolioShockDeltaPct,
+      },
+    };
+  });
+
+  const stressTax =
+    res.base_tax && res.stressed_tax
+      ? { base: res.base_tax, stressed: res.stressed_tax }
+      : null;
+
+  return { portfolios, stressTax };
 }
 
 // ── 스트레스 테스트 (슬라이더 시나리오 값으로 전체 재계산) ──────

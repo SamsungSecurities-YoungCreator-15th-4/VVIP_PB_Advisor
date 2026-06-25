@@ -30,17 +30,14 @@ export default function PortfolioSection() {
   const {
     selectedPortfolioId, selectPortfolio,
     portfolios, portfolioSource, portfolioNote, setPortfolios,
-    stressedPortfolios, isStressMode, stressAnalyzing,
+    setCorrelationHeatmap, setPortfolioTax,
     selectedCustomerId, customers,
     ips, liveBase, consultationId,
+    analyzing,
   } = useDashboardStore();
-
-  const displayPortfolios = isStressMode && stressedPortfolios.length > 0
-    ? stressedPortfolios
-    : portfolios;
   const [calculating, setCalculating] = useState(false);
 
-  // 고객 선택 또는 마운트 시 포트폴리오 계산
+  // 고객 변경 시에만 자동 계산 — IPS 변경은 '분析하기' 버튼으로 수동 트리거
   useEffect(() => {
     const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
     if (!customer) return;
@@ -63,13 +60,18 @@ export default function PortfolioSection() {
         consultationId: consultationId || undefined,
         clientId: customer.id,
       }).then((result) => {
-        if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
+        if (!cancelled) {
+          setPortfolios(result.data.portfolios, result.source, result.note);
+          if (result.data.correlationHeatmap) setCorrelationHeatmap(result.data.correlationHeatmap);
+          if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
+        }
       }).finally(() => {
         if (!cancelled) setCalculating(false);
       });
     }, 300);
     return () => { cancelled = true; clearTimeout(tid); };
-  }, [selectedCustomerId, customers, ips.returnPct, ips.risk, ips.timeYears, ips.liquidity, ips.tax, liveBase.ratePct, liveBase.fxKrw, consultationId, setPortfolios]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomerId]);
 
   const asOf = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "2-digit", day: "2-digit",
@@ -80,7 +82,7 @@ export default function PortfolioSection() {
       <div className="mb-2 flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2.5">
           <h2 className="text-lg font-extrabold">포트폴리오 대시보드</h2>
-          {(calculating || stressAnalyzing) ? (
+          {(calculating || analyzing) ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
               분석중...
@@ -107,13 +109,13 @@ export default function PortfolioSection() {
         </span>
       </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        {displayPortfolios.map((pf) => (
+        {portfolios.map((pf) => (
           <PortfolioCard
             key={pf.id}
             pf={pf}
-            isSelected={selectedPortfolioId === pf.id}
+            isSelected={pf.id !== "current" && selectedPortfolioId === pf.id}
             onSelect={() => selectPortfolio(pf.id)}
-            selectable={true}
+            selectable={pf.id !== "current"}
           />
         ))}
       </div>

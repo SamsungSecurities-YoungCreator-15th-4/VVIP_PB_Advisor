@@ -242,5 +242,6 @@ export type {
   ListedClient,
 } from "./api/clients";
 
-export { fetchPortfolioCalculate, fetchPortfolioStressTest } from "./api/portfolio";
-export type { PortfolioCalcOptions, PortfolioCalcData } from "./api/portfolio";
+export { fetchPortfolioCalculate, fetchPortfolioStressTest, fetchStressMetrics } from "./api/portfolio";
+export type { PortfolioCalcOptions, PortfolioCalcData, StressMetricsOptions, StressMetricsResult } from "./api/portfolio";
+export type { StressTaxData, StressTaxGauge, StressTaxStrategyCards, StressTaxHeadline, StressTaxFlow } from "./api/types";

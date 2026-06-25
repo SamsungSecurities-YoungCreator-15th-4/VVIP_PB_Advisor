@@ -24,6 +24,8 @@ import {
   type ConsultationSummaryItem,
   type ListedClient,
   createClient,
+  fetchPortfolioCalculate,
+  fetchStressMetrics,
   listClients,
   listConsultations,
   loadConsultationDetail,
@@ -93,6 +95,22 @@ export default function Sidebar() {
     setTranscript,
     setConsultationId,
     setSttStatus,
+    scenario,
+    liveBase,
+    basePortfolios,
+    setPortfolios,
+    setStressPortfolios,
+    setStressTax,
+    setCorrelationHeatmap,
+    setPortfolioTax,
+    stressPreset,
+    clearStressMode,
+    analyzing,
+    setAnalyzing,
+    lastAnalyzedIps,
+    lastAnalyzedScenario,
+    setAnalysisBaseline,
+    consultationId,
   } = useDashboardStore();
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -157,6 +175,71 @@ export default function Sidebar() {
   }, [setCustomers]);
 
   if (!customer) return null;
+
+  const handleAnalyze = async () => {
+    if (analyzing) return;
+
+    const ipsChanged =
+      lastAnalyzedIps === null ||
+      lastAnalyzedIps.returnPct !== ips.returnPct ||
+      lastAnalyzedIps.risk !== ips.risk ||
+      lastAnalyzedIps.timeYears !== ips.timeYears ||
+      lastAnalyzedIps.liquidity !== ips.liquidity ||
+      lastAnalyzedIps.tax !== ips.tax ||
+      lastAnalyzedIps.goal !== ips.goal;
+
+    const scenarioChanged =
+      lastAnalyzedScenario !== null &&
+      (lastAnalyzedScenario.ratePct !== scenario.ratePct ||
+        lastAnalyzedScenario.fxKrw !== scenario.fxKrw);
+
+    const onlyStressChanged =
+      !ipsChanged && scenarioChanged && stressPreset !== "current";
+
+    setAnalyzing(true);
+    try {
+      if (onlyStressChanged) {
+        const stressResult = await fetchStressMetrics(
+          {
+            aumEokwon: customer.aumEokwon,
+            returnPct: ips.returnPct,
+            risk: ips.risk,
+            timeYears: ips.timeYears,
+            liquidity: ips.liquidity,
+            tax: ips.tax,
+            ratePct: scenario.ratePct,
+            fxKrw: scenario.fxKrw,
+            liveRatePct: liveBase.ratePct,
+            liveFxKrw: liveBase.fxKrw,
+            stressPreset,
+          },
+          basePortfolios,
+        );
+        setStressPortfolios(stressResult.portfolios);
+        if (stressResult.stressTax) setStressTax(stressResult.stressTax);
+      } else {
+        clearStressMode();
+        const result = await fetchPortfolioCalculate({
+          aumEokwon: customer.aumEokwon,
+          returnPct: ips.returnPct,
+          risk: ips.risk,
+          timeYears: ips.timeYears,
+          liquidity: ips.liquidity,
+          tax: ips.tax,
+          ratePct: liveBase.ratePct,
+          fxKrw: liveBase.fxKrw,
+          consultationId: consultationId || undefined,
+          clientId: customer.clientId,
+        });
+        setPortfolios(result.data.portfolios, result.source, result.note);
+        if (result.data.correlationHeatmap) setCorrelationHeatmap(result.data.correlationHeatmap);
+        if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
+      }
+      setAnalysisBaseline(ips, scenario);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleDropdownToggle = () => {
     if (!dropdownOpen && dropdownTriggerRef.current) {
@@ -603,9 +686,18 @@ export default function Sidebar() {
 
         <Button
           size="lg"
+          disabled={analyzing}
+          onClick={() => { void handleAnalyze(); }}
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
-          분석하기
+          {analyzing ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              분析 중…
+            </>
+          ) : (
+            "분析하기"
+          )}
         </Button>
       </aside>
 
