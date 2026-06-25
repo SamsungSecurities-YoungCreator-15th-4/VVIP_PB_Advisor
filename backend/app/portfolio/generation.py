@@ -293,14 +293,21 @@ def calculate_portfolio_return_correlation(
     series_a: Optional[pd.Series] = None,
 ) -> float:
     if series_a is None:
-        series_a = calculate_portfolio_return_series(weights_a, returns)
-    series_b = calculate_portfolio_return_series(weights_b, returns)
+        series_a = calculate_portfolio_return_series(
+            weights_a,
+            returns,
+        )
+    series_b = calculate_portfolio_return_series(
+        weights_b,
+        returns,
+    )
     corr = series_a.corr(series_b)
 
-    if corr is None or np.isnan(corr):
-        return 1.0
+    if corr is None or not np.isfinite(corr):
+        return 0.0
 
     return float(corr)
+
 
 
 
@@ -415,16 +422,13 @@ def find_recommended_portfolios(
             continue
         unique_semantic_pass_count += 1
 
-        soft_preference_alignment = calculate_soft_preference_alignment(
-            candidate_weights=final_weights,
-            unique_profile=request.unique_profile,
-        )
         metrics = calculate_metrics(
             weights=final_weights,
             returns=returns,
             expected_returns=expected_returns,
             request=request,
             cov_matrix=cov_matrix,
+            candidate_mode=True,
         )
 
         if metrics["risk_level"] is not None:
@@ -477,6 +481,12 @@ def find_recommended_portfolios(
             continue
 
         common_filter_pass_count += 1
+        soft_preference_alignment = (
+            calculate_soft_preference_alignment(
+                candidate_weights=final_weights,
+                unique_profile=request.unique_profile,
+            )
+        )
         candidates.append(
             {
                 "weights": final_weights,
@@ -488,6 +498,136 @@ def find_recommended_portfolios(
                 ),
             }
         )
+
+    portfolio_b_rescue_simulations = 0
+    if len(candidates) == 1:
+        portfolio_b_rescue_simulations = max(
+            500,
+            min(request.num_simulations, 3000),
+        )
+        generated_count += portfolio_b_rescue_simulations
+
+        for _ in range(portfolio_b_rescue_simulations):
+            base_weights = generate_random_weights(
+                assets=available_assets,
+                rng=rng,
+            )
+            final_weights = apply_unique_constraint(
+                base_weights=base_weights,
+                total_asset=request.total_asset,
+                unique_need_amount=request.unique_need_amount,
+                unique_asset=effective_unique_asset,
+            )
+            semantic_passed, _semantic_violations = (
+                evaluate_unique_constraints(
+                    candidate_weights=final_weights,
+                    unique_profile=request.unique_profile,
+                    current_weights=request.current_weights,
+                )
+            )
+            if not semantic_passed:
+                rejection_counts["unique_semantic"] += 1
+                continue
+            unique_semantic_pass_count += 1
+
+            metrics = calculate_metrics(
+                weights=final_weights,
+                returns=returns,
+                expected_returns=expected_returns,
+                request=request,
+                cov_matrix=cov_matrix,
+                candidate_mode=True,
+            )
+
+            if metrics["risk_level"] is not None:
+                guideline_pass_count += 1
+
+            suitability_passed = is_suitable_for_client(
+                metrics,
+                request.risk_profile,
+            )
+            guideline_detail = evaluate_guideline_detail(
+                metrics,
+                request.risk_profile,
+            )
+            liquidity_passed = bool(
+                guideline_detail
+                .get("hard_checks", {})
+                .get("liquidity_coverage", False)
+            )
+            risk_control = metrics.get(
+                "selection_risk_control",
+                {},
+            )
+            risk_checks = risk_control.get(
+                "checks",
+                {},
+            )
+            var_passed = bool(
+                risk_checks.get(
+                    "historical_var_95",
+                    False,
+                )
+            )
+            risk_contribution_passed = bool(
+                risk_checks.get(
+                    "risk_contribution",
+                    False,
+                )
+            )
+
+            if suitability_passed:
+                suitable_count += 1
+            else:
+                rejection_counts["suitability"] += 1
+
+            if liquidity_passed:
+                liquidity_pass_count += 1
+            else:
+                rejection_counts["liquidity"] += 1
+
+            if not var_passed:
+                rejection_counts["historical_var_95"] += 1
+            if not risk_contribution_passed:
+                rejection_counts["risk_contribution"] += 1
+
+            if risk_control.get("passed", False):
+                risk_control_pass_count += 1
+
+            common_filter_passed = all(
+                (
+                    suitability_passed,
+                    liquidity_passed,
+                    var_passed,
+                    risk_contribution_passed,
+                )
+            )
+            if not common_filter_passed:
+                continue
+
+            common_filter_pass_count += 1
+            soft_preference_alignment = (
+                calculate_soft_preference_alignment(
+                    candidate_weights=final_weights,
+                    unique_profile=request.unique_profile,
+                )
+            )
+            candidates.append(
+                {
+                    "weights": final_weights,
+                    "metrics": metrics,
+                    "soft_preference_alignment": (
+                        soft_preference_alignment
+                    ),
+                    "selection_rank": build_selection_rank_tuple(
+                        metrics,
+                        soft_preference_alignment.get(
+                            "score",
+                            0.0,
+                        ),
+                    ),
+                }
+            )
 
     if not candidates:
         raise RuntimeError(
@@ -661,6 +801,10 @@ def find_recommended_portfolios(
 
     search_summary = {
         "generated_portfolios": generated_count,
+        "initial_generated_portfolios": request.num_simulations,
+        "portfolio_b_rescue_simulations": (
+            portfolio_b_rescue_simulations
+        ),
         "guideline_pass_portfolios": guideline_pass_count,
         "suitable_portfolios": suitable_count,
         "liquidity_pass_portfolios": liquidity_pass_count,

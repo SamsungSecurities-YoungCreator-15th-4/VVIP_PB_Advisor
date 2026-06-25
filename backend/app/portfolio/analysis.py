@@ -29,6 +29,7 @@ from .prices import (
     calculate_daily_returns,
 )
 from .expected_returns import calculate_expected_returns
+from .metrics import build_monte_carlo_scenario_context
 from .generation import (
     build_constraint_warnings,
     get_effective_unique_asset,
@@ -72,6 +73,23 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         view_expected_returns=request.view_expected_returns,
         view_weight=request.view_weight,
     )
+
+    try:
+        monte_carlo_scenario_context = (
+            build_monte_carlo_scenario_context(
+                returns=returns,
+                expected_returns=expected_returns,
+                investment_horizon_years=(
+                    request
+                    .investment_horizon_years
+                ),
+                random_seed=(
+                    request.random_seed
+                ),
+            )
+        )
+    except Exception:
+        monte_carlo_scenario_context = None
 
     backtest_prices = download_backtest_price_data(
         period="5y",
@@ -143,6 +161,9 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         request=request,
         cov_matrix=cov_matrix,
         backtest_returns=analysis_backtest_returns,
+        monte_carlo_scenario_context=(
+            monte_carlo_scenario_context
+        ),
     )
 
     rec_1_response = build_portfolio_response(
@@ -155,6 +176,9 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         selection_summary=recommendations[0]["selection_summary"],
         cov_matrix=cov_matrix,
         backtest_returns=analysis_backtest_returns,
+        monte_carlo_scenario_context=(
+            monte_carlo_scenario_context
+        ),
     )
 
     rec_2_response = build_portfolio_response(
@@ -168,6 +192,9 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         correlation_with_recommended_1=recommendations[1].get("correlation_with_recommended_1"),
         cov_matrix=cov_matrix,
         backtest_returns=analysis_backtest_returns,
+        monte_carlo_scenario_context=(
+            monte_carlo_scenario_context
+        ),
     )
 
     correlation_matrix = calculate_dashboard_group_correlation_matrix(returns)

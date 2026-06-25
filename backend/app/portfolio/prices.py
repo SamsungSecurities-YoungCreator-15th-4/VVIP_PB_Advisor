@@ -325,21 +325,316 @@ def _load_price_frame_snapshot(
     }
 
 
+def _extract_close_price_frame(
+    raw: pd.DataFrame,
+    tickers: Dict[str, str],
+) -> pd.DataFrame:
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+
+    if isinstance(
+        raw.columns,
+        pd.MultiIndex,
+    ):
+        level_0 = raw.columns.get_level_values(
+            0
+        )
+        level_1 = raw.columns.get_level_values(
+            1
+        )
+        if "Close" in level_0:
+            close = raw["Close"].copy()
+        elif "Close" in level_1:
+            close = raw.xs(
+                "Close",
+                axis=1,
+                level=1,
+            ).copy()
+        else:
+            return pd.DataFrame()
+    else:
+        if "Close" not in raw.columns:
+            return pd.DataFrame()
+        close = raw[["Close"]].copy()
+        if len(tickers) == 1:
+            close.columns = [
+                next(
+                    iter(
+                        tickers.values()
+                    )
+                )
+            ]
+
+    if isinstance(close, pd.Series):
+        close = close.to_frame(
+            name=next(
+                iter(tickers.values())
+            )
+        )
+
+    reverse_map = {
+        ticker: asset
+        for asset, ticker
+        in tickers.items()
+    }
+    close = close.rename(
+        columns=reverse_map
+    )
+    columns = [
+        asset
+        for asset in tickers
+        if asset in close.columns
+    ]
+    return (
+        close[columns]
+        .replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+        .dropna(how="all")
+        .sort_index()
+    )
+
+
+def _download_close_prices_with_individual_retry(
+    tickers: Dict[str, str],
+    period: str,
+) -> Tuple[
+    pd.DataFrame,
+    List[str],
+    List[str],
+    List[str],
+]:
+    try:
+        raw = yf.download(
+            list(tickers.values()),
+            period=period,
+            auto_adjust=True,
+            progress=False,
+            group_by="column",
+            threads=True,
+        )
+        prices = _extract_close_price_frame(
+            raw,
+            tickers,
+        )
+    except Exception:
+        prices = pd.DataFrame()
+        logger.warning(
+            "가격 일괄 조회 실패. "
+            "누락 자산 개별 재시도를 진행합니다.",
+            exc_info=True,
+        )
+
+    missing_assets = [
+        asset
+        for asset in tickers
+        if (
+            asset not in prices.columns
+            or not prices[asset]
+            .notna()
+            .any()
+        )
+    ]
+    attempted_assets = list(
+        missing_assets
+    )
+    recovered_assets: List[str] = []
+
+    for asset in missing_assets:
+        ticker = tickers[asset]
+        try:
+            single_raw = yf.download(
+                ticker,
+                period=period,
+                auto_adjust=True,
+                progress=False,
+                group_by="column",
+                threads=False,
+            )
+            single = (
+                _extract_close_price_frame(
+                    single_raw,
+                    {asset: ticker},
+                )
+            )
+        except Exception:
+            logger.warning(
+                "가격 개별 재시도 실패: "
+                "asset=%s ticker=%s",
+                asset,
+                ticker,
+                exc_info=True,
+            )
+            continue
+
+        if (
+            asset not in single.columns
+            or not single[asset]
+            .notna()
+            .any()
+        ):
+            continue
+
+        if prices.empty:
+            prices = single[
+                [asset]
+            ].copy()
+        else:
+            prices = (
+                prices.drop(
+                    columns=[asset],
+                    errors="ignore",
+                )
+                .join(
+                    single[[asset]],
+                    how="outer",
+                )
+            )
+        recovered_assets.append(asset)
+
+    remaining_assets = [
+        asset
+        for asset in tickers
+        if (
+            asset not in prices.columns
+            or not prices[asset]
+            .notna()
+            .any()
+        )
+    ]
+    return (
+        prices
+        .dropna(how="all")
+        .sort_index(),
+        attempted_assets,
+        recovered_assets,
+        remaining_assets,
+    )
+
+
+def _supplement_missing_assets_from_snapshot(
+    prices: pd.DataFrame,
+    missing_assets: List[str],
+    snapshot_frame: Optional[
+        pd.DataFrame
+    ],
+) -> Tuple[
+    pd.DataFrame,
+    List[str],
+    List[str],
+]:
+    if (
+        not missing_assets
+        or snapshot_frame is None
+        or snapshot_frame.empty
+    ):
+        return (
+            prices,
+            [],
+            list(missing_assets),
+        )
+
+    combined = prices.copy()
+    supplemented: List[str] = []
+
+    for asset in missing_assets:
+        if (
+            asset not in snapshot_frame.columns
+            or not snapshot_frame[asset]
+            .notna()
+            .any()
+        ):
+            continue
+
+        snapshot_series = (
+            snapshot_frame[asset]
+            .replace(
+                [np.inf, -np.inf],
+                np.nan,
+            )
+            .dropna()
+            .sort_index()
+        )
+        if snapshot_series.empty:
+            continue
+
+        if combined.empty:
+            combined = (
+                snapshot_series.to_frame(
+                    name=asset
+                )
+            )
+        else:
+            union_index = (
+                combined.index.union(
+                    snapshot_series.index
+                )
+            )
+            combined = combined.reindex(
+                union_index
+            )
+            combined.loc[
+                snapshot_series.index,
+                asset,
+            ] = snapshot_series
+        supplemented.append(asset)
+
+    remaining = [
+        asset
+        for asset in missing_assets
+        if asset not in supplemented
+    ]
+    return (
+        combined
+        .dropna(how="all")
+        .sort_index(),
+        supplemented,
+        remaining,
+    )
+
 def _apply_live_data_metadata(
     frame: pd.DataFrame,
 ) -> pd.DataFrame:
     snapshot = dict(
-        frame.attrs.get("data_snapshot", {})
+        frame.attrs.get(
+            "data_snapshot",
+            {},
+        )
+    )
+    supplemented_assets = list(
+        snapshot.get(
+            "snapshot_supplemented_assets",
+            [],
+        )
+    )
+    fallback_used = bool(
+        supplemented_assets
     )
     snapshot.update(
         {
-            "data_source": "yfinance_live",
-            "fallback_used": False,
-            "fallback_reason": None,
+            "data_source": (
+                "yfinance_live_with_"
+                "asset_snapshot_supplement"
+                if fallback_used
+                else "yfinance_live"
+            ),
+            "fallback_used": (
+                fallback_used
+            ),
+            "fallback_reason": (
+                "individual_retry_failed_"
+                "for_some_assets"
+                if fallback_used
+                else None
+            ),
         }
     )
-    frame.attrs["data_snapshot"] = snapshot
+    frame.attrs["data_snapshot"] = (
+        snapshot
+    )
     return frame
+
 
 
 def _apply_cached_data_metadata(
@@ -375,91 +670,129 @@ def _apply_cached_data_metadata(
     frame.attrs["data_snapshot"] = snapshot
     return frame
 
-def _download_price_data_live(period: str, cash_return: float) -> pd.DataFrame:
-    """추천·지표 계산용 투자자산 가격 데이터.
-
-    벤치마크는 이 함수에서 조회하지 않는다. 따라서 벤치마크의 결측치,
-    상장 이력, 데이터 시작일은 추천 포트폴리오에 영향을 주지 않는다.
-    """
+def _download_price_data_live(
+    period: str,
+    cash_return: float,
+    snapshot_frame: Optional[
+        pd.DataFrame
+    ] = None,
+) -> pd.DataFrame:
     tickers = {
         asset: ticker
-        for asset, ticker in ASSET_TICKERS.items()
+        for asset, ticker
+        in ASSET_TICKERS.items()
         if ticker != "CASH"
     }
 
-    raw = yf.download(
-        list(tickers.values()),
-        period=period,
-        auto_adjust=True,
-        progress=False,
-        group_by="column",
-        threads=True,
+    (
+        prices,
+        retry_attempted_assets,
+        retry_recovered_assets,
+        remaining_assets,
+    ) = _download_close_prices_with_individual_retry(
+        tickers,
+        period,
+    )
+    (
+        prices,
+        snapshot_supplemented_assets,
+        remaining_assets,
+    ) = _supplement_missing_assets_from_snapshot(
+        prices,
+        remaining_assets,
+        snapshot_frame,
     )
 
-    if raw.empty:
-        raise RuntimeError("yfinance에서 데이터를 가져오지 못했습니다.")
-
-    if isinstance(raw.columns, pd.MultiIndex):
-        if "Close" not in raw.columns.get_level_values(0):
-            raise RuntimeError("yfinance 응답에서 Close 가격을 찾지 못했습니다.")
-        prices = raw["Close"].copy()
-    else:
-        prices = raw[["Close"]].copy()
-
-    reverse_map = {ticker: asset for asset, ticker in tickers.items()}
-    prices = prices.rename(columns=reverse_map)
-    prices = prices.dropna(how="all").sort_index()
+    if remaining_assets:
+        raise RuntimeError(
+            "확정 자산군 중 가격 데이터를 "
+            "가져오지 못한 자산이 있습니다. "
+            f"excluded_assets={remaining_assets}. "
+            "일괄 조회, 개별 재시도, "
+            "마지막 성공 스냅샷 보완이 "
+            "모두 실패했습니다."
+        )
+    if prices.empty:
+        raise RuntimeError(
+            "yfinance와 가격 스냅샷에서 "
+            "데이터를 가져오지 못했습니다."
+        )
 
     available_assets = [
         asset
         for asset in ASSET_TICKERS.keys()
-        if asset != "cash"
-        and asset in prices.columns
-        and prices[asset].notna().any()
+        if (
+            asset != "cash"
+            and asset in prices.columns
+            and prices[asset]
+            .notna()
+            .any()
+        )
     ]
     excluded_assets = [
         asset
         for asset in ASSET_TICKERS.keys()
-        if asset != "cash" and asset not in available_assets
+        if (
+            asset != "cash"
+            and asset not in available_assets
+        )
     ]
-
     if excluded_assets:
         raise RuntimeError(
-            "확정 자산군 중 가격 데이터를 가져오지 못한 자산이 있습니다. "
-            f"excluded_assets={excluded_assets}. "
-            "티커, 상장일, yfinance 다운로드 상태를 확인해 주세요."
+            "확정 자산군 중 가격 데이터가 "
+            "비어 있습니다. "
+            f"excluded_assets={excluded_assets}"
         )
 
+    # 신규 상장 자산의 분석 기간 정책은 기존 로직을 그대로 유지한다.
     first_valid_dates = {
-        asset: prices[asset].first_valid_index()
+        asset: prices[
+            asset
+        ].first_valid_index()
         for asset in available_assets
     }
-    common_start = max(first_valid_dates.values())
+    common_start = max(
+        first_valid_dates.values()
+    )
     limiting_assets = [
         asset
-        for asset, start_date in first_valid_dates.items()
+        for asset, start_date
+        in first_valid_dates.items()
         if start_date == common_start
     ]
 
     common_prices = (
-        prices.loc[common_start:, available_assets]
+        prices.loc[
+            common_start:,
+            available_assets,
+        ]
         .ffill()
         .dropna(how="any")
     )
 
-    if len(common_prices) < MIN_COMMON_PRICE_OBSERVATIONS:
+    if (
+        len(common_prices)
+        < MIN_COMMON_PRICE_OBSERVATIONS
+    ):
         raise RuntimeError(
-            "공통 실제 가격 데이터 구간이 너무 짧습니다. "
+            "공통 실제 가격 데이터 구간이 "
+            "너무 짧습니다. "
             f"observations={len(common_prices)}, "
             f"min_required={MIN_COMMON_PRICE_OBSERVATIONS}, "
             f"common_start={common_start.date() if common_start is not None else None}, "
-            f"limiting_assets={limiting_assets}. "
-            "최근 상장 ETF proxy를 더 긴 이력 proxy로 바꾸는지 검토해 주세요."
+            f"limiting_assets={limiting_assets}."
         )
 
-    daily_cash_return = (1 + cash_return) ** (1 / TRADING_DAYS) - 1
+    daily_cash_return = (
+        (1 + cash_return)
+        ** (1 / TRADING_DAYS)
+        - 1
+    )
     common_prices["cash"] = (
-        (1 + daily_cash_return) ** np.arange(len(common_prices))
+        (1 + daily_cash_return)
+        ** np.arange(
+            len(common_prices)
+        )
     )
 
     ordered_assets = [
@@ -467,30 +800,69 @@ def _download_price_data_live(period: str, cash_return: float) -> pd.DataFrame:
         for asset in ASSET_TICKERS.keys()
         if asset in common_prices.columns
     ]
-    common_prices = common_prices[ordered_assets]
-
-    common_prices.attrs["data_snapshot"] = {
+    common_prices = common_prices[
+        ordered_assets
+    ]
+    common_prices.attrs[
+        "data_snapshot"
+    ] = {
         "period_requested": period,
-        "as_of": common_prices.index[-1].strftime("%Y-%m-%d"),
-        "data_start": common_prices.index[0].strftime("%Y-%m-%d"),
-        "data_end": common_prices.index[-1].strftime("%Y-%m-%d"),
-        "observations": int(len(common_prices)),
-        "available_assets": ordered_assets,
-        "excluded_assets": excluded_assets,
+        "as_of": (
+            common_prices.index[-1]
+            .strftime("%Y-%m-%d")
+        ),
+        "data_start": (
+            common_prices.index[0]
+            .strftime("%Y-%m-%d")
+        ),
+        "data_end": (
+            common_prices.index[-1]
+            .strftime("%Y-%m-%d")
+        ),
+        "observations": int(
+            len(common_prices)
+        ),
+        "available_assets": (
+            ordered_assets
+        ),
+        "excluded_assets": (
+            excluded_assets
+        ),
         "first_valid_dates": {
-            asset: date.strftime("%Y-%m-%d")
-            for asset, date in first_valid_dates.items()
+            asset: date.strftime(
+                "%Y-%m-%d"
+            )
+            for asset, date
+            in first_valid_dates.items()
         },
-        "limiting_assets": limiting_assets,
-        "usage": "metrics_and_recommendation_investable_assets_only",
+        "limiting_assets": (
+            limiting_assets
+        ),
+        "individual_retry_"
+        "attempted_assets": (
+            retry_attempted_assets
+        ),
+        "individual_retry_"
+        "recovered_assets": (
+            retry_recovered_assets
+        ),
+        "snapshot_supplemented_assets": (
+            snapshot_supplemented_assets
+        ),
+        "usage": (
+            "metrics_and_recommendation_"
+            "investable_assets_only"
+        ),
         "benchmark_included": False,
         "note": (
-            "추천·기대수익률·공분산·위험지표 계산용 데이터. "
-            "벤치마크는 포함하지 않으며, 전체 투자자산의 공통 실제 가격 구간만 사용."
+            "추천·기대수익률·공분산·"
+            "위험지표 계산용 데이터. "
+            "신규 상장 기간 처리는 기존 "
+            "공통 실제 가격 구간 정책 유지."
         ),
     }
-
     return common_prices
+
 
 
 def download_price_data(
@@ -502,10 +874,20 @@ def download_price_data(
         period,
         cash_return,
     )
+    cached = _load_price_frame_snapshot(
+        cache_key
+    )
+    cached_frame = (
+        cached[0]
+        if cached is not None
+        else None
+    )
+
     try:
         prices = _download_price_data_live(
             period=period,
             cash_return=cash_return,
+            snapshot_frame=cached_frame,
         )
         prices = _apply_live_data_metadata(
             prices
@@ -516,16 +898,14 @@ def download_price_data(
         )
         return prices
     except Exception as error:
-        cached = _load_price_frame_snapshot(
-            cache_key
-        )
         if cached is None:
             raise
 
         cached_prices, metadata = cached
         logger.warning(
-            "가격 조회 실패. 마지막 성공 "
-            "스냅샷 사용: %s",
+            "가격 일괄 조회·개별 재시도·"
+            "자산별 보완 실패. "
+            "마지막 성공 전체 스냅샷 사용: %s",
             cache_key,
             exc_info=True,
         )
@@ -536,104 +916,166 @@ def download_price_data(
         )
 
 
+
 def _download_backtest_price_data_live(
     period: str,
     cash_return: float,
+    snapshot_frame: Optional[
+        pd.DataFrame
+    ] = None,
 ) -> pd.DataFrame:
-    """백테스트 차트 전용 투자자산 5년 가격 데이터.
-
-    벤치마크는 별도 함수에서 조회하고 이 결과에는 포함하지 않는다.
-    """
     period = "5y"
-
     tickers = {
         asset: ticker
-        for asset, ticker in ASSET_TICKERS.items()
+        for asset, ticker
+        in ASSET_TICKERS.items()
         if ticker != "CASH"
     }
 
-    raw = yf.download(
-        list(tickers.values()),
-        period=period,
-        auto_adjust=True,
-        progress=False,
-        group_by="column",
-        threads=True,
+    (
+        prices,
+        retry_attempted_assets,
+        retry_recovered_assets,
+        remaining_assets,
+    ) = _download_close_prices_with_individual_retry(
+        tickers,
+        period,
+    )
+    (
+        prices,
+        snapshot_supplemented_assets,
+        remaining_assets,
+    ) = _supplement_missing_assets_from_snapshot(
+        prices,
+        remaining_assets,
+        snapshot_frame,
     )
 
-    if raw.empty:
-        raise RuntimeError("yfinance에서 데이터를 가져오지 못했습니다.")
-
-    if isinstance(raw.columns, pd.MultiIndex):
-        if "Close" not in raw.columns.get_level_values(0):
-            raise RuntimeError("yfinance 응답에서 Close 가격을 찾지 못했습니다.")
-        prices = raw["Close"].copy()
-    else:
-        prices = raw[["Close"]].copy()
-
-    reverse_map = {ticker: asset for asset, ticker in tickers.items()}
-    prices = prices.rename(columns=reverse_map)
-    prices = prices.dropna(how="all").sort_index()
-
+    if remaining_assets:
+        raise RuntimeError(
+            "확정 자산군 중 백테스트 "
+            "가격 데이터를 가져오지 못한 "
+            "자산이 있습니다. "
+            f"excluded_assets={remaining_assets}."
+        )
     if prices.empty:
-        raise RuntimeError("가격 데이터가 비어 있습니다.")
+        raise RuntimeError(
+            "백테스트 가격 데이터가 "
+            "비어 있습니다."
+        )
 
     base_index = prices.index
-    daily_cash_return = (1 + cash_return) ** (1 / TRADING_DAYS) - 1
+    daily_cash_return = (
+        (1 + cash_return)
+        ** (1 / TRADING_DAYS)
+        - 1
+    )
 
-    backtest_prices = pd.DataFrame(index=base_index)
-    first_valid_dates: Dict[str, Any] = {}
-    cash_substituted_assets: Dict[str, Any] = {}
+    backtest_prices = pd.DataFrame(
+        index=base_index
+    )
+    first_valid_dates: Dict[
+        str,
+        Any,
+    ] = {}
+    cash_substituted_assets: Dict[
+        str,
+        Any,
+    ] = {}
     excluded_assets: List[str] = []
 
     for asset in ASSET_TICKERS.keys():
         if asset == "cash":
             continue
 
-        if asset not in prices.columns or prices[asset].notna().sum() == 0:
+        if (
+            asset not in prices.columns
+            or prices[asset]
+            .notna()
+            .sum()
+            == 0
+        ):
             excluded_assets.append(asset)
             continue
 
-        series = prices[asset].reindex(base_index).ffill()
-        first_valid_date = series.first_valid_index()
-
+        series = (
+            prices[asset]
+            .reindex(base_index)
+            .ffill()
+        )
+        first_valid_date = (
+            series.first_valid_index()
+        )
         if first_valid_date is None:
             excluded_assets.append(asset)
             continue
 
-        first_valid_dates[asset] = first_valid_date
-        first_pos = base_index.get_loc(first_valid_date)
+        first_valid_dates[asset] = (
+            first_valid_date
+        )
+        first_pos = base_index.get_loc(
+            first_valid_date
+        )
 
+        # 기존 신규 상장 백테스트 정책을 그대로 유지한다.
         if first_pos > 0:
-            first_real_price = float(series.loc[first_valid_date])
-            reverse_steps = np.arange(first_pos, 0, -1)
-            pre_listing_values = first_real_price / (
-                (1 + daily_cash_return) ** reverse_steps
+            first_real_price = float(
+                series.loc[
+                    first_valid_date
+                ]
             )
-            series.iloc[:first_pos] = pre_listing_values
-
-            cash_substituted_assets[asset] = {
-                "substituted_from": base_index[0].strftime("%Y-%m-%d"),
-                "substituted_until": base_index[first_pos - 1].strftime(
-                    "%Y-%m-%d"
+            reverse_steps = np.arange(
+                first_pos,
+                0,
+                -1,
+            )
+            pre_listing_values = (
+                first_real_price
+                / (
+                    (1 + daily_cash_return)
+                    ** reverse_steps
+                )
+            )
+            series.iloc[:first_pos] = (
+                pre_listing_values
+            )
+            cash_substituted_assets[
+                asset
+            ] = {
+                "substituted_from": (
+                    base_index[0]
+                    .strftime("%Y-%m-%d")
                 ),
-                "first_real_price_date": first_valid_date.strftime("%Y-%m-%d"),
+                "substituted_until": (
+                    base_index[
+                        first_pos - 1
+                    ].strftime("%Y-%m-%d")
+                ),
+                "first_real_price_date": (
+                    first_valid_date
+                    .strftime("%Y-%m-%d")
+                ),
                 "method": (
-                    "backtest_only_pre_listing_period_replaced_with_cash_return"
+                    "backtest_only_pre_"
+                    "listing_period_replaced_"
+                    "with_cash_return"
                 ),
             }
 
-        backtest_prices[asset] = series.ffill()
+        backtest_prices[asset] = (
+            series.ffill()
+        )
 
     if excluded_assets:
         raise RuntimeError(
-            "확정 자산군 중 가격 데이터를 전혀 가져오지 못한 자산이 있습니다. "
-            f"excluded_assets={excluded_assets}. "
-            "티커 또는 yfinance 다운로드 상태를 확인해 주세요."
+            "확정 자산군 중 가격 데이터가 "
+            "비어 있습니다. "
+            f"excluded_assets={excluded_assets}."
         )
 
     backtest_prices["cash"] = (
-        (1 + daily_cash_return) ** np.arange(len(base_index))
+        (1 + daily_cash_return)
+        ** np.arange(len(base_index))
     )
 
     ordered_assets = [
@@ -641,48 +1083,100 @@ def _download_backtest_price_data_live(
         for asset in ASSET_TICKERS.keys()
         if asset in backtest_prices.columns
     ]
-    backtest_prices = backtest_prices[ordered_assets]
+    backtest_prices = backtest_prices[
+        ordered_assets
+    ]
 
-    if backtest_prices.isna().any().any():
-        missing_assets = backtest_prices.columns[
-            backtest_prices.isna().any()
-        ].tolist()
+    if (
+        backtest_prices
+        .isna()
+        .any()
+        .any()
+    ):
+        missing_assets = (
+            backtest_prices.columns[
+                backtest_prices
+                .isna()
+                .any()
+            ].tolist()
+        )
         raise RuntimeError(
-            "백테스트용 현금 대체 이후에도 결측치가 남아 있습니다. "
+            "백테스트용 현금 대체 이후에도 "
+            "결측치가 남아 있습니다. "
             f"missing_assets={missing_assets}"
         )
 
-    if len(backtest_prices) < MIN_COMMON_PRICE_OBSERVATIONS:
+    if (
+        len(backtest_prices)
+        < MIN_COMMON_PRICE_OBSERVATIONS
+    ):
         raise RuntimeError(
-            "5년 백테스트 가격 데이터 구간이 너무 짧습니다. "
+            "5년 백테스트 가격 데이터 "
+            "구간이 너무 짧습니다. "
             f"observations={len(backtest_prices)}, "
             f"min_required={MIN_COMMON_PRICE_OBSERVATIONS}"
         )
 
-    backtest_prices.attrs["data_snapshot"] = {
+    backtest_prices.attrs[
+        "data_snapshot"
+    ] = {
         "period_requested": period,
-        "as_of": backtest_prices.index[-1].strftime("%Y-%m-%d"),
-        "data_start": backtest_prices.index[0].strftime("%Y-%m-%d"),
-        "data_end": backtest_prices.index[-1].strftime("%Y-%m-%d"),
-        "observations": int(len(backtest_prices)),
-        "available_assets": ordered_assets,
-        "excluded_assets": excluded_assets,
+        "as_of": (
+            backtest_prices.index[-1]
+            .strftime("%Y-%m-%d")
+        ),
+        "data_start": (
+            backtest_prices.index[0]
+            .strftime("%Y-%m-%d")
+        ),
+        "data_end": (
+            backtest_prices.index[-1]
+            .strftime("%Y-%m-%d")
+        ),
+        "observations": int(
+            len(backtest_prices)
+        ),
+        "available_assets": (
+            ordered_assets
+        ),
+        "excluded_assets": (
+            excluded_assets
+        ),
         "first_valid_dates": {
-            asset: date.strftime("%Y-%m-%d")
-            for asset, date in first_valid_dates.items()
+            asset: date.strftime(
+                "%Y-%m-%d"
+            )
+            for asset, date
+            in first_valid_dates.items()
         },
-        "cash_substituted_assets": cash_substituted_assets,
+        "cash_substituted_assets": (
+            cash_substituted_assets
+        ),
         "limiting_assets": [],
-        "usage": "backtest_chart_investable_assets_only",
+        "individual_retry_"
+        "attempted_assets": (
+            retry_attempted_assets
+        ),
+        "individual_retry_"
+        "recovered_assets": (
+            retry_recovered_assets
+        ),
+        "snapshot_supplemented_assets": (
+            snapshot_supplemented_assets
+        ),
+        "usage": (
+            "backtest_chart_"
+            "investable_assets_only"
+        ),
         "benchmark_included": False,
         "note": (
-            "백테스트 차트 전용 투자자산 데이터. "
-            "신규 상장 또는 데이터 시작 전 구간만 현금 수익률로 대체하며, "
-            "벤치마크는 별도 조회."
+            "백테스트 차트 전용 데이터. "
+            "신규 상장 전 현금수익률 대체 "
+            "정책은 기존대로 유지."
         ),
     }
-
     return backtest_prices
+
 
 
 def download_backtest_price_data(
@@ -695,11 +1189,23 @@ def download_backtest_price_data(
         fixed_period,
         cash_return,
     )
+    cached = _load_price_frame_snapshot(
+        cache_key
+    )
+    cached_frame = (
+        cached[0]
+        if cached is not None
+        else None
+    )
+
     try:
         prices = (
             _download_backtest_price_data_live(
                 period=fixed_period,
                 cash_return=cash_return,
+                snapshot_frame=(
+                    cached_frame
+                ),
             )
         )
         prices = _apply_live_data_metadata(
@@ -711,16 +1217,14 @@ def download_backtest_price_data(
         )
         return prices
     except Exception as error:
-        cached = _load_price_frame_snapshot(
-            cache_key
-        )
         if cached is None:
             raise
 
         cached_prices, metadata = cached
         logger.warning(
-            "백테스트 조회 실패. 마지막 성공 "
-            "스냅샷 사용: %s",
+            "백테스트 일괄 조회·개별 "
+            "재시도·자산별 보완 실패. "
+            "마지막 성공 전체 스냅샷 사용: %s",
             cache_key,
             exc_info=True,
         )
@@ -729,6 +1233,7 @@ def download_backtest_price_data(
             cache_metadata=metadata,
             error=error,
         )
+
 
 
 def calculate_daily_returns(prices: pd.DataFrame) -> pd.DataFrame:

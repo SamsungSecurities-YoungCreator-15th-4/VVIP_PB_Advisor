@@ -929,9 +929,56 @@ def enrich_unique_profile(profile: Dict[str, Any], unique_value: Any) -> Dict[st
 
     result = copy.deepcopy(profile)
     semantic = parse_unique_semantic(unique_value)
-    existing_constraints = list(result.get("semantic_constraints") or [])
-    result["semantic_constraints"] = [*existing_constraints, *semantic.get("constraints", [])]
-    result["soft_preferences"] = list(semantic.get("soft_preferences") or [])
+    existing_constraints = list(
+        result.get("semantic_constraints")
+        or []
+    )
+    result["semantic_constraints"] = [
+        *existing_constraints,
+        *semantic.get("constraints", []),
+    ]
+
+    existing_soft_preferences = [
+        item
+        for item in (
+            result.get("soft_preferences")
+            or []
+        )
+        if isinstance(item, dict)
+    ]
+    incoming_soft_preferences = [
+        item
+        for item in (
+            semantic.get("soft_preferences")
+            or []
+        )
+        if isinstance(item, dict)
+    ]
+    merged_soft_preferences: List[
+        Dict[str, Any]
+    ] = []
+    seen_soft_preferences: Set[
+        Tuple[Any, ...]
+    ] = set()
+    for preference in [
+        *existing_soft_preferences,
+        *incoming_soft_preferences,
+    ]:
+        signature = (
+            preference.get("subject_type"),
+            preference.get("subject"),
+            preference.get("direction"),
+            preference.get("evidence"),
+        )
+        if signature in seen_soft_preferences:
+            continue
+        seen_soft_preferences.add(signature)
+        merged_soft_preferences.append(
+            copy.deepcopy(preference)
+        )
+    result["soft_preferences"] = (
+        merged_soft_preferences
+    )
     result["semantic_audit"] = {
         "status": semantic.get("status"),
         "version": semantic.get("version"),
