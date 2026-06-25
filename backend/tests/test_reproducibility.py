@@ -313,8 +313,8 @@ class TestRagGeneratorDeterminism:
 
     def test_fallback_prefers_numeric_evidence_sentence(self):
         answer = (
-            "시장 변동성 관리가 필요합니다. "
-            "한국 국채 10년물 금리는 2.9~3.2% 범위로 예상됩니다."
+            "1. 시장 변동성 관리가 필요합니다. "
+            "2. 한국 국채 10년물 금리는 2.9~3.2% 범위로 예상됩니다."
         )
         summary = fallback_insight_summary(answer)
         assert "2.9~3.2%" in summary
@@ -335,6 +335,11 @@ class TestRagGeneratorDeterminism:
         assert "4.1%" in summary
         assert "듀레이션 관리 필요" in summary
         assert len(summary) <= 90
+
+    def test_normalize_insight_summary_keeps_short_financial_terms(self):
+        assert "시가 50억원" in normalize_insight_summary("시가 50억원 기준")
+        assert normalize_insight_summary("시가 상승") == "시가 상승"
+        assert "높은 5%" in normalize_insight_summary("높은 5% 변동성")
 
     def test_normalize_insight_summary_converts_sentence_to_noun_phrase(self):
         assert normalize_insight_summary("금리가 상승했습니다.") == "금리 상승"

@@ -113,11 +113,11 @@ def _normalize_summary_as_noun_phrase(text: str) -> str:
         return summary
 
     summary = re.sub(
-        r"^(?P<subject>[가-힣A-Za-z0-9]+)(?:이|가|은|는)\s+",
+        r"^(?P<subject>[가-힣A-Za-z0-9]{2,})(?:이|가|은|는)\s+",
         r"\g<subject> ",
         summary,
     )
-    summary = re.sub(r"(?<=\S)(?:이|가|은|는)\s+(?=\d)", " ", summary)
+    summary = re.sub(r"(?<=\S{2})(?:이|가|은|는)\s+(?=\d)", " ", summary)
     sentence_endings = (
         ("확인되었습니다", "확인"),
         ("확인됐습니다", "확인"),
@@ -157,7 +157,7 @@ def _normalize_summary_as_noun_phrase(text: str) -> str:
         r"예상|전망|우려|기대|가능성|판단|보임|높임|줄임|나타남|미침|어려움"
     )
     summary = re.sub(
-        rf"(?:이|가|은|는|을|를)\s+(?=(?:함께\s+)?(?:{noun_keywords})(?:\s|$))",
+        rf"(?<=\S{{2}})(?:이|가|은|는|을|를)\s+(?=(?:함께\s+)?(?:{noun_keywords})(?:\s|$))",
         " ",
         summary,
     )
@@ -177,12 +177,13 @@ _PREAMBLE_MARKERS = (
     "다음과 같습니다",
     "아래와 같습니다",
 )
+_LIST_PREFIX_RE = re.compile(r"^\s*\d+[.)]\s*")
 
 
 def _is_substantive_sentence(sentence: str) -> bool:
     """실질 정보가 담긴 문장이면 True. 도입 인사말·번호머리·짧은 조각은 거른다."""
     # 'N.'·'N)' 같은 리스트 번호 머리를 떼고 내용만 본다(번호가 문장으로 잘리는 것 방지).
-    stripped = re.sub(r"^\s*\d+[.)]\s*", "", sentence).strip().rstrip(" .。!?！？")
+    stripped = _LIST_PREFIX_RE.sub("", sentence).strip().rstrip(" .。!?！？")
     if len(stripped) < 5:  # '1', '미국' 같은 토막은 실질 문장으로 보지 않는다.
         return False
     if stripped.endswith("드리겠습니다"):
@@ -196,8 +197,9 @@ _NUMERIC_TOKEN_RE = re.compile(
 
 
 def _contains_numeric_evidence(text: str) -> bool:
-    """답변 원문에 있는 수치 근거를 포함한 문장인지 판별한다."""
-    return bool(_NUMERIC_TOKEN_RE.search(text))
+    """답변 원문에 있는 수치 근거를 포함한 문장인지 판별한다. 문장 앞 리스트 번호는 제외한다."""
+    stripped = _LIST_PREFIX_RE.sub("", text)
+    return bool(_NUMERIC_TOKEN_RE.search(stripped))
 
 
 def fallback_insight_summary(answer: str) -> str:
@@ -216,7 +218,7 @@ def fallback_insight_summary(answer: str) -> str:
     numeric_substantive = [s for s in substantive if _contains_numeric_evidence(s)]
     chosen = (numeric_substantive or substantive or sentences or [answer])[0]
     # 고른 문장 앞 리스트 번호 머리는 요약에 들어가지 않게 떼고 정규화한다.
-    chosen = re.sub(r"^\s*\d+[.)]\s*", "", chosen)
+    chosen = _LIST_PREFIX_RE.sub("", chosen)
     summary = normalize_insight_summary(chosen)
     if summary:
         return summary
