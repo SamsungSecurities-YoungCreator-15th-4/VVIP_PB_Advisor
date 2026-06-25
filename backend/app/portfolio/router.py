@@ -65,7 +65,7 @@ from .responses import (
 )
 from .analysis import run_analysis_core, run_full_analysis
 from .adapters import normalize_analysis_request_payload
-from .formatters import build_portfolio_calculate_response
+from .formatters import build_metrics_payload, build_portfolio_calculate_response
 
 router = APIRouter(tags=["portfolio"])
 KST = ZoneInfo("Asia/Seoul")
@@ -275,8 +275,14 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             "stress_fx_shock": None if request.scenario else req.stress_fx_shock,
             "asset_shocks": {k: safe_round(v, 6) for k, v in asset_shocks.items()},
             "portfolio_shock": safe_round(portfolio_shock, 6),
-            "base": base,
-            "stressed": stressed,
+            # 단위 통일: calculate(/portfolio/calculate)는 metrics를
+            # build_metrics_payload로 퍼센트 변환해 내보낸다(0.05 비율 → 5.00%).
+            # stress-metrics도 같은 포매터를 태워 calculate의 metrics
+            # (PortfolioMetricsResponse)와 키·단위를 일치시킨다. 필드별 변환이라
+            # 세후수익률·변동성·MDD만 ×100이고 샤프·소르티노·베타는 비율 유지.
+            # 내부 계산값(base/stressed)은 0.05 비율 그대로라 세금·백테스트에 영향 없음.
+            "base": build_metrics_payload({"metrics": base}),
+            "stressed": build_metrics_payload({"metrics": stressed}),
             "base_backtest": base_backtest,
             "stressed_backtest": stressed_backtest,
             "base_tax": base_tax,
