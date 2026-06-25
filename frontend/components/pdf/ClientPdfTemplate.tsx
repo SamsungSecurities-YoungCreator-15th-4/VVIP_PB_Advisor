@@ -4,7 +4,6 @@
  */
 
 import {
-  MACRO_INDICATORS,
   PORTFOLIOS,
   TAX_EFFECT,
   TAX_ADVICE,
@@ -392,11 +391,12 @@ const MACRO_DESC: Record<
   },
 };
 
-const CLIENT_MACROS = MACRO_INDICATORS;
 
 function MarketIpsPage() {
   const customer = useSelectedCustomer();
   const ips = useDashboardStore((s) => s.ips);
+  // 상단바와 동일한 실시간 시장 지표(store). 미로드 시엔 목 기준값으로 초기화돼 있다.
+  const macroIndicators = useDashboardStore((s) => s.macroIndicators);
   const IPS_ITEMS = [
     {
       tag: "Goal",
@@ -513,7 +513,7 @@ function MarketIpsPage() {
             marginBottom: 28,
           }}
         >
-          {CLIENT_MACROS.map((m, idx) => {
+          {macroIndicators.map((m, idx) => {
             const desc = MACRO_DESC[m.label];
             const isUp = m.direction === "up";
             return (
@@ -523,7 +523,7 @@ function MarketIpsPage() {
                   flex: 1,
                   padding: "12px 10px",
                   borderRight:
-                    idx < CLIENT_MACROS.length - 1
+                    idx < macroIndicators.length - 1
                       ? `1px solid ${BORDER}`
                       : "none",
                   background: "white",
