@@ -252,7 +252,8 @@ export function buildPdfCorrHeatmap(
 
     if (indices.length > 0) {
       const labels = indices.map(
-        ({ asset_class, name }) => ASSET_ABBR[asset_class] ?? name.slice(0, 3),
+        ({ asset_class, name }) =>
+          ASSET_ABBR[asset_class] ?? name?.slice(0, 3) ?? "",
       );
       const matrix = indices.map(({ i }) =>
         indices.map(({ i: j }) => heatmap.matrix[i]?.[j] ?? 0),

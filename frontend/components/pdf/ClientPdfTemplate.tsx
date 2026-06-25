@@ -1894,7 +1894,8 @@ function DiversificationPage() {
   // 대시보드와 동일하게 '선택한 포트폴리오'의 비중>0 자산 기준으로 히트맵을 구성한다.
   const selectedPf =
     storePortfolios.find((p) => p.id === selectedPortfolioId) ??
-    storePortfolios.find((p) => p.id === "a");
+    storePortfolios.find((p) => p.id === "a") ??
+    storePortfolios[0];
   const {
     labels: corrLabels,
     matrix: corrMatrix,
