@@ -46,23 +46,28 @@ export default function PortfolioSection() {
     if (!customer) return;
 
     let cancelled = false;
-    const tid = setTimeout(() => { if (!cancelled) setCalculating(true); }, 0);
-    fetchPortfolioCalculate({
-      aumEokwon: customer.aumEokwon,
-      returnPct: ips.returnPct,
-      risk: ips.risk,
-      timeYears: ips.timeYears,
-      liquidity: ips.liquidity,
-      tax: ips.tax,
-      ratePct: liveBase.ratePct,
-      fxKrw: liveBase.fxKrw,
-      consultationId: consultationId || undefined,
-      clientId: customer.id,
-    }).then((result) => {
-      if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
-    }).finally(() => {
-      if (!cancelled) setCalculating(false);
-    });
+    // 디바운스: 연속 입력 변경·effect 재실행이 calculate를 여러 번 동시에 쏘면 Render
+    // 단일 워커에 쌓여 모두 느려진다. 마지막 변경만 300ms 뒤 1건 보낸다.
+    const tid = setTimeout(() => {
+      if (cancelled) return;
+      setCalculating(true);
+      fetchPortfolioCalculate({
+        aumEokwon: customer.aumEokwon,
+        returnPct: ips.returnPct,
+        risk: ips.risk,
+        timeYears: ips.timeYears,
+        liquidity: ips.liquidity,
+        tax: ips.tax,
+        ratePct: liveBase.ratePct,
+        fxKrw: liveBase.fxKrw,
+        consultationId: consultationId || undefined,
+        clientId: customer.id,
+      }).then((result) => {
+        if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
+      }).finally(() => {
+        if (!cancelled) setCalculating(false);
+      });
+    }, 300);
     return () => { cancelled = true; clearTimeout(tid); };
   }, [selectedCustomerId, customers, ips.returnPct, ips.risk, ips.timeYears, ips.liquidity, ips.tax, liveBase.ratePct, liveBase.fxKrw, consultationId, setPortfolios]);
 

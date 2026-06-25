@@ -30,11 +30,20 @@ class STTIPSJson(BaseModel):
     Time: Any = Field(..., description="투자기간(년)", examples=[10])
     Tax: Any = Field(
         ...,
-        description="세금 관련 발화 원문. low/medium/high로 추론하지 않고 규칙 기반 파서가 세목·명시 사실만 추출",
+        description=(
+            "세금 관련 발화 원문. 결정론적 registry 파서가 우선이며, 누락 가능성이 있을 때만 "
+            "Tax 전용 LLM이 원문 검증을 거쳐 허용 fact를 보완"
+        ),
         examples=["금융소득종합과세가 걱정되고 ISA는 2022년 가입, 올해 1,500만원 납입"],
     )
     Liquidity: Any = Field(..., description="유동성 필요 수준. 예: 낮음/중간/높음", examples=["중간"])
-    Legal: Optional[Any] = Field(None, description="법률·규제·계약 제약 원문")
+    Legal: Optional[Any] = Field(
+        None,
+        description=(
+            "법률·규제·계약 관련 자유문장. 결정론적 안전망을 우선하고 Legal 전용 LLM은 "
+            "미분류 검토 주제만 보완하며 포트폴리오 비중·점수에는 반영하지 않음"
+        ),
+    )
     Unique: Optional[Any] = Field(None, description="필요자금·ISA·IRP·승계 등 고객 고유 상황 원문")
 
     model_config = ConfigDict(extra="ignore")
@@ -63,7 +72,7 @@ class PortfolioCalculateRequest(BaseModel):
     current_portfolio: Optional[List[CurrentPortfolioItem]] = None
     benchmark_key: BenchmarkKey = DEFAULT_BENCHMARK_KEY
     period: str = "5y"
-    num_simulations: int = Field(5000, ge=500, le=100000)
+    num_simulations: int = Field(3000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
     random_seed: int = Field(42, ge=0)
     scenario: Optional[ScenarioInput] = None
@@ -101,7 +110,7 @@ class PortfolioCalculateRequest(BaseModel):
                 ],
                 "benchmark_key": "msci_acwi",
                 "period": "5y",
-                "num_simulations": 5000,
+                "num_simulations": 3000,
             }
         },
     )

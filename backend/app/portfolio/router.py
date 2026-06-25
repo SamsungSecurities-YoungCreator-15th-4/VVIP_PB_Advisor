@@ -1,12 +1,16 @@
 # ruff: noqa: E501
 """§13-14. API 엔드포인트 — FastAPI 라우터."""
 
+import hashlib
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Dict, Optional, Literal, Any, Union
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from app.market.cache import TTLCache
 
 from .assets import (
     ASSET_TICKERS,
@@ -111,6 +115,21 @@ def get_benchmarks():
     return get_benchmark_catalog()
 
 
+# calculate는 결정론(seed 고정·now/random 미사용)이라 동일 입력이면 동일 출력이다.
+# 5000→3000회로 줄여도 무거운(약한 CPU에서 수십 초) CPU 작업이라, 동일 입력 재호출과
+# 화면 재진입을 캐시로 즉시 응답한다. 시세는 일중 변하므로 TTL을 짧게(10분) 둔다.
+_CALCULATE_TTL_SECONDS = 600
+_calculate_cache: TTLCache[Dict[str, Any]] = TTLCache(ttl_seconds=_CALCULATE_TTL_SECONDS)
+
+
+def _calculate_cache_key(payload: Dict[str, Any]) -> str:
+    # 캐시된 응답에 요청자의 client_id·consultation_id가 그대로 담기므로(formatters
+    # build_portfolio_calculate_response), 이 식별자를 키에서 빼면 동일 파라미터의 다른
+    # 고객/세션이 남의 식별자를 받는 정보 유출이 된다. 데이터 격리를 위해 식별자를 키에 포함한다.
+    serialized = json.dumps(payload, sort_keys=True, default=str, ensure_ascii=False)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
 @router.post(
     "/portfolio/calculate",
     response_model=PortfolioCalculateResponseContract,
@@ -121,9 +140,15 @@ def portfolio_calculate(
     """STT ips_json 또는 내부 AnalysisRequest로 포트폴리오를 계산한다."""
     try:
         payload = request.model_dump(exclude_none=True)
+        cache_key = _calculate_cache_key(payload)
+        cached = _calculate_cache.get(cache_key)
+        if cached is not None:
+            return cached
         normalized_request, adapter_info = normalize_analysis_request_payload(payload)
         full = run_full_analysis(normalized_request)
-        return build_portfolio_calculate_response(full, adapter_info)
+        response = build_portfolio_calculate_response(full, adapter_info)
+        _calculate_cache.set(cache_key, response)
+        return response
     except Exception as e:
         raise public_http_exception(e)
 

@@ -32,6 +32,24 @@ ResolveStatus = Literal[
 
 _LISTED_CLS = {"Y", "K", "N"}
 
+# 흔한 약칭 → DART 등록명. DART 는 정식 등록명만 보유해 약칭(현대차·네이버 등)이
+# 정규화 정확일치에서 누락된다. DB 로 등록명을 검증한 매핑만 둔다(추정 금지).
+# 키는 normalize_corp_name 으로 정규화해 보관한다(아래 _NAME_ALIASES).
+_RAW_NAME_ALIASES = {
+    "현대차": "현대자동차",
+    "기아차": "기아",
+    "네이버": "NAVER",
+    "하이닉스": "SK하이닉스",
+    "LG엔솔": "LG에너지솔루션",
+    "엘지엔솔": "LG에너지솔루션",
+    "삼바": "삼성바이오로직스",
+    "카뱅": "카카오뱅크",
+}
+_NAME_ALIASES = {
+    normalize_corp_name(alias): canonical
+    for alias, canonical in _RAW_NAME_ALIASES.items()
+}
+
 
 @dataclass
 class CandidateInfo:
@@ -108,6 +126,13 @@ def resolve_corp_code(query: str) -> ResolveResult:
     if not normalized:
         return ResolveResult("not_found", None, None, "정규화 결과 빈 문자열")
     rows = _rows_by_normalized(normalized)
+
+    if not rows:
+        # 흔한 약칭이면 등록명으로 한 번 더 시도(현대차→현대자동차, 네이버→NAVER 등).
+        canonical = _NAME_ALIASES.get(normalized)
+        if canonical:
+            normalized = normalize_corp_name(canonical)
+            rows = _rows_by_normalized(normalized)
 
     if not rows:
         return ResolveResult("not_found", None, None, f"'{q}'(정규화 '{normalized}') 매칭 없음")

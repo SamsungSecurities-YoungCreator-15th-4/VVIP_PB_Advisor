@@ -270,6 +270,8 @@ def convert_analysis_to_portfolio_request(request: AnalysisRequest) -> Portfolio
         tax_text=ips.tax_text,
         tax_profile=ips.tax_profile,
         tax_sensitivity=ips.tax_sensitivity,
+        legal_text=ips.legal_text,
+        legal_profile=ips.legal_profile,
         liquidity_need=ips.liquidity_need,
         current_weights=canonicalize_weights(ips.current_weights),
         # Sharpe/Sortino 기준 금리는 미국 무위험이자율 기준으로 별도 관리한다.
