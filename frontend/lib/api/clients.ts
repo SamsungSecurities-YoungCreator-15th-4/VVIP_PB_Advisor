@@ -139,7 +139,7 @@ export async function getPreviousDashboard(
 ): Promise<ApiResult<DashboardSnapshotResult | null>> {
   try {
     const query = opts?.consultationId
-      ? `?consultation_id=${encodeURIComponent(opts.consultationId)}`
+      ? `consultation_id=${encodeURIComponent(opts.consultationId)}`
       : "";
     const res = await apiGet<DashboardSnapshotResult>(
       `/clients/${encodeURIComponent(clientId)}/previous-dashboard${query}`,

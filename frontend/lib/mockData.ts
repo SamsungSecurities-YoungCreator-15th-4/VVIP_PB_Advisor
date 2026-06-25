@@ -56,6 +56,12 @@ export interface Customer {
   clientId?: string;
   /** DB 저장 성공 여부. false = 데모(로컬에만 추가). undefined = mock 초기 고객. */
   persisted?: boolean;
+  /**
+   * 갓 생성돼 아직 상담(STT/지난 상담 불러오기)이 한 번도 없는 신규 고객.
+   * true면 더미 IPS로 자동 분석하지 않고 IPS·중앙 대시보드를 빈 상태로 둔다.
+   * STT 완료 또는 과거 상담 불러오기 시 false 로 해제된다.
+   */
+  isNew?: boolean;
 }
 
 export const CUSTOMERS: Customer[] = [

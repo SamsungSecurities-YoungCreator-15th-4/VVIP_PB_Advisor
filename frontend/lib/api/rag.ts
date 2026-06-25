@@ -37,16 +37,26 @@ function mockInsight(): InsightData {
 }
 
 function mapResponse(res: RagInsightResponse): InsightData {
+  const mapped = (res.citations ?? []).map((c) => ({
+    title: c.title ?? "",
+    date: c.published_date ?? null,
+    sourceType: c.source_type,
+    similarity: c.similarity,
+    chunk: c.chunk,
+  }));
+
+  // 제목이 같은 출처는 한 건만 노출 — 첫 항목(유사도 상위)을 유지한다.
+  const seen = new Set<string>();
+  const citations = mapped.filter((c) => {
+    if (seen.has(c.title)) return false;
+    seen.add(c.title);
+    return true;
+  });
+
   return {
     answer: res.answer ?? "",
     summary: res.summary ?? "",
-    citations: (res.citations ?? []).map((c) => ({
-      title: c.title ?? "",
-      date: c.published_date ?? null,
-      sourceType: c.source_type,
-      similarity: c.similarity,
-      chunk: c.chunk,
-    })),
+    citations,
     asOf: res.as_of,
   };
 }

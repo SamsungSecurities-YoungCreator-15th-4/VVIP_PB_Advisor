@@ -89,6 +89,7 @@ export default function Sidebar() {
     ips,
     setIps,
     selectCustomer,
+    clearCustomerNew,
     addCustomer,
     setCustomers,
     transcript,
@@ -158,6 +159,10 @@ export default function Sidebar() {
     const cid = customer.id;
     if (autoAnalyzedForRef.current === cid) return;
     autoAnalyzedForRef.current = cid;
+
+    // 신규 고객(상담 전): 더미 IPS로 자동 분석하지 않는다.
+    // IPS·중앙 대시보드를 빈 상태("분석 결과가 존재하지 않습니다")로 유지한다.
+    if (customer.isNew) return;
 
     void (async () => {
       // DB 스냅샷 복원 시도: clientId가 있는 고객만 (신규 미저장 고객 제외)
@@ -379,6 +384,7 @@ export default function Sidebar() {
       isaOpened: true,
       clientId: result.data.clientId || undefined,
       persisted,
+      isNew: true, // 상담 전 신규 고객 — 더미 IPS·자동 분석 없이 빈 상태로 시작
     });
     selectCustomer(id); // 추가한 고객을 바로 선택 → STT 업로드가 이 고객으로 진행
     setNewName("");
@@ -402,6 +408,7 @@ export default function Sidebar() {
     if (res.source === "live") {
       setSttStatus("done");
       setHasFreshStt(true);
+      clearCustomerNew(customer.id); // 상담 확보 → 더 이상 신규(빈) 상태 아님
     } else {
       setSttStatus("error", res.note);
     }
@@ -438,6 +445,7 @@ export default function Sidebar() {
     if (res.source === "live") {
       setTranscript(res.data.transcript, "live");
       setConsultationId(res.data.consultationId);
+      clearCustomerNew(customer.id); // 과거 상담 확보 → 더 이상 신규(빈) 상태 아님
       if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
       // 선택한 '그 회차'의 대시보드 스냅샷으로 복원(최신이 아니라 해당 회차).
       const dashRes = await getPreviousDashboard(customer.clientId, {
@@ -680,25 +688,31 @@ export default function Sidebar() {
             <DataSourceBadge source={transcriptSource} note={sttNote} />
           </div>
           <div className="flex max-h-[150px] flex-col gap-1.5 overflow-y-auto pr-0.5">
-            {transcript.map((m, i) => (
-              <div key={i} className="flex items-start gap-1.5">
-                <span
-                  className={`mt-0.5 inline-flex w-7 shrink-0 items-center justify-center rounded-md py-0.5 text-[8.5px] font-extrabold ${
-                    m.speaker === "고객"
-                      ? "bg-[#DCE9FF] text-brand-dark"
-                      : "bg-[#ADB5BD] text-white"
-                  }`}
-                >
-                  {m.speaker}
-                </span>
-                <span className="flex-1 text-[13px] font-medium leading-snug text-muted-foreground">
-                  {m.text}
-                </span>
-                <span className="mt-0.5 shrink-0 text-[9px] font-semibold tabular-nums text-muted-foreground/60">
-                  {m.time}
-                </span>
-              </div>
-            ))}
+            {transcript.length === 0 ? (
+              <p className="py-6 text-center text-[13px] font-medium text-muted-foreground">
+                상담 내역이 없습니다
+              </p>
+            ) : (
+              transcript.map((m, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  <span
+                    className={`mt-0.5 inline-flex w-7 shrink-0 items-center justify-center rounded-md py-0.5 text-[8.5px] font-extrabold ${
+                      m.speaker === "고객"
+                        ? "bg-[#DCE9FF] text-brand-dark"
+                        : "bg-[#ADB5BD] text-white"
+                    }`}
+                  >
+                    {m.speaker}
+                  </span>
+                  <span className="flex-1 text-[13px] font-medium leading-snug text-muted-foreground">
+                    {m.text}
+                  </span>
+                  <span className="mt-0.5 shrink-0 text-[9px] font-semibold tabular-nums text-muted-foreground/60">
+                    {m.time}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
           <Button
             variant="outline"

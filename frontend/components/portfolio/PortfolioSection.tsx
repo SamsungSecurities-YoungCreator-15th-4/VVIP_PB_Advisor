@@ -56,7 +56,7 @@ export default function PortfolioSection() {
           {analyzing ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
-              분석...
+              분석중...
             </div>
           ) : portfolioSource === "live" ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
