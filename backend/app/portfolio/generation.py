@@ -13,6 +13,7 @@ from .models import PortfolioRequest
 from .utils import normalize_weights, safe_float, safe_round, validate_required_assets_available, validate_unique_asset
 from .unique_semantic import (
     build_unique_constraint_warnings,
+    calculate_soft_preference_alignment,
     evaluate_unique_constraints,
     get_excluded_assets,
     validate_unique_constraint_consistency,
@@ -103,10 +104,26 @@ def apply_unique_constraint(
     return normalize_weights(final_weights)
 
 
-def build_selection_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
-    """포트폴리오 A 순위: 공통 필터 통과 후보 중 세후수익률 최대."""
+# 프론트는 세후수익률을 % 기준 소수점 1자리로 보여준다.
+# 내부 ratio에서는 소수점 3자리 반올림이 같은 화면 표시값을 뜻한다.
+AFTER_TAX_RETURN_RATIO_TIE_PRECISION = 3
+
+# 위험기여도 집중도는 1bp(0.01%p) 단위가 같은 후보에서만
+# 정성 선호를 보조 기준으로 사용한다.
+RISK_CONTRIBUTION_RATIO_TIE_PRECISION = 4
+
+
+def build_selection_rank_tuple(
+    metrics: Dict[str, Any],
+    soft_preference_score: float = 0.0,
+) -> Tuple[Any, ...]:
+    """A: 화면상 세후수익률이 같은 후보에서만 약한 선호를 우선한다."""
+
+    after_tax_return = safe_float(metrics.get("after_tax_return"))
     return (
-        safe_float(metrics.get("after_tax_return")),
+        safe_round(after_tax_return, AFTER_TAX_RETURN_RATIO_TIE_PRECISION),
+        safe_float(soft_preference_score),
+        after_tax_return,
         safe_float(metrics.get("expected_return")),
         safe_float(metrics.get("sharpe_ratio")),
         -safe_float(metrics.get("historical_var_95_daily_loss")),
@@ -115,10 +132,22 @@ def build_selection_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
     )
 
 
-def build_portfolio_b_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
-    """목표 달성 후보 중 위험기여도 집중도를 가장 먼저 최소화한다."""
+def build_portfolio_b_rank_tuple(
+    metrics: Dict[str, Any],
+    soft_preference_score: float = 0.0,
+) -> Tuple[Any, ...]:
+    """B: 위험집중도가 1bp 단위로 같은 후보에서만 약한 선호를 우선한다."""
+
+    risk_contribution = safe_float(
+        metrics.get("risk_contribution_max_share")
+    )
     return (
-        safe_float(metrics.get("risk_contribution_max_share")),
+        safe_round(
+            risk_contribution,
+            RISK_CONTRIBUTION_RATIO_TIE_PRECISION,
+        ),
+        -safe_float(soft_preference_score),
+        risk_contribution,
         safe_float(metrics.get("historical_var_95_daily_loss")),
         safe_float(metrics.get("volatility")),
         -safe_float(metrics.get("after_tax_return")),
@@ -129,11 +158,18 @@ def build_portfolio_b_rank_tuple(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
 def build_portfolio_b_fallback_rank_tuple(
     metrics: Dict[str, Any],
     target_after_tax_return: float,
+    soft_preference_score: float = 0.0,
 ) -> Tuple[Any, ...]:
-    """목표 달성 후보가 없으면 목표 부족 폭을 먼저 최소화한다."""
+    """목표 부족 폭의 화면 표시값이 같은 후보에서만 약한 선호를 우선한다."""
+
     after_tax_return = safe_float(metrics.get("after_tax_return"))
     target_shortfall = max(target_after_tax_return - after_tax_return, 0.0)
     return (
+        safe_round(
+            target_shortfall,
+            AFTER_TAX_RETURN_RATIO_TIE_PRECISION,
+        ),
+        -safe_float(soft_preference_score),
         target_shortfall,
         safe_float(metrics.get("risk_contribution_max_share")),
         safe_float(metrics.get("historical_var_95_daily_loss")),
@@ -164,6 +200,7 @@ def build_selection_summary(
             "strategy_type": "return_seeking",
             "ranking_basis": [
                 "after_tax_return_desc",
+                "soft_preference_alignment_desc_within_primary_display_tie",
                 "expected_return_desc",
                 "sharpe_ratio_desc",
                 "historical_var_95_asc",
@@ -190,6 +227,7 @@ def build_selection_summary(
                 [
                     "target_after_tax_return_filter",
                     "risk_contribution_max_share_asc",
+                    "soft_preference_alignment_desc_within_primary_display_tie",
                     "historical_var_95_asc",
                     "volatility_asc",
                     "after_tax_return_desc",
@@ -197,6 +235,7 @@ def build_selection_summary(
                 if target_met
                 else [
                     "target_shortfall_asc",
+                    "soft_preference_alignment_desc_within_primary_display_tie",
                     "risk_contribution_max_share_asc",
                     "historical_var_95_asc",
                     "volatility_asc",
@@ -376,6 +415,10 @@ def find_recommended_portfolios(
             continue
         unique_semantic_pass_count += 1
 
+        soft_preference_alignment = calculate_soft_preference_alignment(
+            candidate_weights=final_weights,
+            unique_profile=request.unique_profile,
+        )
         metrics = calculate_metrics(
             weights=final_weights,
             returns=returns,
@@ -438,7 +481,11 @@ def find_recommended_portfolios(
             {
                 "weights": final_weights,
                 "metrics": metrics,
-                "selection_rank": build_selection_rank_tuple(metrics),
+                "soft_preference_alignment": soft_preference_alignment,
+                "selection_rank": build_selection_rank_tuple(
+                    metrics,
+                    soft_preference_alignment.get("score", 0.0),
+                ),
             }
         )
 
@@ -460,6 +507,9 @@ def find_recommended_portfolios(
         recommendation_1["metrics"],
         portfolio_type="A",
         target_after_tax_return=target_after_tax_return,
+    )
+    recommendation_1["selection_summary"]["soft_preference_alignment"] = (
+        recommendation_1.get("soft_preference_alignment", {})
     )
 
     # B는 A와 최소 비중 차이가 있는
@@ -534,7 +584,10 @@ def find_recommended_portfolios(
     if target_met_candidates:
         recommendation_2 = min(
             target_met_candidates,
-            key=lambda candidate: build_portfolio_b_rank_tuple(candidate["metrics"]),
+            key=lambda candidate: build_portfolio_b_rank_tuple(
+                candidate["metrics"],
+                candidate.get("soft_preference_alignment", {}).get("score", 0.0),
+            ),
         )
         portfolio_b_selection_mode = "target_met_risk_minimization"
     else:
@@ -543,6 +596,7 @@ def find_recommended_portfolios(
             key=lambda candidate: build_portfolio_b_fallback_rank_tuple(
                 candidate["metrics"],
                 target_after_tax_return,
+                candidate.get("soft_preference_alignment", {}).get("score", 0.0),
             ),
         )
         portfolio_b_selection_mode = "target_shortfall_fallback"
@@ -551,6 +605,9 @@ def find_recommended_portfolios(
         recommendation_2["metrics"],
         portfolio_type="B",
         target_after_tax_return=target_after_tax_return,
+    )
+    recommendation_2["selection_summary"]["soft_preference_alignment"] = (
+        recommendation_2.get("soft_preference_alignment", {})
     )
 
     portfolio_b_weight_distance = safe_float(
@@ -630,6 +687,14 @@ def find_recommended_portfolios(
             request.unique_profile.get("semantic_constraints", [])
             if isinstance(request.unique_profile, dict)
             else []
+        ),
+        "unique_soft_preferences": (
+            request.unique_profile.get("soft_preferences", [])
+            if isinstance(request.unique_profile, dict)
+            else []
+        ),
+        "soft_preference_policy": (
+            "secondary_ranking_only_within_display_or_1bp_tie"
         ),
         "excluded_by_unique": sorted(excluded_by_unique),
         "excluded_by_horizon": (
