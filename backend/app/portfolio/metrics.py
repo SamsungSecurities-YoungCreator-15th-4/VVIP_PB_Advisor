@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .assets import ALTERNATIVE_ASSETS, ASSET_DURATION_YEARS, ASSET_TICKERS, BOND_ASSETS, BOND_CASH_ASSETS, CASH_LIKE_ASSETS, CLIENT_RISK_LEVEL, FX_SENSITIVE_ASSETS, INTEREST_RATE_SENSITIVE_ASSETS, RISK_LEVEL_NAME, STOCK_ASSETS
 from .constants import BACKTEST_BASE_INDEX, BENCHMARK_CONFIGS, BENCHMARK_POLICY_VERSION, DEFAULT_RANDOM_SEED, GUIDELINE_RULES, MIN_BETA_OBSERVATIONS, MONTE_CARLO_METRIC_RANGE_DISPLAY_CENTER, MONTE_CARLO_METRIC_RANGE_DISPLAY_LOWER, MONTE_CARLO_METRIC_RANGE_DISPLAY_UPPER, MONTE_CARLO_METRIC_RANGE_MAX_HORIZON_YEARS, MONTE_CARLO_METRIC_RANGE_PERCENTILES, MONTE_CARLO_METRIC_RANGE_SEED_OFFSET, MONTE_CARLO_METRIC_RANGE_SIMULATIONS, MONTE_CARLO_METRIC_RANGE_STEPS_PER_YEAR, MONTE_CARLO_METRIC_RANGE_VERSION, SELECTION_RISK_CONTROLS, SORTINO_NO_DOWNSIDE_CAP, TRADING_DAYS, VOL_STRESS_BETA, VOL_STRESS_CAP
 from .models import PortfolioRequest
-from .tax_accounts import allocate_account_buckets, calculate_after_tax_return, estimate_taxable_financial_income
+from .tax_accounts import allocate_account_buckets, calculate_after_tax_return
 from .utils import cap01, get_benchmark_config, normalize_weights, safe_float, safe_round, validate_required_assets_available
 
 # ============================================================
