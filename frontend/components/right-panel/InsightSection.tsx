@@ -127,9 +127,9 @@ export default function InsightSection() {
       </form>
 
       {/* 분석 결과 + 요약 + 출처 */}
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-1 flex-col gap-2.5 min-h-0">
         {/* 분석 결과 */}
-        <div className="flex flex-col rounded-xl border border-brand/15 bg-brand/5 p-3">
+        <div className="flex flex-1 flex-col rounded-xl border border-brand/15 bg-brand/5 p-3 min-h-0">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
             <Sparkles className="size-3 text-brand" />
             <span className="text-[13px] font-extrabold tracking-wide text-brand-dark">
@@ -144,7 +144,7 @@ export default function InsightSection() {
               </span>
             )}
           </div>
-          <div className="max-h-[260px] overflow-y-auto pr-1">
+          <div className="flex-1 overflow-y-auto pr-1 min-h-[120px]">
             {showInitial ? (
               <p className="text-[13px] font-medium text-muted-foreground">
                 질문을 입력하면 AI가 실데이터로 답합니다.
