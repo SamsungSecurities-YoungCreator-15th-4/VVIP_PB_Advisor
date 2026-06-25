@@ -62,6 +62,12 @@ interface DashboardState {
   portfolioNote?: string;
   setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
 
+  // ── 분석 트리거 ──
+  // '분석하기' 클릭 시에만 calculate를 돌린다. 마운트·입력 변경 자동 계산은 하지 않는다.
+  // 클릭마다 nonce를 올려 PortfolioSection의 effect가 그때만 1회 계산하게 한다.
+  analyzeNonce: number;
+  requestAnalyze: () => void;
+
   // ── 스트레스 테스트 결과 ──
   stressedPortfolios: Portfolio[];
   isStressMode: boolean;
@@ -124,6 +130,9 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   portfolioNote: "포트폴리오를 계산 중입니다.",
   setPortfolios: (portfolios, source, note) =>
     set({ portfolios, portfolioSource: source, portfolioNote: note }),
+
+  analyzeNonce: 0,
+  requestAnalyze: () => set((s) => ({ analyzeNonce: s.analyzeNonce + 1 })),
 
   stressedPortfolios: [],
   isStressMode: false,

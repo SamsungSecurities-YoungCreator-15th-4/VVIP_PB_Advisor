@@ -33,6 +33,7 @@ export default function PortfolioSection() {
     stressedPortfolios, isStressMode, stressAnalyzing,
     selectedCustomerId, customers,
     ips, liveBase, consultationId,
+    analyzeNonce,
   } = useDashboardStore();
 
   const displayPortfolios = isStressMode && stressedPortfolios.length > 0
@@ -40,36 +41,37 @@ export default function PortfolioSection() {
     : portfolios;
   const [calculating, setCalculating] = useState(false);
 
-  // 고객 선택 또는 마운트 시 포트폴리오 계산
+  // '분석하기' 클릭 시에만 포트폴리오를 계산한다(analyzeNonce 증가가 트리거).
+  // 마운트·고객선택·슬라이더 변경으로는 자동 계산하지 않는다 — Render 무료티어에서
+  // 첫 진입 시 불필요한 콜드 계산이 돌다 120초 만에 (canceled) 되던 문제를 막는다.
+  // nonce 0(초기)에는 계산하지 않고 데모 포트폴리오를 그대로 보여준다.
   useEffect(() => {
+    if (analyzeNonce === 0) return;
     const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
     if (!customer) return;
 
     let cancelled = false;
-    // 디바운스: 연속 입력 변경·effect 재실행이 calculate를 여러 번 동시에 쏘면 Render
-    // 단일 워커에 쌓여 모두 느려진다. 마지막 변경만 300ms 뒤 1건 보낸다.
-    const tid = setTimeout(() => {
-      if (cancelled) return;
-      setCalculating(true);
-      fetchPortfolioCalculate({
-        aumEokwon: customer.aumEokwon,
-        returnPct: ips.returnPct,
-        risk: ips.risk,
-        timeYears: ips.timeYears,
-        liquidity: ips.liquidity,
-        tax: ips.tax,
-        ratePct: liveBase.ratePct,
-        fxKrw: liveBase.fxKrw,
-        consultationId: consultationId || undefined,
-        clientId: customer.id,
-      }).then((result) => {
-        if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
-      }).finally(() => {
-        if (!cancelled) setCalculating(false);
-      });
-    }, 300);
-    return () => { cancelled = true; clearTimeout(tid); };
-  }, [selectedCustomerId, customers, ips.returnPct, ips.risk, ips.timeYears, ips.liquidity, ips.tax, liveBase.ratePct, liveBase.fxKrw, consultationId, setPortfolios]);
+    setCalculating(true);
+    fetchPortfolioCalculate({
+      aumEokwon: customer.aumEokwon,
+      returnPct: ips.returnPct,
+      risk: ips.risk,
+      timeYears: ips.timeYears,
+      liquidity: ips.liquidity,
+      tax: ips.tax,
+      ratePct: liveBase.ratePct,
+      fxKrw: liveBase.fxKrw,
+      consultationId: consultationId || undefined,
+      clientId: customer.id,
+    }).then((result) => {
+      if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
+    }).finally(() => {
+      if (!cancelled) setCalculating(false);
+    });
+    return () => { cancelled = true; };
+    // 트리거는 analyzeNonce 뿐. 입력값들은 클릭 시점의 최신값을 클로저로 읽는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzeNonce]);
 
   const asOf = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "2-digit", day: "2-digit",
