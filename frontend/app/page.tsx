@@ -1,8 +1,6 @@
 import Header from "@/components/header/Header";
 import Sidebar from "@/components/sidebar/Sidebar";
-import PortfolioSection from "@/components/portfolio/PortfolioSection";
-import BacktestChart from "@/components/portfolio/BacktestChart";
-import TaxSection from "@/components/tax/TaxSection";
+import CentralDashboard from "@/components/dashboard/Centraldashboard";
 import RightPanel from "@/components/right-panel/RightPanel";
 import AuthGuard from "@/components/common/AuthGuard";
 
@@ -18,11 +16,7 @@ export default function Home() {
         <Header />
         <div className="flex items-stretch gap-3 overflow-x-auto">
           <Sidebar />
-          <main className="flex min-w-0 flex-1 flex-col gap-3">
-            <PortfolioSection />
-            <BacktestChart />
-            <TaxSection />
-          </main>
+          <CentralDashboard />
           <RightPanel />
         </div>
       </div>

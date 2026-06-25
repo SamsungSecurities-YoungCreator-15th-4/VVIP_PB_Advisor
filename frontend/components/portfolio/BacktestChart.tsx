@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -109,7 +110,11 @@ export default function BacktestChart() {
       })()
     : ["2021", "2022", "2023", "2024", "2025", "2026"];
 
-  if (portfolioSource === "fallback" && portfolioNote === undefined && !analyzing) {
+  if (
+    portfolioSource === "fallback" &&
+    portfolioNote === undefined &&
+    !analyzing
+  ) {
     return (
       <Card className="flex min-h-[200px] items-center justify-center gap-0 p-3">
         <p className="text-[14px] font-semibold text-muted-foreground">
@@ -142,7 +147,12 @@ export default function BacktestChart() {
               </span>
             </p>
           </HelpTooltip>
-          {hasRealData ? (
+          {analyzing ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              분석중...
+            </div>
+          ) : hasRealData ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
               <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
               연동 완료

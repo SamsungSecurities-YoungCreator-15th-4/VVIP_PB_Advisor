@@ -37,6 +37,21 @@ export interface IpsState {
   unique: string;
 }
 
+/**
+ * 신규 고객(상담 전) 전용 빈 IPS — 더미 값을 쓰지 않고 조율기를 비운 채로 시작한다.
+ * Segment(risk/liquidity)는 "" 일 때 아무 항목도 선택되지 않은 상태로 렌더된다.
+ */
+export const EMPTY_IPS: IpsState = {
+  returnPct: 0,
+  risk: "" as IpsState["risk"],
+  timeYears: 0,
+  liquidity: "" as IpsState["liquidity"],
+  goal: "",
+  tax: "",
+  legal: "",
+  unique: "",
+};
+
 /** STT 상담 연동 상태(비동기 흐름·출처 표시용). */
 export type SttStatus = "idle" | "uploading" | "done" | "error";
 
@@ -128,6 +143,8 @@ interface DashboardState {
   addCustomer: (c: Customer) => void;
   setCustomers: (customers: Customer[]) => void;
   selectCustomer: (id: string) => void;
+  /** 신규 고객의 isNew 플래그 해제(STT/과거 상담 불러오기 등 실제 데이터 확보 시). */
+  clearCustomerNew: (id: string) => void;
   selectPortfolio: (id: string) => void;
   setIps: (patch: Partial<IpsState>) => void;
   setScenario: (patch: Partial<DashboardState["scenario"]>) => void;
@@ -221,21 +238,42 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         : (customers[0]?.id ?? s.selectedCustomerId),
     })),
   selectCustomer: (id) =>
+    set((s) => {
+      // 신규 고객(상담 전)은 IPS도 빈 상태로 시작 — 더미 값을 보여주지 않는다.
+      const target = s.customers.find((c) => c.id === id);
+      return {
+        selectedCustomerId: id,
+        // 고객 전환 시 이전 고객의 분석 결과·스트레스 상태 전체 초기화
+        portfolioSource: "fallback" as DataSource,
+        portfolios: PORTFOLIOS,
+        basePortfolios: PORTFOLIOS,
+        portfolioNote: undefined,
+        correlationHeatmap: null,
+        portfolioTax: null,
+        stressTax: null,
+        taxOptimizer: null,
+        insightResult: null,
+        isStressMode: false,
+        stressPreset: "current",
+        scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분석는 항상 calculate
+        // 신규 고객(상담 전)은 IPS·상담 내역·상담 ID까지 전부 빈 상태로 시작 — 더미 데이터 노출 금지
+        ...(target?.isNew
+          ? {
+              ips: EMPTY_IPS,
+              transcript: [] as ConsultMessage[],
+              transcriptSource: "empty" as DataSource,
+              consultationId: "",
+              sttStatus: "idle" as SttStatus,
+              sttNote: undefined,
+            }
+          : {}),
+      };
+    }),
+  clearCustomerNew: (id) =>
     set((s) => ({
-      selectedCustomerId: id,
-      // 고객 전환 시 이전 고객의 분석 결과·스트레스 상태 전체 초기화
-      portfolioSource: "fallback" as DataSource,
-      portfolios: PORTFOLIOS,
-      basePortfolios: PORTFOLIOS,
-      portfolioNote: undefined,
-      correlationHeatmap: null,
-      portfolioTax: null,
-      stressTax: null,
-      taxOptimizer: null,
-      insightResult: null,
-      isStressMode: false,
-      stressPreset: "current",
-      scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분석는 항상 calculate
+      customers: s.customers.map((c) =>
+        c.id === id ? { ...c, isNew: false } : c,
+      ),
     })),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),
