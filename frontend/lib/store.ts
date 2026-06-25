@@ -223,7 +223,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectCustomer: (id) =>
     set((s) => ({
       selectedCustomerId: id,
-      // 고객 전환 시 이전 고객의 분析 결과·스트레스 상태 전체 초기화
+      // 고객 전환 시 이전 고객의 분석 결과·스트레스 상태 전체 초기화
       portfolioSource: "fallback" as DataSource,
       portfolios: PORTFOLIOS,
       basePortfolios: PORTFOLIOS,
@@ -235,7 +235,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       insightResult: null,
       isStressMode: false,
       stressPreset: "current",
-      scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분析는 항상 calculate
+      scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분석는 항상 calculate
     })),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),

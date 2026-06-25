@@ -354,6 +354,7 @@ export interface PortfolioTaxResponse {
   saved_vs_current: number;
   summary: string;
   calculation_notes: string[];
+  gauge?: StressTaxGauge | null;
   [key: string]: unknown;
 }
 
@@ -640,3 +641,4 @@ export interface MarketDataPoint {
   annualReturn: number;
   annualVolatility: number;
 }
+

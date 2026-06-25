@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Loader2, Sparkles } from "lucide-react";
+import { ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
   fetchRagInsight,
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
+import { DOCUMENT_LINKS } from "@/lib/documentLinks";
 
 /** 우측 하단: AI 인사이트 검색(RAG /rag/insight 실연결) + 결과 + 요약 + 출처/인용 */
 export default function InsightSection() {
@@ -191,22 +192,43 @@ export default function InsightSection() {
                 표시할 출처가 없습니다.
               </p>
             ) : (
-              citations.map((src, i) => (
-                <div
-                  key={`${src.title}-${i}`}
-                  className="flex items-center gap-2 border-b border-muted py-1.5 last:border-none"
-                >
-                  <Download className="size-3 shrink-0 text-muted-foreground/70" />
-                  <span className="flex-1 truncate text-[13px] font-semibold text-muted-foreground/90">
-                    {src.title}
-                  </span>
-                  {src.date && (
-                    <span className="shrink-0 text-[8.5px] font-semibold tabular-nums text-muted-foreground/70">
-                      {src.date}
+              citations.map((src, i) => {
+                const docInfo = DOCUMENT_LINKS[src.title];
+                const displayDate = docInfo?.date ?? src.date;
+                const inner = (
+                  <>
+                    <ExternalLink
+                      className={`size-3 shrink-0 ${docInfo ? "text-brand" : "text-muted-foreground/70"}`}
+                    />
+                    <span className="flex-1 truncate text-[13px] font-semibold text-muted-foreground/90">
+                      {src.title}
                     </span>
-                  )}
-                </div>
-              ))
+                    {displayDate && (
+                      <span className="shrink-0 text-[8.5px] font-semibold tabular-nums text-muted-foreground/70">
+                        {displayDate}
+                      </span>
+                    )}
+                  </>
+                );
+                return docInfo ? (
+                  <a
+                    key={`${src.title}-${i}`}
+                    href={docInfo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 border-b border-muted py-1.5 last:border-none hover:bg-brand/5 rounded transition-colors"
+                  >
+                    {inner}
+                  </a>
+                ) : (
+                  <div
+                    key={`${src.title}-${i}`}
+                    className="flex items-center gap-2 border-b border-muted py-1.5 last:border-none"
+                  >
+                    {inner}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -218,7 +218,9 @@ export interface Portfolio {
   id: "current" | "a" | "b";
   name: string;
   badge: "현재" | "베스트" | "추천";
-  /** 11종 계산 단위 비중(%). 화면에는 assetMapping으로 6분류 합산해 표시 */
+  /** 백엔드 8개 자산군 원본 allocation (도넛 차트에 직접 사용) */
+  allocation?: { asset_class: string; name: string; weight: number }[];
+  /** 11종 계산 단위 비중(%). CorrelationHeatmap 필터링용 — 도넛 표시는 allocation 우선 */
   weights: CalcUnitWeights;
   metrics: PortfolioMetrics;
   backtest?: BacktestPoint[];
