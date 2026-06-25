@@ -705,6 +705,14 @@ def build_six_tax_strategy_cards(
                 "reason": reason_payload["reason"],
                 "reason_code": reason_payload["reason_code"],
                 "raw_reason": reason_payload["raw_reason"],
+                # 프런트 TaxAdviceCard 타입과 1:1 정렬(스키마 통일).
+                # calculate(tax_optimizer)·stress-metrics(base_tax/stressed_tax) 모두
+                # 이 함수를 거치므로 두 엔드포인트가 동일 필드를 내보낸다 → 같은 렌더 코드.
+                "savingManwon": int(round(contribution / 10_000)),
+                "transferableManwon": int(
+                    round(safe_float(card.get("transferableManwon")))
+                ),
+                "ineligibleReason": reason_payload["reason"],
             }
         )
 

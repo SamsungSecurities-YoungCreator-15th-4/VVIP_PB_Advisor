@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import copy
+from functools import lru_cache
 import json
 import logging
 import re
@@ -787,6 +788,46 @@ def _normalize_weight_map(weights: Optional[Dict[str, float]]) -> Optional[Dict[
     return {asset: value / total for asset, value in cleaned.items()}
 
 
+@lru_cache(maxsize=128)
+def _normalize_weight_items(
+    items: Tuple[Tuple[str, float], ...],
+) -> Optional[Tuple[Tuple[str, float], ...]]:
+    """동일한 현재 포트폴리오 비중의 정규화 결과를 재사용한다."""
+
+    normalized = _normalize_weight_map(dict(items))
+    if normalized is None:
+        return None
+    return tuple(normalized.items())
+
+
+def _normalize_current_weight_map(
+    weights: Optional[Dict[str, float]],
+) -> Optional[Dict[str, float]]:
+    """동일한 current_weights를 시뮬레이션 후보마다 다시 정규화하지 않는다."""
+
+    if not isinstance(weights, dict) or not weights:
+        return None
+
+    try:
+        # 실제 정규화에 사용되는 자산군만 캐시 키에 포함한다.
+        # request_id 같은 무관한 메타데이터가 달라도 동일한 비중이면 캐시를 재사용한다.
+        cache_key = tuple(
+            sorted(
+                (asset, float(value))
+                for asset, value in weights.items()
+                if asset in ASSET_TICKERS
+            )
+        )
+    except (TypeError, ValueError):
+        return _normalize_weight_map(weights)
+
+    if not cache_key:
+        return _normalize_weight_map(weights)
+
+    cached = _normalize_weight_items(cache_key)
+    return dict(cached) if cached is not None else None
+
+
 def _subject_weight(weights: Dict[str, float], constraint: Dict[str, Any]) -> float:
     assets = _constraint_subject_assets(constraint)
     return float(sum(float(weights.get(asset, 0.0)) for asset in assets))
@@ -803,7 +844,7 @@ def evaluate_unique_constraints(
     candidate = _normalize_weight_map(candidate_weights)
     if candidate is None:
         return False, [{"reason": "invalid_candidate_weights"}]
-    current = _normalize_weight_map(current_weights)
+    current = _normalize_current_weight_map(current_weights)
     violations: List[Dict[str, Any]] = []
 
     for constraint in (unique_profile or {}).get("semantic_constraints") or []:

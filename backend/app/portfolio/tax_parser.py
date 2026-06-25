@@ -892,7 +892,7 @@ def _extract_facts(text: str, mentions: List[Dict[str, Any]]) -> Dict[str, Any]:
     return facts
 
 
-def _build_routes(
+def build_tax_routes(
     mentions: Sequence[Dict[str, Any]],
     facts: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
@@ -934,7 +934,7 @@ def parse_tax_text(value: Any) -> Dict[str, Any]:
         "tax_mentions": tax_mentions,
         "cost_mentions": cost_mentions,
         "facts": facts,
-        "routes": _build_routes(all_mentions, facts),
+        "routes": build_tax_routes(all_mentions, facts),
         "unmatched_text": [text] if text and not all_mentions else [],
         "parser_version": "deterministic-tax-registry-v1",
         "parser_note": (
@@ -947,14 +947,41 @@ def parse_tax_text(value: Any) -> Dict[str, Any]:
 def apply_tax_profile_to_ips_payload(
     ips_payload: Dict[str, Any],
     tax_value: Any,
+    *,
+    allow_llm_fallback: bool = False,
+    llm_fallback_mode: str = "off",
 ) -> Dict[str, Any]:
-    """Tax 파서 결과에서 확인된 사실만 기존 계산 입력으로 연결한다."""
+    """Tax 파서 결과에서 확인된 사실만 기존 계산 입력으로 연결한다.
+
+    기본 계산 경로에서는 결정론적 파서만 사용한다.
+    LLM fallback은 별도 분석/사전계산 경로가 명시적으로 허용할 때만 실행한다.
+    """ 
 
     result = dict(ips_payload)
     profile = parse_tax_text(tax_value)
-    from .tax_llm_fallback import enrich_tax_profile_with_llm
 
-    profile = enrich_tax_profile_with_llm(profile)
+    # /portfolio/calculate 같은 빈번한 계산 경로에서는 LLM을 호출하지 않는다.
+    # 별도 명시적 분석/사전계산 액션에서만 True로 허용한다.
+    # 하위 호환: 기존 명시적 True 호출은 blocking 분석 액션으로 취급한다.
+    if allow_llm_fallback:
+        llm_fallback_mode = "blocking"
+
+    if llm_fallback_mode == "blocking":
+        from .tax_llm_fallback import enrich_tax_profile_with_llm
+
+        profile = enrich_tax_profile_with_llm(profile)
+    elif llm_fallback_mode == "conditional_non_blocking":
+        from .tax_llm_fallback import (
+            enrich_tax_profile_with_llm_non_blocking,
+        )
+
+        profile = enrich_tax_profile_with_llm_non_blocking(profile)
+    elif llm_fallback_mode != "off":
+        raise ValueError(
+            "llm_fallback_mode는 off, blocking, "
+            "conditional_non_blocking 중 하나여야 합니다."
+        )
+
     facts = profile["facts"]
     result["tax_text"] = profile["raw_text"]
     result["tax_profile"] = profile
