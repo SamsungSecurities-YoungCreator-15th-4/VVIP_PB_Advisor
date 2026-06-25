@@ -54,6 +54,58 @@ ASSET_NAMES_KR = {
     "cash": "현금",
 }
 
+# ============================================================
+# 대시보드 표시용 8개 자산군
+# ============================================================
+# 내부 추천·세금·위험 계산은 위 12개 자산을 그대로 사용한다.
+# 아래 그룹은 최종 API 응답의 도넛 차트와 상관관계 히트맵에만 사용한다.
+#
+# 그룹 키는 프론트와 합의할 안정적인 API 키다.
+# dict 삽입 순서가 곧 차트/히트맵 표시 순서다.
+DASHBOARD_ASSET_GROUPS = {
+    "domestic_equity": {
+        "label": "국내주식",
+        "assets": ("domestic_equity",),
+    },
+    "overseas_equity": {
+        "label": "해외주식",
+        "assets": (
+            "overseas_blue_chip",
+            "overseas_growth",
+            "overseas_dividend",
+        ),
+    },
+    "bond": {
+        "label": "채권",
+        "assets": (
+            "general_bond",
+            "low_coupon_bond",
+            "separate_tax_bond",
+        ),
+    },
+    "gold": {
+        "label": "금",
+        "assets": ("gold",),
+    },
+    "reit": {
+        "label": "리츠",
+        "assets": ("reit",),
+    },
+    "commodity": {
+        "label": "원자재",
+        "assets": ("commodity",),
+    },
+    "dollar": {
+        "label": "달러",
+        "assets": ("dollar",),
+    },
+    "cash": {
+        "label": "현금",
+        "assets": ("cash",),
+    },
+}
+
+
 # 기존 키로 들어온 요청도 한동안 받아주기 위한 호환 alias.
 LEGACY_ASSET_ALIASES = {
     "domestic_stock": "domestic_equity",

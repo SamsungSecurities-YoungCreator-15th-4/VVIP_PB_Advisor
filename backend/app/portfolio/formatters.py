@@ -7,8 +7,10 @@ import math
 from typing import Dict, List, Optional, Any
 
 from .constants import BACKTEST_BASE_INDEX
-from .assets import ASSET_NAMES_KR, ASSET_TICKERS, RISK_LEVEL_NAME
+from .assets import ASSET_NAMES_KR, DASHBOARD_ASSET_GROUPS, RISK_LEVEL_NAME
 from .utils import safe_float, safe_round
+from .dashboard_views import build_dashboard_allocation_payload as build_grouped_allocation_payload
+from .dashboard_views import build_common_correlation_heatmap_payload as build_grouped_correlation_payload
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -52,25 +54,11 @@ def round_allocation_percentages(
     }
 
 
-def build_allocation_payload(portfolio: Dict[str, Any]) -> List[Dict[str, Any]]:
-    raw_weights = [
-        (asset, safe_float(info.get("weight")))
-        for asset, info in portfolio["weights"].items()
-        if safe_float(info.get("weight")) > 1e-12
-    ]
-    rounded = round_allocation_percentages(raw_weights)
 
-    return [
-        {
-            "asset_class": asset,
-            "name": portfolio["weights"][asset].get(
-                "label",
-                ASSET_NAMES_KR.get(asset, asset),
-            ),
-            "weight": rounded[asset],
-        }
-        for asset, _ in raw_weights
-    ]
+def build_allocation_payload(
+    portfolio: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    return build_grouped_allocation_payload(portfolio)
 
 def build_backtest_payload(
     cumulative_returns: List[Dict[str, Any]],
@@ -269,40 +257,32 @@ def build_spec_portfolio_item(
         },
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
+    item["risk_contribution_heatmap"] = (
+        portfolio.get("risk_contribution_heatmap")
+        or portfolio.get("dashboard_risk_contribution_heatmap")
+        or {}
+    )
     return item
+
+
+
+def _round_optional_correlation(value: Any) -> Optional[float]:
+    '''정의되지 않은 상관계수는 0으로 위조하지 않고 None으로 유지한다.'''
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return round(numeric, 4)
 
 
 def build_correlation_heatmap_payload(
     full_response: Dict[str, Any],
 ) -> Dict[str, Any]:
-    raw_matrix = full_response.get("correlation_matrix") or {}
-    asset_keys = [
-        asset
-        for asset in ASSET_TICKERS
-        if asset in raw_matrix
-    ]
-
-    return {
-        "assets": [
-            {
-                "asset_class": asset,
-                "name": ASSET_NAMES_KR.get(asset, asset),
-            }
-            for asset in asset_keys
-        ],
-        "matrix": [
-            [
-                safe_round(
-                    (raw_matrix.get(column_asset) or {}).get(row_asset),
-                    4,
-                )
-                for column_asset in asset_keys
-            ]
-            for row_asset in asset_keys
-        ],
-        "value_type": "correlation",
-    }
-
+    return build_grouped_correlation_payload(full_response)
 
 def build_portfolio_calculate_response(
     full_response: Dict[str, Any],

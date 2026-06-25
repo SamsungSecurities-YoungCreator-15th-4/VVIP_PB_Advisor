@@ -205,6 +205,26 @@ class PortfolioTaxResponse(ExtensibleModel):
     calculation_notes: List[str] = Field(default_factory=list)
 
 
+class PortfolioHeatmapAssetResponse(ExtensibleModel):
+    asset_class: str
+    name: str
+    weight: float = Field(description="해당 포트폴리오의 그룹 비중(%)")
+
+
+class PortfolioRiskContributionHeatmapResponse(ExtensibleModel):
+    assets: List[PortfolioHeatmapAssetResponse]
+    matrix: List[List[float]]
+    value_type: Literal[
+        "portfolio_variance_contribution_percent"
+    ] = "portfolio_variance_contribution_percent"
+    matrix_total: float
+    portfolio_variance: float
+    portfolio_volatility: float
+    method: Literal[
+        "weighted_group_covariance_decomposition"
+    ] = "weighted_group_covariance_decomposition"
+    interpretation: Optional[str] = None
+
 class PortfolioItemResponse(ExtensibleModel):
     kind: Literal["current", "A", "B"]
     rank: Optional[int] = None
@@ -212,6 +232,7 @@ class PortfolioItemResponse(ExtensibleModel):
     badge: Optional[str] = None
     allocation: List[AllocationItemResponse]
     allocation_total: float = Field(100.0, description="표시 비중 합계")
+    risk_contribution_heatmap: PortfolioRiskContributionHeatmapResponse
     metrics: PortfolioMetricsResponse
     metrics_krw: PortfolioMetricsKRWResponse
     vs_current_krw: VsCurrentKRWResponse
@@ -228,8 +249,12 @@ class CorrelationAssetResponse(BaseModel):
 
 class CorrelationHeatmapResponse(BaseModel):
     assets: List[CorrelationAssetResponse]
-    matrix: List[List[float]]
+    matrix: List[List[Optional[float]]]
     value_type: Literal["correlation"] = "correlation"
+    grouping_method: Literal[
+        "equal_weighted_constituent_daily_returns"
+    ] = "equal_weighted_constituent_daily_returns"
+    null_value_reason: str
 
 
 class RejectionCountsResponse(ExtensibleModel):
