@@ -23,7 +23,7 @@ def build_metric_range_payload(
     range_payload: Any,
 ) -> Optional[Dict[str, Any]]:
     """내부 rate 단위의 Monte Carlo Range를 API 표시용 percent 단위로 변환한다."""
-    if not isinstance(range_payload, dict):
+    if not isinstance(range_payload, dict) or not range_payload:
         return None
 
     payload = dict(range_payload)
