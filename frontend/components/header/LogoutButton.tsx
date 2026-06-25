@@ -25,8 +25,13 @@ export default function LogoutButton() {
   async function handleLogout() {
     setLoading(true);
     try {
-      await getSupabase().auth.signOut();
+      // Supabase signOut은 예외 대신 { error }를 반환할 수 있다 — 디버깅용으로 기록.
+      const { error } = await getSupabase().auth.signOut();
+      if (error) console.error("로그아웃 중 오류:", error);
+    } catch (err) {
+      console.error("예기치 못한 로그아웃 오류:", err);
     } finally {
+      // 성공·실패와 무관하게 로그인 화면으로 이동(로컬 세션은 이미 비워짐).
       router.replace("/login");
     }
   }
