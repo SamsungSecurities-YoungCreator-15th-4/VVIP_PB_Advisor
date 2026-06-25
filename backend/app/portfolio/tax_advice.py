@@ -460,6 +460,153 @@ def calc_tax_advice(
     return cards
 
 
+def _build_combined_strategy_cards(
+    portfolio: list[dict[str, Any]],
+    context: dict[str, Any],
+    **kwargs: Any,
+) -> dict[str, dict[str, Any]]:
+    # Combined 계산에 실제로 필요한 카드 필드만 만든다.
+    total_won = context["total_won"]
+    income_by_asset = context["income_by_asset"]
+    excess_won = context["excess_won"]
+    investable_won = context["investable_won"]
+
+    isa_type = str(kwargs.get("isa_type") or "general").lower()
+    isa_tax_free_limit_won = _resolve_isa_tax_free_limit(isa_type)
+    isa_headroom_won = max(
+        ISA_ANNUAL_LIMIT_WON
+        - max(float(kwargs.get("isa_used_manwon") or 0.0), 0.0) * 10_000,
+        0.0,
+    )
+    income_asset_value_won = sum(
+        _safe_nonnegative(item.get("weight")) * total_won
+        for item in portfolio
+        if item.get("asset_class") in _COMPREHENSIVE_INCOME_ASSETS
+    )
+    transferable_won = min(
+        isa_headroom_won,
+        income_asset_value_won,
+        investable_won,
+    )
+
+    isa_opened = bool(kwargs.get("isa_opened", True))
+    isa_can_open_new = kwargs.get("isa_can_open_new")
+    isa_usable = kwargs.get("isa_usable")
+    isa_years_until_liquid = kwargs.get("isa_years_until_liquid")
+    horizon_years = kwargs.get("horizon_years")
+
+    isa_reason: Optional[str] = None
+    if isa_usable is False:
+        isa_reason = "ISA 계좌 적격성·잔여한도 조건 미충족"
+    elif not isa_opened and (
+        isa_can_open_new is False
+        or (isa_can_open_new is None and excess_won > 0)
+    ):
+        isa_reason = "ISA 신규 개설 불가(적격성 조건 미충족)"
+    else:
+        remaining_lockup = (
+            max(float(isa_years_until_liquid), 0.0)
+            if isa_years_until_liquid is not None
+            else (0.0 if isa_opened else float(ISA_MANDATORY_HOLDING_YEARS))
+        )
+        if (
+            horizon_years is not None
+            and remaining_lockup > 0
+            and float(horizon_years) < remaining_lockup
+        ):
+            isa_reason = (
+                f"투자기간 {float(horizon_years):g}년 < ISA 잔여 의무보유 "
+                f"{remaining_lockup:g}년"
+            )
+
+    isa_saving_won = 0.0
+    if (
+        isa_reason is None
+        and transferable_won > 0
+        and income_asset_value_won > 0
+    ):
+        avg_income_rate = sum(income_by_asset.values()) / income_asset_value_won
+        moved_income_won = transferable_won * avg_income_rate
+        comp_portion_won = min(moved_income_won, excess_won)
+        tax_outside_won = (
+            moved_income_won * WITHHOLDING_TAX_RATE
+            + comp_portion_won * context["extra_rate"]
+        )
+        tax_isa_won = max(
+            moved_income_won - isa_tax_free_limit_won,
+            0.0,
+        ) * ISA_EXCESS_TAX_RATE
+        isa_saving_won = max(tax_outside_won - tax_isa_won, 0.0)
+
+    pension_headroom_won = max(
+        PENSION_TAX_CREDIT_LIMIT_WON
+        - max(float(kwargs.get("pension_used_manwon") or 0.0), 0.0) * 10_000,
+        0.0,
+    )
+    pension_reason: Optional[str] = None
+    if kwargs.get("pension_usable") is False:
+        pension_reason = "연금계좌 적격성·잔여 세액공제 한도 조건 미충족"
+    elif not kwargs.get("pension_tax_liability_sufficient", True):
+        pension_reason = "산출세액이 세액공제액보다 작아 전액 공제 효과를 가정할 수 없음"
+    else:
+        age = kwargs.get("age")
+        if age is not None and int(age) < PENSION_RECEIVE_AGE:
+            years_to_receive = PENSION_RECEIVE_AGE - int(age)
+            if (
+                horizon_years is not None
+                and float(horizon_years) < years_to_receive
+            ):
+                pension_reason = (
+                    f"투자기간 {float(horizon_years):g}년 < 연금 수령까지 "
+                    f"{years_to_receive:g}년"
+                )
+
+    pension_transferable = min(pension_headroom_won, investable_won)
+    pension_tax_credit_rate = kwargs.get("pension_tax_credit_rate")
+    if pension_tax_credit_rate is None:
+        pension_tax_credit_rate = PENSION_TAX_CREDIT_RATE
+    pension_saving_won = pension_transferable * max(
+        float(pension_tax_credit_rate),
+        0.0,
+    )
+
+    dividend_income_won = sum(
+        income_by_asset.get(asset_class, 0.0)
+        for asset_class in _DIVIDEND_INCOME_ASSETS
+    )
+    dividend_saving_won = (
+        min(dividend_income_won, excess_won) * context["extra_rate"]
+    )
+
+    bond_income_won = sum(
+        income_by_asset.get(asset_class, 0.0)
+        for asset_class in _BOND_INCOME_ASSETS
+    )
+    bond_saving_won = min(bond_income_won, excess_won) * max(
+        context["marginal"] - LONG_BOND_SEPARATE_TAX_RATE,
+        0.0,
+    )
+
+    return {
+        "isa": {
+            "savingWon": round(isa_saving_won),
+            "applicable": isa_reason is None and isa_saving_won > 0,
+            "ineligibleReason": isa_reason,
+        },
+        "pension_credit": {
+            "savingWon": round(pension_saving_won) if pension_reason is None else 0,
+            "applicable": pension_reason is None and pension_saving_won > 0,
+            "ineligibleReason": pension_reason,
+        },
+        "low_tax_dividend": {
+            "applicable": dividend_saving_won > 0,
+        },
+        "separate_bond": {
+            "applicable": bond_saving_won > 0,
+        },
+    }
+
+
 def calc_combined_tax_saving(
     portfolio: list[dict[str, Any]],
     gross_return: float,
@@ -468,6 +615,7 @@ def calc_combined_tax_saving(
     standalone_cards: Optional[
         list[dict[str, Any]]
     ] = None,
+    calculate_standalone_cards: bool = True,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Combine six strategies without double-using shared tax bases.
@@ -488,20 +636,27 @@ def calc_combined_tax_saving(
         near_term_need_manwon=kwargs.get("near_term_need_manwon") or 0.0,
         expected_returns_by_asset=expected_returns_by_asset,
     )
-    card_list = (
-        standalone_cards
-        if standalone_cards is not None
-        else calc_tax_advice(
+    if standalone_cards is not None:
+        cards = {
+            card["key"]: card
+            for card in standalone_cards
+        }
+    elif calculate_standalone_cards:
+        cards = {
+            card["key"]: card
+            for card in calc_tax_advice(
+                portfolio,
+                gross_return,
+                total_assets,
+                **kwargs,
+            )
+        }
+    else:
+        cards = _build_combined_strategy_cards(
             portfolio,
-            gross_return,
-            total_assets,
+            context,
             **kwargs,
         )
-    )
-    cards = {
-        card["key"]: card
-        for card in card_list
-    }
     income_by_asset = context["income_by_asset"]
     total_won = context["total_won"]
     rem = context["excess_won"]

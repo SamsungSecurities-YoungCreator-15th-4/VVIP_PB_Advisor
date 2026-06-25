@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.portfolio import tax_advice as tax_advice_module
+
 from app.portfolio.constants import (
     ISA_GENERAL_TAX_FREE_LIMIT,
     ISA_SEOGMIN_TAX_FREE_LIMIT,
@@ -385,3 +387,118 @@ def test_shared_monte_carlo_context_matches_direct_path() -> None:
         == direct["after_tax_return"]
     )
     assert reused["mdd"] == direct["mdd"]
+
+
+def test_snapshot_supplement_outer_join_replaces_empty_column() -> None:
+    live_index = pd.date_range(
+        "2025-01-02",
+        periods=2,
+        freq="D",
+    )
+    snapshot_index = pd.date_range(
+        "2025-01-01",
+        periods=3,
+        freq="D",
+    )
+    live = pd.DataFrame(
+        {
+            "asset_a": [1.0, 1.1],
+            "asset_b": [np.nan, np.nan],
+        },
+        index=live_index,
+    )
+    snapshot = pd.DataFrame(
+        {
+            "asset_b": [2.0, 2.1, 2.2],
+        },
+        index=snapshot_index,
+    )
+
+    combined, supplemented, remaining = (
+        _supplement_missing_assets_from_snapshot(
+            live,
+            ["asset_b"],
+            snapshot,
+        )
+    )
+
+    assert list(combined.index) == list(snapshot_index)
+    assert combined.loc[
+        snapshot_index,
+        "asset_b",
+    ].tolist() == [2.0, 2.1, 2.2]
+    assert supplemented == ["asset_b"]
+    assert remaining == []
+
+
+def test_combined_tax_lightweight_path_skips_full_cards(
+    monkeypatch,
+) -> None:
+    portfolio = [
+        {
+            "asset_class": "overseas_dividend",
+            "weight": 0.5,
+        },
+        {
+            "asset_class": "general_bond",
+            "weight": 0.5,
+        },
+    ]
+    kwargs = {
+        "isa_used_manwon": 0.0,
+        "pension_used_manwon": 0.0,
+        "realized_loss_manwon": 100.0,
+        "other_financial_income": 0.3,
+        "marginal_income_tax_rate": 0.385,
+        "age": 55,
+        "horizon_years": 10,
+        "near_term_need_manwon": 0.0,
+        "isa_opened": True,
+        "isa_type": "general",
+        "isa_can_open_new": True,
+        "isa_usable": True,
+        "isa_years_until_liquid": 0.0,
+        "pension_usable": True,
+        "pension_tax_liability_sufficient": True,
+        "pension_tax_credit_rate": 0.132,
+        "expected_returns_by_asset": {
+            "overseas_dividend": 0.08,
+            "general_bond": 0.04,
+        },
+    }
+
+    standalone = tax_advice_module.calc_tax_advice(
+        portfolio,
+        0.06,
+        10.0,
+        **kwargs,
+    )
+    expected = tax_advice_module.calc_combined_tax_saving(
+        portfolio,
+        0.06,
+        10.0,
+        standalone_cards=standalone,
+        **kwargs,
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError(
+            "calc_tax_advice should not run for the lightweight path"
+        )
+
+    monkeypatch.setattr(
+        tax_advice_module,
+        "calc_tax_advice",
+        fail_if_called,
+    )
+
+    actual = tax_advice_module.calc_combined_tax_saving(
+        portfolio,
+        0.06,
+        10.0,
+        calculate_standalone_cards=False,
+        **kwargs,
+    )
+
+    assert actual == expected
+

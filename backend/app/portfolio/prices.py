@@ -559,25 +559,16 @@ def _supplement_missing_assets_from_snapshot(
         if snapshot_series.empty:
             continue
 
-        if combined.empty:
-            combined = (
-                snapshot_series.to_frame(
-                    name=asset
-                )
+        combined = (
+            combined.drop(
+                columns=[asset],
+                errors="ignore",
             )
-        else:
-            union_index = (
-                combined.index.union(
-                    snapshot_series.index
-                )
+            .join(
+                snapshot_series.rename(asset),
+                how="outer",
             )
-            combined = combined.reindex(
-                union_index
-            )
-            combined.loc[
-                snapshot_series.index,
-                asset,
-            ] = snapshot_series
+        )
         supplemented.append(asset)
 
     remaining = [

@@ -848,6 +848,7 @@ def calculate_six_strategy_tax_model(
                 portfolio,
                 expected_return,
                 total_asset / 1e8,
+                calculate_standalone_cards=False,
                 **kwargs,
             )
         )
