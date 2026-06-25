@@ -148,8 +148,7 @@ export default function Sidebar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  // 자동 분석하기: 페이지 첫 로드 또는 고객 전환 시 handleAnalyze 자동 실행
-  // (handleAnalyze가 early return 이후 정의되므로 ref를 경유)
+  // 자동 분析하기: 페이지 첫 로드 또는 고객 전환 시 handleAnalyze 자동 실행
   const handleAnalyzeRef = useRef<(() => Promise<void>) | null>(null);
   const autoAnalyzedForRef = useRef<string | null>(null);
   useEffect(() => {
@@ -222,10 +221,8 @@ export default function Sidebar() {
     prevRealtimeStatusRef.current = realtimeStatus;
   }, [realtimeStatus]);
 
-  if (!customer) return null;
-
   const handleAnalyze = async () => {
-    if (analyzing) return;
+    if (!customer || analyzing) return;
 
     // stressPreset이 현재값 외 프리셋이거나 슬라이더가 live 기준값에서 벗어나면 스트레스 테스트 API 호출
     const shouldStress =
@@ -274,7 +271,7 @@ export default function Sidebar() {
         if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
         // 절세 제안·종합과세 게이지는 calculate의 tax_optimizer를 기본 소스로 쓴다.
         setTaxOptimizer(result.data.taxOptimizer);
-        // STT 직후 첫 분석하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
+        // STT 직후 첫 분析하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
         if (
           hasFreshStt &&
           customer.clientId &&
@@ -294,10 +291,12 @@ export default function Sidebar() {
       setAnalyzing(false);
     }
   };
-  // render 중 직접 ref 업데이트 금지 → effect로 매 렌더마다 최신 함수를 저장
+  // 매 렌더마다 최신 handleAnalyze 클로저를 ref에 저장 (early return 이전에 위치)
   useEffect(() => {
     handleAnalyzeRef.current = handleAnalyze;
   });
+
+  if (!customer) return null;
 
   const handleDropdownToggle = () => {
     if (!dropdownOpen && dropdownTriggerRef.current) {
