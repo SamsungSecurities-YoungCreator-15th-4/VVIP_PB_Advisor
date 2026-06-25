@@ -71,7 +71,11 @@ interface DashboardState {
   portfolioSource: DataSource;
   portfolioNote?: string;
   /** calculate 결과로 portfolios·basePortfolios 동시 갱신, isStressMode: false */
-  setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
+  setPortfolios: (
+    portfolios: Portfolio[],
+    source: DataSource,
+    note?: string,
+  ) => void;
   /** stress-metrics 결과를 portfolios에 반영 (basePortfolios는 유지), isStressMode: true */
   setStressPortfolios: (portfolios: Portfolio[]) => void;
 
@@ -90,12 +94,17 @@ interface DashboardState {
   setPortfolioTax: (tax: Record<string, PortfolioTaxResponse>) => void;
   /** stress-metrics 응답의 base_tax/stressed_tax 쌍 — TaxSection 연동용 */
   stressTax: { base: StressTaxData; stressed: StressTaxData } | null;
-  setStressTax: (tax: { base: StressTaxData; stressed: StressTaxData } | null) => void;
+  setStressTax: (
+    tax: { base: StressTaxData; stressed: StressTaxData } | null,
+  ) => void;
+  /** calculate 응답의 tax_optimizer — 스트레스 미진입 시 절세 제안·종합과세 게이지 소스 */
+  taxOptimizer: Record<string, StressTaxData> | null;
+  setTaxOptimizer: (tax: Record<string, StressTaxData> | null) => void;
 
-  // ── 분析하기 버튼 상태 ──
+  // ── 분석하기 버튼 상태 ──
   analyzing: boolean;
   setAnalyzing: (v: boolean) => void;
-  /** IPS·시나리오 기준선 — 마지막 분석 시점을 기록해 다음 분析 시 변화 여부 판단에 사용 */
+  /** IPS·시나리오 기준선 — 마지막 분석 시점을 기록해 다음 분석 시 변화 여부 판단에 사용 */
   lastAnalyzedIps: IpsState | null;
   lastAnalyzedScenario: { ratePct: number; fxKrw: number } | null;
   setAnalysisBaseline: (
@@ -157,9 +166,14 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   portfolioSource: "fallback" as DataSource,
   portfolioNote: "포트폴리오를 계산 중입니다.",
   setPortfolios: (portfolios, source, note) =>
-    set({ portfolios, basePortfolios: portfolios, portfolioSource: source, portfolioNote: note, isStressMode: false }),
-  setStressPortfolios: (portfolios) =>
-    set({ portfolios, isStressMode: true }),
+    set({
+      portfolios,
+      basePortfolios: portfolios,
+      portfolioSource: source,
+      portfolioNote: note,
+      isStressMode: false,
+    }),
+  setStressPortfolios: (portfolios) => set({ portfolios, isStressMode: true }),
 
   isStressMode: false,
   stressPreset: "current",
@@ -173,6 +187,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setPortfolioTax: (tax) => set({ portfolioTax: tax }),
   stressTax: null,
   setStressTax: (tax) => set({ stressTax: tax }),
+  taxOptimizer: null,
+  setTaxOptimizer: (tax) => set({ taxOptimizer: tax }),
 
   analyzing: false,
   setAnalyzing: (v) => set({ analyzing: v }),
@@ -204,7 +220,23 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         ? s.selectedCustomerId
         : (customers[0]?.id ?? s.selectedCustomerId),
     })),
-  selectCustomer: (id) => set({ selectedCustomerId: id }),
+  selectCustomer: (id) =>
+    set((s) => ({
+      selectedCustomerId: id,
+      // 고객 전환 시 이전 고객의 분析 결과·스트레스 상태 전체 초기화
+      portfolioSource: "fallback" as DataSource,
+      portfolios: PORTFOLIOS,
+      basePortfolios: PORTFOLIOS,
+      portfolioNote: undefined,
+      correlationHeatmap: null,
+      portfolioTax: null,
+      stressTax: null,
+      taxOptimizer: null,
+      insightResult: null,
+      isStressMode: false,
+      stressPreset: "current",
+      scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분析는 항상 calculate
+    })),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),
   setScenario: (patch) =>
@@ -219,7 +251,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     })),
   setOtherIncome: (manwon) => set({ otherIncomeManwon: Math.max(0, manwon) }),
 
-  setTranscript: (transcript, source) => set({ transcript, transcriptSource: source }),
+  setTranscript: (transcript, source) =>
+    set({ transcript, transcriptSource: source }),
   setConsultationId: (id) => set({ consultationId: id }),
   setSttStatus: (status, note) => set({ sttStatus: status, sttNote: note }),
 }));

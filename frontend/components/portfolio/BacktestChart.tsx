@@ -45,7 +45,7 @@ const pctFmt = (v: number) => {
 export default function BacktestChart() {
   const [benchmark, setBenchmark] = useState<Benchmark>("KOSPI");
   const helpMode = useDashboardStore((s) => s.helpMode);
-  const portfolios      = useDashboardStore((s) => s.portfolios);
+  const portfolios = useDashboardStore((s) => s.portfolios);
   const portfolioSource = useDashboardStore((s) => s.portfolioSource);
 
   const displayPortfolios = portfolios;
@@ -106,6 +106,16 @@ export default function BacktestChart() {
         return ticks;
       })()
     : ["2021", "2022", "2023", "2024", "2025", "2026"];
+
+  if (portfolioSource === "fallback") {
+    return (
+      <Card className="flex min-h-[200px] items-center justify-center gap-0 p-3">
+        <p className="text-[14px] font-semibold text-muted-foreground">
+          분석 결과가 존재하지 않습니다
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card className="gap-0 p-3">
@@ -194,7 +204,9 @@ export default function BacktestChart() {
               axisLine={false}
               tick={{ fontSize: 12, fill: "#B0B8C1", fontWeight: 600 }}
               ticks={xTicks}
-              tickFormatter={hasRealData ? (v: string) => v.slice(0, 4) : undefined}
+              tickFormatter={
+                hasRealData ? (v: string) => v.slice(0, 4) : undefined
+              }
             />
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip

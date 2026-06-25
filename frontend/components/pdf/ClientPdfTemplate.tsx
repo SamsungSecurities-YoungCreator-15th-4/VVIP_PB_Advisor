@@ -3,15 +3,9 @@
  * 구조: 표지 → 시장&IPS → 포트폴리오 비교&지표 → 절세&계좌 → 분산투자&상관관계
  */
 
-import {
-  PORTFOLIOS,
-  TAX_EFFECT,
-  TAX_ADVICE,
-  CORRELATION_MATRIX,
-  BASE_TIME,
-} from "@/lib/mockData";
 import { DISPLAY_GROUPS } from "@/lib/assetMapping";
 import { useDashboardStore } from "@/lib/store";
+import { buildPdfTaxEffect, buildPdfTaxAdvice, extractTaxOptimizerEntry } from "@/lib/pdfTaxData";
 
 /** 현재 대시보드에서 선택된 고객(없으면 첫 고객)을 store 에서 읽는다. */
 function useSelectedCustomer() {
@@ -78,6 +72,11 @@ const getTodayShort = () =>
     .replace(/\. /g, ".")
     .replace(/\.$/, "");
 
+const getNow = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
 // ── 공통 헬퍼 ──────────────────────────────────────────────────
 
 function PageFooter({ page, total }: { page: number; total: number }) {
@@ -140,10 +139,9 @@ function CoverPage() {
   const C = useSelectedCustomer();
   const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
   const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const taxEffect = buildPdfTaxEffect(extractTaxOptimizerEntry(useDashboardStore((s) => s.taxOptimizer), selectedPortfolioId));
   const selectedPortfolioName =
-    (storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS).find(
-      (p) => p.id === selectedPortfolioId,
-    )?.name ?? "포트폴리오 A";
+    storePortfolios.find((p) => p.id === selectedPortfolioId)?.name ?? "포트폴리오 A";
   return (
     <div
       data-pdf-page=""
@@ -293,11 +291,11 @@ function CoverPage() {
         <div style={{ display: "flex" }}>
           {[
             { label: "보고서 일자", value: getTodayShort() },
-            { label: "기준 시각", value: `${BASE_TIME} 기준` },
+            { label: "기준 시각", value: `${getNow()} 기준` },
             { label: "선택 포트폴리오", value: selectedPortfolioName },
             {
               label: "예상 연간 절세",
-              value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원`,
+              value: `+${taxEffect.annualSavingManwon.toLocaleString()}만원`,
             },
           ].map((item, i) => (
             <div
@@ -736,9 +734,9 @@ const METRIC_CARDS = [
 
 function PortfolioPage() {
   const storePortfolios = useDashboardStore((s) => s.portfolios);
-  const displayPortfolios = storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS;
-  const portCurrent = displayPortfolios.find((p) => p.id === "current") ?? PORTFOLIOS.find((p) => p.id === "current")!;
-  const portA = displayPortfolios.find((p) => p.id === "a") ?? PORTFOLIOS.find((p) => p.id === "a")!;
+  const portCurrent = storePortfolios.find((p) => p.id === "current");
+  const portA = storePortfolios.find((p) => p.id === "a");
+  if (!portCurrent || !portA) return null;
   const cur = portCurrent.metrics;
   const a = portA.metrics;
 
@@ -1122,9 +1120,14 @@ function PortfolioPage() {
 
 function TaxPage() {
   const C = useSelectedCustomer();
+  const taxOptimizerMap = useDashboardStore((s) => s.taxOptimizer);
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const taxOptimizerEntry = extractTaxOptimizerEntry(taxOptimizerMap, selectedPortfolioId);
+  const taxEffect = buildPdfTaxEffect(taxOptimizerEntry);
+  const taxAdvice = buildPdfTaxAdvice(taxOptimizerEntry);
   const accountRows = ACCOUNT_PDF.filter((acct) => acct.key !== "general").map(
     (acct) => {
-      const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
+      const accData = taxEffect.accounts.find((a) => a.name === acct.name);
       const used =
         accData?.used != null
           ? accData.used
@@ -1202,7 +1205,7 @@ function TaxPage() {
                 lineHeight: 1,
               }}
             >
-              + {TAX_EFFECT.annualSavingManwon.toLocaleString()}만원
+              + {taxEffect.annualSavingManwon.toLocaleString()}만원
             </div>
           </div>
           <div style={{ textAlign: "right", maxWidth: 260 }}>
@@ -1213,7 +1216,7 @@ function TaxPage() {
                 lineHeight: 1.7,
               }}
             >
-              {TAX_EFFECT.subNote}
+              {taxEffect.subNote}
             </div>
           </div>
         </div>
@@ -1224,7 +1227,7 @@ function TaxPage() {
         >
           <SectionBar />
           <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
-            절세 전략 비교 ({TAX_EFFECT.flow.pretaxLabel})
+            절세 전략 비교 ({taxEffect.flow.pretaxLabel})
           </div>
         </div>
 
@@ -1272,7 +1275,7 @@ function TaxPage() {
                 </tr>
               </thead>
               <tbody>
-                {TAX_EFFECT.flow.rows.map((row, i) => (
+                {taxEffect.flow.rows.map((row, i) => (
                   <tr
                     key={row.label}
                     style={{
@@ -1334,11 +1337,11 @@ function TaxPage() {
               }}
             >
               <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.7 }}>
-                ✓ 세후 수익률 {TAX_EFFECT.afterTaxReturn.from} →{" "}
-                {TAX_EFFECT.afterTaxReturn.to} (
-                {TAX_EFFECT.afterTaxReturn.delta})<br />✓ 실효세 절감{" "}
-                {TAX_EFFECT.effectiveTax.from} → {TAX_EFFECT.effectiveTax.to} (
-                {TAX_EFFECT.effectiveTax.delta})
+                ✓ 세후 수익률 {taxEffect.afterTaxReturn.from} →{" "}
+                {taxEffect.afterTaxReturn.to} (
+                {taxEffect.afterTaxReturn.delta})<br />✓ 실효세 절감{" "}
+                {taxEffect.effectiveTax.from} → {taxEffect.effectiveTax.to} (
+                {taxEffect.effectiveTax.delta})
               </div>
             </div>
           </div>
@@ -1630,7 +1633,7 @@ function TaxPage() {
             marginBottom: 10,
           }}
         >
-          {TAX_ADVICE.cards.map((card) => (
+          {taxAdvice.cards.map((card) => (
             <div
               key={card.title}
               style={{
@@ -1687,10 +1690,10 @@ function TaxPage() {
           }}
         >
           <span style={{ fontSize: 10, fontWeight: 700, color: BRAND_DARK }}>
-            {TAX_ADVICE.totalLabel}
+            {taxAdvice.totalLabel}
           </span>
           <span style={{ fontSize: 11, fontWeight: 900, color: BRAND_DARK }}>
-            {TAX_ADVICE.totalSaving}
+            {taxAdvice.totalSaving}
           </span>
         </div>
       </div>
@@ -1703,6 +1706,7 @@ function TaxPage() {
 // ── Page 5: 전략별 추천 상품 ────────────────────────────────────
 
 function TaxProductsPage() {
+  const taxAdvice = buildPdfTaxAdvice(extractTaxOptimizerEntry(useDashboardStore((s) => s.taxOptimizer), useDashboardStore((s) => s.selectedPortfolioId)));
   return (
     <div
       data-pdf-page=""
@@ -1788,7 +1792,7 @@ function TaxProductsPage() {
             </tr>
           </thead>
           <tbody>
-            {TAX_ADVICE.cards.map((card, i) => (
+            {taxAdvice.cards.map((card, i) => (
               <tr
                 key={card.title}
                 style={{
@@ -1878,7 +1882,32 @@ const ASSET_CARDS = [
   },
 ];
 
+// DISPLAY_GROUPS → 백엔드 asset_class 매핑 (대표 자산 순서대로, 첫 히트 사용)
+const DISPLAY_GROUP_BACKEND: Record<string, string[]> = {
+  국내주식: ["domestic_equity"],
+  해외배당주: ["overseas_dividend"],
+  해외성장주: ["overseas_blue_chip", "overseas_growth"],
+  일반채권: ["general_bond", "cash"],
+  저쿠폰채: ["low_coupon_bond"],
+  분리과세: ["separate_tax_bond"],
+};
+
+function buildCorrMatrix(heatmap: { assets: { asset_class: string }[]; matrix: number[][] } | null): number[][] {
+  if (!heatmap) return DISPLAY_GROUPS.map((_, i) => DISPLAY_GROUPS.map((__, j) => (i === j ? 1 : 0)));
+  return DISPLAY_GROUPS.map((g1) => {
+    const i1 = heatmap.assets.findIndex((a) => (DISPLAY_GROUP_BACKEND[g1] ?? []).includes(a.asset_class));
+    return DISPLAY_GROUPS.map((g2) => {
+      if (g1 === g2) return 1;
+      const i2 = heatmap.assets.findIndex((a) => (DISPLAY_GROUP_BACKEND[g2] ?? []).includes(a.asset_class));
+      if (i1 === -1 || i2 === -1) return 0;
+      return heatmap.matrix[i1]?.[i2] ?? 0;
+    });
+  });
+}
+
 function DiversificationPage() {
+  const heatmap = useDashboardStore((s) => s.correlationHeatmap);
+  const corrMatrix = buildCorrMatrix(heatmap);
   return (
     <div
       data-pdf-page=""
@@ -1983,7 +2012,7 @@ function DiversificationPage() {
               </tr>
             </thead>
             <tbody>
-              {CORRELATION_MATRIX.map((row, ri) => (
+              {corrMatrix.map((row, ri) => (
                 <tr key={ri}>
                   <td
                     style={{

@@ -85,6 +85,8 @@ interface PortfolioCalculateResponse {
     matrix: number[][];
     value_type?: string;
   };
+  // 포트폴리오별 절세 맵 {current, portfolio_a, portfolio_b} — 각 값은 build_tax_optimizer_payload 출력.
+  tax_optimizer?: Record<string, StressTaxData>;
 }
 
 // ── IPS 값 변환 ────────────────────────────────────────────────
@@ -225,6 +227,8 @@ export interface PortfolioCalcData {
   calculationSessionId: string;
   correlationHeatmap: CorrelationHeatmapResponse | null;
   portfolioTax: Record<string, PortfolioTaxResponse> | null;
+  // 포트폴리오별 절세 맵 {current, portfolio_a, portfolio_b}. 스트레스 미진입 시 절세 화면 소스.
+  taxOptimizer: Record<string, StressTaxData> | null;
 }
 
 function extractPortfolioTax(
@@ -284,6 +288,7 @@ export async function fetchPortfolioCalculate(
       calculationSessionId: res.calculation_session_id,
       correlationHeatmap: (res.correlation_heatmap as CorrelationHeatmapResponse) ?? null,
       portfolioTax: extractPortfolioTax(res.portfolios),
+      taxOptimizer: res.tax_optimizer ?? null,
     });
   } catch (err) {
     const note =
@@ -291,7 +296,7 @@ export async function fetchPortfolioCalculate(
         ? "응답 시간 초과로 데모 포트폴리오를 표시합니다."
         : "백엔드 연결 실패로 데모 포트폴리오를 표시합니다.";
     return fallback(
-      { portfolios: PORTFOLIOS, calculationSessionId: "", correlationHeatmap: null, portfolioTax: null },
+      { portfolios: PORTFOLIOS, calculationSessionId: "", correlationHeatmap: null, portfolioTax: null, taxOptimizer: null },
       note,
     );
   }

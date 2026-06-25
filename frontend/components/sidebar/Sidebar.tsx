@@ -104,16 +104,17 @@ export default function Sidebar() {
     setPortfolios,
     setStressPortfolios,
     setStressTax,
+    setTaxOptimizer,
     setCorrelationHeatmap,
     setPortfolioTax,
     stressPreset,
     clearStressMode,
     analyzing,
     setAnalyzing,
-    lastAnalyzedIps,
-    lastAnalyzedScenario,
     setAnalysisBaseline,
     consultationId,
+    liveBaseLoaded,
+    portfolioSource,
   } = useDashboardStore();
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -130,7 +131,7 @@ export default function Sidebar() {
   const [newAum, setNewAum] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  // STT(업로드·실시간) 완료 후 첫 분析하기 때만 스냅샷 저장하기 위한 플래그
+  // STT(업로드·실시간) 완료 후 첫 분석하기 때만 스냅샷 저장하기 위한 플래그
   const [hasFreshStt, setHasFreshStt] = useState(false);
 
   const {
@@ -146,6 +147,38 @@ export default function Sidebar() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // 자동 분析하기: 페이지 첫 로드 또는 고객 전환 시 handleAnalyze 자동 실행
+  const handleAnalyzeRef = useRef<(() => Promise<void>) | null>(null);
+  const autoAnalyzedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!customer || !liveBaseLoaded || analyzing) return;
+    if (portfolioSource === "live") return;
+    const cid = customer.id;
+    if (autoAnalyzedForRef.current === cid) return;
+    autoAnalyzedForRef.current = cid;
+
+    void (async () => {
+      // DB 스냅샷 복원 시도: clientId가 있는 고객만 (신규 미저장 고객 제외)
+      if (customer.clientId) {
+        const dashRes = await getPreviousDashboard(customer.clientId);
+        if (dashRes.source === "live" && dashRes.data) {
+          const dr = dashRes.data
+            .dashboard_result as unknown as PortfolioCalcData;
+          if (dr.portfolios?.length) {
+            setPortfolios(dr.portfolios, "live");
+            if (dr.correlationHeatmap)
+              setCorrelationHeatmap(dr.correlationHeatmap);
+            if (dr.portfolioTax) setPortfolioTax(dr.portfolioTax);
+            setTaxOptimizer(dr.taxOptimizer ?? null);
+            return; // 스냅샷 복원 성공 → 신규 분석 스킵
+          }
+        }
+      }
+      // 스냅샷 없거나 clientId 미보유 → 신규 분석하기
+      void handleAnalyzeRef.current?.();
+    })();
+  }, [customer, liveBaseLoaded, portfolioSource, analyzing, setPortfolios, setCorrelationHeatmap, setPortfolioTax, setTaxOptimizer]);
 
   // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
@@ -188,31 +221,18 @@ export default function Sidebar() {
     prevRealtimeStatusRef.current = realtimeStatus;
   }, [realtimeStatus]);
 
-  if (!customer) return null;
-
   const handleAnalyze = async () => {
-    if (analyzing) return;
+    if (!customer || analyzing) return;
 
-    const ipsChanged =
-      lastAnalyzedIps === null ||
-      lastAnalyzedIps.returnPct !== ips.returnPct ||
-      lastAnalyzedIps.risk !== ips.risk ||
-      lastAnalyzedIps.timeYears !== ips.timeYears ||
-      lastAnalyzedIps.liquidity !== ips.liquidity ||
-      lastAnalyzedIps.tax !== ips.tax ||
-      lastAnalyzedIps.goal !== ips.goal;
-
-    const scenarioChanged =
-      lastAnalyzedScenario !== null &&
-      (lastAnalyzedScenario.ratePct !== scenario.ratePct ||
-        lastAnalyzedScenario.fxKrw !== scenario.fxKrw);
-
-    const onlyStressChanged =
-      !ipsChanged && scenarioChanged && stressPreset !== "current";
+    // stressPreset이 현재값 외 프리셋이거나 슬라이더가 live 기준값에서 벗어나면 스트레스 테스트 API 호출
+    const shouldStress =
+      (stressPreset !== "current" && stressPreset !== null) ||
+      scenario.ratePct !== liveBase.ratePct ||
+      scenario.fxKrw !== liveBase.fxKrw;
 
     setAnalyzing(true);
     try {
-      if (onlyStressChanged) {
+      if (shouldStress) {
         const stressResult = await fetchStressMetrics(
           {
             aumEokwon: customer.aumEokwon,
@@ -249,8 +269,15 @@ export default function Sidebar() {
         if (result.data.correlationHeatmap)
           setCorrelationHeatmap(result.data.correlationHeatmap);
         if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
+        // 절세 제안·종합과세 게이지는 calculate의 tax_optimizer를 기본 소스로 쓴다.
+        setTaxOptimizer(result.data.taxOptimizer);
         // STT 직후 첫 분析하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
-        if (hasFreshStt && customer.clientId && consultationId && result.source === "live") {
+        if (
+          hasFreshStt &&
+          customer.clientId &&
+          consultationId &&
+          result.source === "live"
+        ) {
           setHasFreshStt(false);
           void saveDashboardSnapshot(customer.clientId, {
             consultation_id: consultationId,
@@ -264,6 +291,12 @@ export default function Sidebar() {
       setAnalyzing(false);
     }
   };
+  // 매 렌더마다 최신 handleAnalyze 클로저를 ref에 저장 (early return 이전에 위치)
+  useEffect(() => {
+    handleAnalyzeRef.current = handleAnalyze;
+  });
+
+  if (!customer) return null;
 
   const handleDropdownToggle = () => {
     if (!dropdownOpen && dropdownTriggerRef.current) {
@@ -369,11 +402,14 @@ export default function Sidebar() {
       // 가장 최근 저장된 대시보드 스냅샷으로 중앙 대시보드 복원
       const dashRes = await getPreviousDashboard(customer.clientId);
       if (dashRes.source === "live" && dashRes.data) {
-        const dr = dashRes.data.dashboard_result as unknown as PortfolioCalcData;
+        const dr = dashRes.data
+          .dashboard_result as unknown as PortfolioCalcData;
         if (dr.portfolios?.length) {
           setPortfolios(dr.portfolios, "live");
-          if (dr.correlationHeatmap) setCorrelationHeatmap(dr.correlationHeatmap);
+          if (dr.correlationHeatmap)
+            setCorrelationHeatmap(dr.correlationHeatmap);
           if (dr.portfolioTax) setPortfolioTax(dr.portfolioTax);
+          setTaxOptimizer(dr.taxOptimizer ?? null);
         }
       }
       setHistoryOpen(false);
@@ -732,10 +768,10 @@ export default function Sidebar() {
           {analyzing ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              분析 중…
+              분석 중…
             </>
           ) : (
-            "분析하기"
+            "분석하기"
           )}
         </Button>
       </aside>
