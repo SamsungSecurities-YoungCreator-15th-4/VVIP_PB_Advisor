@@ -30,6 +30,15 @@ class Settings:
             "ALLOWED_ORIGINS",
             "http://localhost:3000,http://127.0.0.1:3000",
         )
+        # Vercel 프리뷰 URL은 배포마다 바뀌어(vvip-pb-advisor-<hash>-...vercel.app)
+        # 고정 목록(ALLOWED_ORIGINS)으로는 매번 CORS 프리플라이트가 400으로 막힌다.
+        # 이 프로젝트의 vercel.app 배포(프로덕션·프리뷰)를 정규식으로 허용한다.
+        # allow_credentials=True 와 함께 쓰여도 매칭된 origin만 반사하므로 와일드카드(*)
+        # 보다 안전하다. 범위를 이 프로젝트 도메인으로 한정해 임의 *.vercel.app 은 막는다.
+        self.allowed_origin_regex = os.getenv(
+            "ALLOWED_ORIGIN_REGEX",
+            r"^https://vvip-pb-advisor(-[a-z0-9-]+)?\.vercel\.app$",
+        )
 
     @property
     def allowed_origins(self) -> list[str]:
