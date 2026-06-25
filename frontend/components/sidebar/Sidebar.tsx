@@ -179,7 +179,7 @@ export default function Sidebar() {
       // 스냅샷 없거나 clientId 미보유 → 신규 분석하기
       void handleAnalyzeRef.current?.();
     })();
-  }, [customer?.id, liveBaseLoaded, portfolioSource, analyzing]);
+  }, [customer, liveBaseLoaded, portfolioSource, analyzing, setPortfolios, setCorrelationHeatmap, setPortfolioTax, setTaxOptimizer]);
 
   // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
