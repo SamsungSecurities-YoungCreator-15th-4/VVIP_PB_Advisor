@@ -113,11 +113,11 @@ def _normalize_summary_as_noun_phrase(text: str) -> str:
         return summary
 
     summary = re.sub(
-        r"^(?P<subject>[가-힣A-Za-z0-9]+)(?:이|가|은|는)\s+",
+        r"^(?P<subject>[가-힣A-Za-z0-9]{2,})(?:이|가|은|는)\s+",
         r"\g<subject> ",
         summary,
     )
-    summary = re.sub(r"(?<=\S)(?:이|가|은|는)\s+(?=\d)", " ", summary)
+    summary = re.sub(r"(?<=\S{2})(?:이|가|은|는)\s+(?=\d)", " ", summary)
     sentence_endings = (
         ("확인되었습니다", "확인"),
         ("확인됐습니다", "확인"),
@@ -196,8 +196,9 @@ _NUMERIC_TOKEN_RE = re.compile(
 
 
 def _contains_numeric_evidence(text: str) -> bool:
-    """답변 원문에 있는 수치 근거를 포함한 문장인지 판별한다."""
-    return bool(_NUMERIC_TOKEN_RE.search(text))
+    """답변 원문에 있는 수치 근거를 포함한 문장인지 판별한다. 문장 앞 리스트 번호는 제외한다."""
+    stripped = re.sub(r"^\s*\d+[.)]\s*", "", text)
+    return bool(_NUMERIC_TOKEN_RE.search(stripped))
 
 
 def fallback_insight_summary(answer: str) -> str:
