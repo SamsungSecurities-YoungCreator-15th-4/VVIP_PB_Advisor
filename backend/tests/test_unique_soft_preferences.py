@@ -148,6 +148,65 @@ def test_explicit_increase_is_not_duplicated_as_soft_preference():
     assert result["soft_preferences"] == []
 
 
+def test_soft_preference_subset_is_removed_when_matching_hard_constraint():
+    text = "미국 배당주를 선호해서 비중을 늘리고 싶습니다."
+    result = unique_semantic._validate_llm_payload(
+        text,
+        {
+            "constraints": [
+                {
+                    "subject_type": "asset",
+                    "subject": "overseas_dividend",
+                    "operator": "increase",
+                    "value_pct": None,
+                    "precision_digits": None,
+                    "evidence": text,
+                }
+            ],
+            "soft_preferences": [
+                {
+                    "subject_type": "asset",
+                    "subject": "overseas_dividend",
+                    "direction": "prefer",
+                    "evidence": "미국 배당주를 선호해서",
+                }
+            ],
+            "liquidity": {},
+            "accounts": {},
+            "advisory_only": [],
+            "unmatched_segments": [],
+        },
+    )
+
+    assert len(result["constraints"]) == 1
+    assert result["soft_preferences"] == []
+    assert any(
+        item["reason"] == "duplicate_of_hard_constraint"
+        for item in result["discarded_claims"]
+    )
+
+
+@pytest.mark.parametrize(
+    "unique_profile",
+    [
+        None,
+        [],
+        "invalid-profile",
+        {"soft_preferences": "not-a-list"},
+        {"soft_preferences": [None, "invalid-item"]},
+    ],
+)
+def test_alignment_handles_invalid_unique_profile_shape(unique_profile):
+    result = unique_semantic.calculate_soft_preference_alignment(
+        candidate_weights=_weights(cash=1.0),
+        unique_profile=unique_profile,
+    )
+
+    assert result["score"] == 0.0
+    assert result["preference_count"] == 0
+    assert result["details"] == []
+
+
 def test_alignment_uses_actual_weights_and_equal_preference_weights():
     profile = {
         "soft_preferences": [

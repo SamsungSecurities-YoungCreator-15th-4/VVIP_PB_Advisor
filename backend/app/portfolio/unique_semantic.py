@@ -726,8 +726,51 @@ def _validate_llm_payload(text: str, raw_payload: Dict[str, Any]) -> Dict[str, A
         soft_seen.add(dedupe_key)
         soft_preferences.append(preference)
 
+    # LLM이 hard constraint 문장에서 선호 표현 일부만 잘라
+    # soft preference로 중복 추출하더라도 Rule 6-2를 강제한다.
+    # evidence가 서로 포함 관계이고 실제 대상 자산이 하나라도 겹칠 때만 제거한다.
+    filtered_soft_preferences: List[Dict[str, Any]] = []
+    for preference in soft_preferences:
+        preference_evidence = _normalize_for_match(
+            str(preference.get("evidence") or "")
+        )
+        preference_assets = _constraint_subject_assets(preference)
+
+        duplicate_of_hard_constraint = False
+        for constraint in constraints:
+            constraint_evidence = _normalize_for_match(
+                str(constraint.get("evidence") or "")
+            )
+            constraint_assets = _constraint_subject_assets(constraint)
+
+            evidence_overlaps = bool(
+                preference_evidence
+                and constraint_evidence
+                and (
+                    preference_evidence in constraint_evidence
+                    or constraint_evidence in preference_evidence
+                )
+            )
+            subject_overlaps = bool(preference_assets & constraint_assets)
+
+            if evidence_overlaps and subject_overlaps:
+                duplicate_of_hard_constraint = True
+                break
+
+        if duplicate_of_hard_constraint:
+            discarded.append(
+                {
+                    "kind": "soft_preference",
+                    "reason": "duplicate_of_hard_constraint",
+                    "candidate": preference,
+                }
+            )
+            continue
+
+        filtered_soft_preferences.append(preference)
+
     soft_preferences, less_specific_preferences = _dedupe_soft_preferences(
-        soft_preferences
+        filtered_soft_preferences
     )
     for preference in less_specific_preferences:
         discarded.append(
@@ -1051,7 +1094,13 @@ def calculate_soft_preference_alignment(
     """후보 비중과 고객의 약한 선호 간 정렬도를 계산한다."""
 
     candidate = _normalize_weight_map(candidate_weights)
-    preferences = list((unique_profile or {}).get("soft_preferences") or [])
+    profile_dict = unique_profile if isinstance(unique_profile, dict) else {}
+    raw_preferences = profile_dict.get("soft_preferences")
+    preferences = (
+        [item for item in raw_preferences if isinstance(item, dict)]
+        if isinstance(raw_preferences, list)
+        else []
+    )
     if candidate is None or not preferences:
         return {
             "score": 0.0,
