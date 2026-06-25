@@ -97,7 +97,7 @@ export default function InsightSection() {
     <Card className="flex flex-col gap-0 p-3.5">
       {/* 헤더 */}
       <div className="mb-2.5 flex shrink-0 items-center justify-between">
-        <HelpTooltip text={INSIGHT_HELP}>
+        <HelpTooltip text={INSIGHT_HELP} placement="bottom">
           <p className="cursor-default text-[14px] font-bold">
             <span
               className={

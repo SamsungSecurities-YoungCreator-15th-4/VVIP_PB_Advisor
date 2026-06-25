@@ -3,6 +3,12 @@
 import { AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import HelpTooltip from "@/components/common/HelpTooltip";
+
+const STRESS_TEST_HELP =
+  "금리·환율에 충격을 줘 포트폴리오가 받을 영향을 미리 점검합니다. " +
+  "'금융위기'·'러우전쟁' 같은 과거 위기 시나리오를 고르거나 슬라이더로 직접 조정하면, " +
+  "각 포트폴리오의 예상 평가손익 변화를 다시 계산해 보여줍니다. '현재'는 실시간 시장값 기준입니다.";
 
 import {
   PORTFOLIOS,
@@ -26,6 +32,7 @@ export default function StressTestSection() {
     portfolios, basePortfolios, isStressMode,
     stressPreset, setStressPreset,
     clearStressMode,
+    helpMode,
   } = useDashboardStore();
 
   const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -65,7 +72,19 @@ export default function StressTestSection() {
     <Card className="gap-0 p-3.5">
       {/* 헤더 */}
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[14px] font-bold">Stress Test</p>
+        <HelpTooltip text={STRESS_TEST_HELP} placement="bottom">
+          <p className="cursor-default text-[14px] font-bold">
+            <span
+              className={
+                helpMode
+                  ? "rounded border border-brand/40 bg-brand/[0.06] px-1"
+                  : ""
+              }
+            >
+              Stress Test
+            </span>
+          </p>
+        </HelpTooltip>
         {isExtreme && (
           <div className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">
             <AlertTriangle className="size-3" />
