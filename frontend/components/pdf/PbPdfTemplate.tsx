@@ -4,7 +4,17 @@
  */
 
 import { useDashboardStore } from "@/lib/store";
+import { toDisplayAllocation } from "@/lib/assetMapping";
 import { buildPdfTaxEffect, buildPdfTaxAdvice, extractTaxOptimizerEntry } from "@/lib/pdfTaxData";
+
+// 포트폴리오 비중을 화면 6분류(ASSET_GROUPS 순서) 정수 비중(%)으로 변환.
+// 대시보드 도넛과 동일한 매핑(toDisplayAllocation)을 써 PDF 수치를 대시보드와 일치시킨다.
+function allocationPct(
+  weights: Parameters<typeof toDisplayAllocation>[0] | null | undefined,
+): number[] {
+  if (!weights) return [0, 0, 0, 0, 0, 0];
+  return toDisplayAllocation(weights).map((d) => Math.round(d.weight));
+}
 
 // ── 상수 ────────────────────────────────────────────────────────
 const W = 794;
@@ -58,13 +68,6 @@ const ASSET_GROUPS = [
   { label: "저쿠폰채", color: "#6FA8FF" },
   { label: "분리과세", color: "#93BEFF" },
 ];
-const WEIGHTS = {
-  current: [25, 18, 12, 22, 12, 11],
-  a: [20, 22, 12, 18, 14, 14],
-  b: [28, 26, 22, 12, 8, 4],
-};
-
-
 // 스트레스 테스트 시나리오 — 포트폴리오 A 기준 운용자산 18억원 시뮬레이션 추정치
 const SCENARIO_ROWS = [
   {
@@ -752,7 +755,7 @@ function PortfolioPage() {
   const cols = [
     {
       p: current,
-      weights: WEIGHTS.current,
+      weights: allocationPct(current.weights),
       label: "현재 포트폴리오",
       badge: "",
       badgeColor: "#6B7280",
@@ -761,7 +764,7 @@ function PortfolioPage() {
     },
     {
       p: portA,
-      weights: WEIGHTS.a,
+      weights: allocationPct(portA.weights),
       label: "포트폴리오 A",
       badge: "수익추구형",
       badgeColor: BRAND,
@@ -770,7 +773,7 @@ function PortfolioPage() {
     },
     {
       p: portB,
-      weights: WEIGHTS.b,
+      weights: allocationPct(portB.weights),
       label: "포트폴리오 B",
       badge: "안정추구형",
       badgeColor: "#2C7BFF",
@@ -1098,6 +1101,13 @@ function TaxPage() {
   const customer = useSelectedCustomer();
   const taxOptimizerMap = useDashboardStore((s) => s.taxOptimizer);
   const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  // 절세 계좌 배치 바는 절세 화면과 동일하게 '선택한 포트폴리오'의 자산배분을 따른다.
+  const selectedPf =
+    storePortfolios.find((p) => p.id === selectedPortfolioId) ??
+    storePortfolios.find((p) => p.id === "a") ??
+    storePortfolios[0];
+  const selectedAlloc = selectedPf ? allocationPct(selectedPf.weights) : [];
   const taxOptimizerEntry = extractTaxOptimizerEntry(taxOptimizerMap, selectedPortfolioId);
   const taxEffect = buildPdfTaxEffect(taxOptimizerEntry);
   const taxAdvice = buildPdfTaxAdvice(taxOptimizerEntry);
@@ -1361,7 +1371,7 @@ function TaxPage() {
                     <div
                       key={g.label}
                       style={{
-                        width: `${WEIGHTS.a[i]}%`,
+                        width: `${selectedAlloc[i] ?? 0}%`,
                         height: "100%",
                         background: g.color,
                       }}
@@ -1401,7 +1411,7 @@ function TaxPage() {
                         flexShrink: 0,
                       }}
                     />
-                    {g.label} {WEIGHTS.a[i]}%
+                    {g.label} {selectedAlloc[i] ?? 0}%
                   </span>
                 ))}
               </div>

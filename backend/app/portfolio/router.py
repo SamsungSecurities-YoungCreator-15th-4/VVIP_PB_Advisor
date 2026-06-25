@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Dict, Optional, Literal, Any, Union
@@ -58,17 +59,26 @@ from .metrics import (
     resolve_scenario_shocks,
 )
 from .responses import (
+    build_portfolio_response,
+    build_tax_optimizer_map,
     build_tax_optimizer_payload,
     get_guideline_definition,
     extract_backtest_payload,
     extract_tax_inputs_payload,
 )
+from .generation import find_recommended_portfolios
+from .constants import TRADING_DAYS
 from .analysis import run_analysis_core, run_full_analysis
 from .adapters import normalize_analysis_request_payload
-from .formatters import build_metrics_payload, build_portfolio_calculate_response
+from .formatters import (
+    build_metrics_payload,
+    build_portfolio_calculate_response,
+    build_spec_portfolio_item,
+)
 
 router = APIRouter(tags=["portfolio"])
 KST = ZoneInfo("Asia/Seoul")
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -265,6 +275,82 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             req,
         )
 
+        # ── 포트폴리오별(현재/A/B) 스트레스 지표·절세 ────────────────────────────
+        # 위 base/stressed는 '제출된 현재 포트폴리오' 한 개만 다뤄, 프런트는 A/B를
+        # 선형근사하고 절세 패널은 어떤 포트폴리오를 골라도 현재값만 봤다.
+        # 추천엔진은 request.random_seed 기반이라 calculate가 만든 A/B를 동일 입력으로
+        # 그대로 재현할 수 있다. 그 3개 포트폴리오에 같은 자산충격 벡터를 적용해
+        # calculate와 같은 형태(portfolios 배열 + tax_optimizer)로 실제 stressed 값을 싣는다.
+        # 충격은 보유 자산뿐 아니라 A/B가 가질 수 있는 전체 자산군으로 확장해서 푼다.
+        # 실패(예: 목표수익률 없어 A/B 선정 불가)하면 None으로 두어 프런트가 기존
+        # 현재-포트폴리오 폴백으로 안전하게 동작하게 한다.
+        stressed_portfolios = None
+        stressed_tax_optimizer = None
+        try:
+            universe = list(returns.columns)
+            full_asset_shocks = (
+                resolve_scenario_shocks(request.scenario, universe)
+                if request.scenario
+                else derive_asset_shocks_from_macro(universe, req)
+            )
+            cov_matrix = returns.cov() * TRADING_DAYS
+            recommendations, _ = find_recommended_portfolios(
+                returns=returns,
+                expected_returns=expected_returns,
+                request=req,
+                cov_matrix=cov_matrix,
+            )
+
+            def _stressed_portfolio(name: str, api_key: str, w: Dict[str, float]) -> Dict[str, Any]:
+                return build_portfolio_response(
+                    name=name,
+                    api_key=api_key,
+                    weights=w,
+                    returns=analysis_returns,
+                    expected_returns=expected_returns,
+                    request=req,
+                    cov_matrix=cov_matrix,
+                    shocks=full_asset_shocks,
+                    include_monte_carlo_ranges=False,
+                )
+
+            stressed_core = {
+                "portfolios": {
+                    "current": _stressed_portfolio("현재 포트폴리오", "current", weights),
+                    "recommended_1": _stressed_portfolio(
+                        "포트폴리오 A", "portfolio_a", recommendations[0]["weights"]
+                    ),
+                    "recommended_2": _stressed_portfolio(
+                        "포트폴리오 B", "portfolio_b", recommendations[1]["weights"]
+                    ),
+                },
+            }
+            stressed_current = stressed_core["portfolios"]["current"]
+            stressed_portfolios = [
+                build_spec_portfolio_item(
+                    kind="current", rank=None, label="현재 포트폴리오", badge=None,
+                    portfolio=stressed_current, current_portfolio=stressed_current,
+                    total_asset=req.total_asset,
+                ),
+                build_spec_portfolio_item(
+                    kind="A", rank=1, label="포트폴리오 A", badge="베스트",
+                    portfolio=stressed_core["portfolios"]["recommended_1"],
+                    current_portfolio=stressed_current, total_asset=req.total_asset,
+                ),
+                build_spec_portfolio_item(
+                    kind="B", rank=2, label="포트폴리오 B", badge="추천",
+                    portfolio=stressed_core["portfolios"]["recommended_2"],
+                    current_portfolio=stressed_current, total_asset=req.total_asset,
+                ),
+            ]
+            stressed_tax_optimizer = build_tax_optimizer_map(stressed_core, req)
+        except Exception:
+            logger.exception(
+                "stress-metrics per-portfolio 계산 실패 — 현재 포트폴리오 단독 응답으로 폴백"
+            )
+            stressed_portfolios = None
+            stressed_tax_optimizer = None
+
         return {
             "as_of": datetime.now(KST).isoformat(timespec="seconds"),
             "scenario": request.scenario,
@@ -287,6 +373,11 @@ def portfolio_stress_metrics(request: StressMetricsRequest):
             "stressed_backtest": stressed_backtest,
             "base_tax": base_tax,
             "stressed_tax": stressed_tax,
+            # 포트폴리오별(현재/A/B) 실제 stressed 결과. calculate와 동일한 구조라
+            # 프런트가 같은 코드(mapPortfolioItem·tax_optimizer)로 렌더한다.
+            # 선정 실패 등으로 만들지 못하면 None — 프런트는 현재-포트폴리오 폴백.
+            "portfolios": stressed_portfolios,
+            "tax_optimizer": stressed_tax_optimizer,
         }
     except Exception as e:
         raise public_http_exception(e)
