@@ -341,13 +341,13 @@ def enrich_tax_profile_with_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
     result["facts"] = facts
 
     # fallback 적용 전 상태가 routes에 남지 않도록 다시 계산한다.
-    from .tax_parser import _build_routes
+    from .tax_parser import build_tax_routes
 
     all_mentions = [
         *(result.get("tax_mentions") or []),
         *(result.get("cost_mentions") or []),
     ]
-    result["routes"] = _build_routes(all_mentions, facts)
+    result["routes"] = build_tax_routes(all_mentions, facts)
 
     result["llm_fallback"] = {
         "status": fallback.get("status"),
