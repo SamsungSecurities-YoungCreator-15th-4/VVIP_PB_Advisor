@@ -235,11 +235,12 @@ export type { SttConsultationData, IpsPatch } from "./api/stt";
 export { listConsultations, loadConsultationDetail } from "./api/consultations";
 export type { ConsultationSummaryItem } from "./api/consultations";
 
-export { createClient, listClients } from "./api/clients";
+export { createClient, listClients, saveDashboardSnapshot, getPreviousDashboard } from "./api/clients";
 export type {
   CreatedClient,
   CreateClientResult,
   ListedClient,
+  DashboardSnapshotResult,
 } from "./api/clients";
 
 export { fetchPortfolioCalculate, fetchPortfolioStressTest, fetchStressMetrics } from "./api/portfolio";
