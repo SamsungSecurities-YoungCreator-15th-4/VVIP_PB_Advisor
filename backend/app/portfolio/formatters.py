@@ -19,6 +19,33 @@ def rate_to_percent(value: Any, digits: int = 2) -> float:
     return safe_round(safe_float(value) * 100.0, digits)
 
 
+def build_metric_range_payload(
+    range_payload: Any,
+) -> Optional[Dict[str, Any]]:
+    """내부 rate 단위의 Monte Carlo Range를 API 표시용 percent 단위로 변환한다."""
+    if not isinstance(range_payload, dict):
+        return None
+
+    payload = dict(range_payload)
+    rate_value_keys = (
+        "p10",
+        "p20",
+        "p50",
+        "p80",
+        "p90",
+        "lower",
+        "center",
+        "upper",
+    )
+
+    for key in rate_value_keys:
+        if payload.get(key) is not None:
+            payload[key] = rate_to_percent(payload[key])
+
+    payload["unit"] = "percent"
+    return payload
+
+
 def round_allocation_percentages(
     asset_weights: List[tuple[str, float]],
 ) -> Dict[str, float]:
@@ -104,6 +131,12 @@ def build_metrics_payload(
             {},
         ),
         "after_tax_return": rate_to_percent(metrics["after_tax_return"]),
+        "after_tax_return_range": build_metric_range_payload(
+            metrics.get("after_tax_return_range")
+        ),
+        "mdd_range": build_metric_range_payload(
+            metrics.get("mdd_range")
+        ),
     }
 
 
