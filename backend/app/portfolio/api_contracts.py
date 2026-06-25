@@ -175,7 +175,7 @@ class MetricRangeResponse(ExtensibleModel):
     center_percentile: Optional[int] = None
     upper_percentile: Optional[int] = None
     unit: Literal["percent"] = "percent"
-    direction: Optional[str] = None
+    direction: Literal["higher_is_better"] = "higher_is_better"
 
 
 class PortfolioMetricsResponse(ExtensibleModel):

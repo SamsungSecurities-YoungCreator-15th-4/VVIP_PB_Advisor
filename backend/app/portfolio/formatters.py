@@ -1,5 +1,4 @@
 # ruff: noqa: E501
-# 커밋용
 """§12-2. API 명세서 ⑤ 응답 포맷터."""
 
 from datetime import datetime
@@ -23,11 +22,10 @@ def rate_to_percent(value: Any, digits: int = 2) -> float:
 def build_metric_range_payload(
     range_payload: Any,
 ) -> Optional[Dict[str, Any]]:
-    """내부 rate 단위의 Monte Carlo Range를 API 표시용 percent 단위로 변환한다."""
+    """내부 rate Range를 프론트 표시용 percent 응답으로 제한해 변환한다."""
     if not isinstance(range_payload, dict) or not range_payload:
         return None
 
-    payload = dict(range_payload)
     rate_value_keys = (
         "p10",
         "p20",
@@ -38,9 +36,29 @@ def build_metric_range_payload(
         "center",
         "upper",
     )
+    metadata_keys = (
+        "lower_percentile",
+        "center_percentile",
+        "upper_percentile",
+        "direction",
+    )
+
+    if not any(
+        range_payload.get(key) is not None
+        for key in rate_value_keys
+    ):
+        return None
+
+    # 프론트에는 분위수 % 값과 표시 메타데이터만 전달한다.
+    # 내부 rate 원본, 원화 금액 및 예상치 못한 추가 키는 노출하지 않는다.
+    payload = {
+        key: range_payload[key]
+        for key in (*rate_value_keys, *metadata_keys)
+        if range_payload.get(key) is not None
+    }
 
     for key in rate_value_keys:
-        if payload.get(key) is not None:
+        if key in payload:
             payload[key] = rate_to_percent(payload[key])
 
     payload["unit"] = "percent"
