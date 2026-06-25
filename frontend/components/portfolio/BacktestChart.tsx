@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -45,14 +46,12 @@ const pctFmt = (v: number) => {
 export default function BacktestChart() {
   const [benchmark, setBenchmark] = useState<Benchmark>("KOSPI");
   const helpMode = useDashboardStore((s) => s.helpMode);
-  const portfolios         = useDashboardStore((s) => s.portfolios);
-  const stressedPortfolios = useDashboardStore((s) => s.stressedPortfolios);
-  const isStressMode       = useDashboardStore((s) => s.isStressMode);
-  const portfolioSource    = useDashboardStore((s) => s.portfolioSource);
+  const portfolios = useDashboardStore((s) => s.portfolios);
+  const portfolioSource = useDashboardStore((s) => s.portfolioSource);
+  const portfolioNote = useDashboardStore((s) => s.portfolioNote);
+  const analyzing = useDashboardStore((s) => s.analyzing);
 
-  const displayPortfolios = isStressMode && stressedPortfolios.length > 0
-    ? stressedPortfolios
-    : portfolios;
+  const displayPortfolios = portfolios;
 
   const benchKey = BENCHMARK_KEY[benchmark];
   const hasRealData =
@@ -111,6 +110,20 @@ export default function BacktestChart() {
       })()
     : ["2021", "2022", "2023", "2024", "2025", "2026"];
 
+  if (
+    portfolioSource === "fallback" &&
+    portfolioNote === undefined &&
+    !analyzing
+  ) {
+    return (
+      <Card className="flex min-h-[200px] items-center justify-center gap-0 p-3">
+        <p className="text-[14px] font-semibold text-muted-foreground">
+          분석 결과가 존재하지 않습니다
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <Card className="gap-0 p-3">
       <div className="mb-1 flex items-center justify-between">
@@ -134,16 +147,17 @@ export default function BacktestChart() {
               </span>
             </p>
           </HelpTooltip>
-          {hasRealData ? (
+          {analyzing ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              분석중...
+            </div>
+          ) : hasRealData ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
               <span className="size-1.5 rounded-full bg-positive shadow-[0_0_0_2px_rgba(22,180,122,0.18)]" />
               연동 완료
             </div>
-          ) : (
-            <div className="rounded-lg bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-              ⚠ 데모
-            </div>
-          )}
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           {/* 현재/A/B 범례 */}
@@ -198,7 +212,9 @@ export default function BacktestChart() {
               axisLine={false}
               tick={{ fontSize: 12, fill: "#B0B8C1", fontWeight: 600 }}
               ticks={xTicks}
-              tickFormatter={hasRealData ? (v: string) => v.slice(0, 4) : undefined}
+              tickFormatter={
+                hasRealData ? (v: string) => v.slice(0, 4) : undefined
+              }
             />
             <YAxis hide domain={["dataMin - 6", "dataMax + 6"]} />
             <Tooltip

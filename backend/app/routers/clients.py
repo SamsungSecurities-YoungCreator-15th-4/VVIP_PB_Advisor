@@ -206,6 +206,46 @@ def _validate_embedded_ids(
             )
 
 
+def _pick_first_dashboard_snapshot(
+    rows: list[dict[str, Any]] | None,
+    *,
+    consultation_id: str | None,
+    current_consultation_id: str | None,
+) -> dict[str, Any] | None:
+    """ips_snapshot 행들(created_at 내림차순)에서 첫 분석 스냅샷을 고른다.
+
+    - consultation_id 지정: 그 회차의 스냅샷만 인정한다('지난 상담 불러오기'에서
+      선택한 회차의 대시보드를 복원하기 위함).
+    - 미지정: 현재 진행 중인 회차(current_consultation_id)는 제외하고 가장 최근 것.
+    스냅샷이 없으면 None.
+    """
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        row_consultation_id = str(row.get("consultation_id") or "")
+        if consultation_id is not None:
+            # 특정 회차 조회: 그 회차만 본다. current 제외 규칙보다 우선한다
+            # (명시적으로 그 회차를 요청한 것이므로).
+            if row_consultation_id != consultation_id:
+                continue
+        elif (
+            current_consultation_id is not None
+            and row_consultation_id == current_consultation_id
+        ):
+            # 최신 조회: 현재 진행 중인 회차는 제외한다.
+            continue
+
+        raw_ips_json = (
+            row.get("raw_ips_json")
+            if isinstance(row.get("raw_ips_json"), dict)
+            else {}
+        )
+        snapshot = raw_ips_json.get(FIRST_DASHBOARD_SNAPSHOT_KEY)
+        if isinstance(snapshot, dict):
+            return snapshot
+    return None
+
+
 def _response_from_stored_snapshot(
     snapshot: dict[str, Any],
     *,
@@ -373,17 +413,21 @@ def save_client_dashboard_snapshot(
 def get_client_previous_dashboard(
     client_id: str,
     current_consultation_id: str | None = None,
+    consultation_id: str | None = None,
     pb_id: str = Depends(get_current_pb_id),
 ) -> DashboardSnapshotResponse:
-    """가장 최근 상담의 첫 분석 결과를 반환한다.
+    """상담의 첫 분석 결과(대시보드 스냅샷)를 반환한다.
 
-    고객 선택 직후에는 current_consultation_id 없이 호출하면 3-1처럼 가장 최근에
-    저장된 첫 분석이 반환된다. 현재 상담이 이미 시작된 뒤 다시 조회한다면
-    current_consultation_id를 넘겨 현재 회차를 제외할 수 있다.
+    - consultation_id 지정: 그 상담의 스냅샷을 반환한다('지난 상담 불러오기'에서
+      선택한 회차의 대시보드를 그대로 복원하기 위함). 없으면 404.
+    - consultation_id 미지정: 가장 최근에 저장된 첫 분석을 반환한다(고객 선택 직후
+      자동 복원용). current_consultation_id를 넘기면 그 회차는 제외한다.
     """
     _validate_client_id(client_id)
     if current_consultation_id is not None:
         _validate_uuid(current_consultation_id, "현재 상담 ID")
+    if consultation_id is not None:
+        _validate_uuid(consultation_id, "상담 ID")
 
     supabase = get_supabase()
 
@@ -418,40 +462,40 @@ def get_client_previous_dashboard(
             detail="이전 상담 첫 분석 결과 조회 중 오류가 발생했습니다.",
         ) from exc
 
-    for row in result.data or []:
-        row_consultation_id = str(row.get("consultation_id") or "")
-        if (
-            current_consultation_id is not None
-            and row_consultation_id == current_consultation_id
-        ):
-            continue
-
-        raw_ips_json = (
-            row.get("raw_ips_json")
-            if isinstance(row.get("raw_ips_json"), dict)
-            else {}
+    snapshot = _pick_first_dashboard_snapshot(
+        result.data,
+        consultation_id=consultation_id,
+        current_consultation_id=current_consultation_id,
+    )
+    if snapshot is not None:
+        return _response_from_stored_snapshot(
+            snapshot,
+            saved=True,
+            message=(
+                "선택한 상담의 첫 분석 결과입니다."
+                if consultation_id is not None
+                else "가장 최근 이전 상담의 첫 분석 결과입니다."
+            ),
         )
-        snapshot = raw_ips_json.get(FIRST_DASHBOARD_SNAPSHOT_KEY)
-        if isinstance(snapshot, dict):
-            return _response_from_stored_snapshot(
-                snapshot,
-                saved=True,
-                message="가장 최근 이전 상담의 첫 분석 결과입니다.",
-            )
 
     # PR #126 방식으로 이미 저장된 데이터가 있다면 한시적으로 읽기 호환한다.
     meta = client.get("meta") if isinstance(client.get("meta"), dict) else {}
     legacy_snapshot = meta.get("previous_dashboard")
     if isinstance(legacy_snapshot, dict):
         legacy_consultation_id = str(legacy_snapshot.get("consultation_id") or "")
-        if (
-            current_consultation_id is None
-            or legacy_consultation_id != current_consultation_id
-        ):
+        if consultation_id is not None:
+            # 특정 회차 조회 시에는 그 회차의 legacy 스냅샷만 인정한다.
+            legacy_matches = legacy_consultation_id == consultation_id
+        else:
+            legacy_matches = (
+                current_consultation_id is None
+                or legacy_consultation_id != current_consultation_id
+            )
+        if legacy_matches:
             return _response_from_stored_snapshot(
                 legacy_snapshot,
                 saved=True,
-                message="기존 방식으로 저장된 가장 최근 상담 결과입니다.",
+                message="기존 방식으로 저장된 상담 결과입니다.",
             )
 
     raise HTTPException(

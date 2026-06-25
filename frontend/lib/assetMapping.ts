@@ -55,6 +55,18 @@ export const DISPLAY_GROUP_COLORS: Record<DisplayGroup, string> = {
   분리과세: "#DCE9FF",
 };
 
+/** 백엔드 8개 자산군 색상 맵 (PR #162 이후 allocation에서 직접 사용) */
+export const BACKEND_ASSET_COLORS: Record<string, string> = {
+  domestic_equity: "#0064FF",
+  overseas_equity: "#2C7BFF",
+  reit:            "#5C9CFF",
+  gold:            "#74A9FF",
+  bond:            "#8FBCFF",
+  commodity:       "#B8D4FF",
+  dollar:          "#DCE9FF",
+  cash:            "#E2E8F0",
+};
+
 // ── 11종 → 6분류 매핑 ──────────────────────────────────────────
 // TODO(팀 확정 필요): 특히 대체자산 4종을 "분리과세"로 묶는 부분은 가안.
 export const CALC_TO_DISPLAY: Record<CalcUnitId, DisplayGroup> = {

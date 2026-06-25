@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import InsightSection from "@/components/right-panel/InsightSection";
+import HelpTooltip from "@/components/common/HelpTooltip";
 import { useAutoCollapse } from "@/lib/useAutoCollapse";
 import { useDashboardStore } from "@/lib/store";
 
@@ -43,7 +44,7 @@ export default function RightPanel() {
   }
 
   return (
-    <div className="flex w-[320px] shrink-0 self-start flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
+    <div className="flex w-[320px] shrink-0 flex-col gap-2.5 rounded-2xl bg-card p-2.5 ring-1 ring-foreground/10">
       {/* 패널 헤더 */}
       <div className="flex items-center px-0.5 pb-0.5">
         <button
@@ -57,14 +58,19 @@ export default function RightPanel() {
 
       <InsightSection />
 
-      <Button
-        size="lg"
-        onClick={handleIpsReflect}
-        disabled={!summary}
-        className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
+      <HelpTooltip
+        text="PB 승인 시, AI 분석 요약 답변이 좌측 패널 IPS Unique 항목에 추가되어 포트폴리오 분석에 활용됩니다."
+        placement="top"
       >
-        IPS 반영하기
-      </Button>
+        <Button
+          size="lg"
+          onClick={handleIpsReflect}
+          disabled={!summary}
+          className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
+        >
+          IPS 반영하기
+        </Button>
+      </HelpTooltip>
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

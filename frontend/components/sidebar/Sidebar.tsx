@@ -23,10 +23,15 @@ import { type Customer, CUSTOMERS } from "@/lib/mockData";
 import {
   type ConsultationSummaryItem,
   type ListedClient,
+  type PortfolioCalcData,
   createClient,
+  fetchPortfolioCalculate,
+  fetchStressMetrics,
+  getPreviousDashboard,
   listClients,
   listConsultations,
   loadConsultationDetail,
+  saveDashboardSnapshot,
   uploadSttConsultation,
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
@@ -84,6 +89,7 @@ export default function Sidebar() {
     ips,
     setIps,
     selectCustomer,
+    clearCustomerNew,
     addCustomer,
     setCustomers,
     transcript,
@@ -93,6 +99,23 @@ export default function Sidebar() {
     setTranscript,
     setConsultationId,
     setSttStatus,
+    scenario,
+    liveBase,
+    liveBaseLoaded,
+    basePortfolios,
+    setPortfolios,
+    setStressPortfolios,
+    setStressTax,
+    setTaxOptimizer,
+    setCorrelationHeatmap,
+    setPortfolioTax,
+    stressPreset,
+    clearStressMode,
+    analyzing,
+    setAnalyzing,
+    setAnalysisBaseline,
+    consultationId,
+    portfolioSource,
   } = useDashboardStore();
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -123,6 +146,72 @@ export default function Sidebar() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // 자동 분석하기: 페이지 첫 로드 또는 고객 전환 시 handleAnalyze 자동 실행
+  const handleAnalyzeRef = useRef<(() => Promise<void>) | null>(null);
+  const autoAnalyzedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    // clientId 없는 mock 고객은 스킵 — listClients() 응답 후 실 고객으로 바뀌면 실행
+    if (!customer || !customer.clientId || !liveBaseLoaded || analyzing) return;
+    if (portfolioSource === "live") return;
+    const cid = customer.id;
+    if (autoAnalyzedForRef.current === cid) return;
+    autoAnalyzedForRef.current = cid;
+
+    // 신규 고객(상담 전): 더미 IPS로 자동 분석하지 않는다.
+    // IPS·중앙 대시보드를 빈 상태("분석 결과가 존재하지 않습니다")로 유지한다.
+    if (customer.isNew) return;
+
+    void (async () => {
+      // DB 스냅샷 복원 시도: clientId가 있는 고객만 (신규 미저장 고객 제외)
+      if (customer.clientId) {
+        const dashRes = await getPreviousDashboard(customer.clientId);
+        if (dashRes.source === "live" && dashRes.data) {
+          const dr = dashRes.data
+            .dashboard_result as unknown as PortfolioCalcData;
+          if (dr.portfolios?.length) {
+            setPortfolios(dr.portfolios, "live");
+            if (dr.correlationHeatmap)
+              setCorrelationHeatmap(dr.correlationHeatmap);
+            if (dr.portfolioTax) setPortfolioTax(dr.portfolioTax);
+            setTaxOptimizer(dr.taxOptimizer ?? null);
+            // 대시보드와 같은 회차의 IPS도 함께 복원(IPS 조율기가 빈 채로 남지 않도록).
+            const restoredCid = dashRes.data.consultation_id;
+            if (restoredCid) {
+              const detail = await loadConsultationDetail(
+                customer.clientId,
+                restoredCid,
+              );
+              // 비동기 동안 고객이 바뀌었으면 이전 고객 데이터를 새 화면에 반영하지 않는다.
+              if (
+                useDashboardStore.getState().selectedCustomerId !== customer.id
+              )
+                return;
+              if (detail.source === "live") {
+                setConsultationId(detail.data.consultationId);
+                if (Object.keys(detail.data.ips).length > 0)
+                  setIps(detail.data.ips);
+              }
+            }
+            return; // 스냅샷 복원 성공 → 신규 분석 스킵
+          }
+        }
+      }
+      // 스냅샷 없거나 clientId 미보유 → 신규 분석하기
+      void handleAnalyzeRef.current?.();
+    })();
+  }, [
+    customer,
+    liveBaseLoaded,
+    portfolioSource,
+    analyzing,
+    setPortfolios,
+    setCorrelationHeatmap,
+    setPortfolioTax,
+    setTaxOptimizer,
+    setConsultationId,
+    setIps,
+  ]);
 
   // 드롭다운을 Card의 overflow-hidden 밖에 fixed로 띄우기 위해 트리거 위치를 기억
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
@@ -155,6 +244,81 @@ export default function Sidebar() {
       cancelled = true;
     };
   }, [setCustomers]);
+
+  const handleAnalyze = async () => {
+    if (!customer || analyzing) return;
+
+    // stressPreset이 현재값 외 프리셋이거나 슬라이더가 live 기준값에서 벗어나면 스트레스 테스트 API 호출
+    const shouldStress =
+      (stressPreset !== "current" && stressPreset !== null) ||
+      scenario.ratePct !== liveBase.ratePct ||
+      scenario.fxKrw !== liveBase.fxKrw;
+
+    setAnalyzing(true);
+    try {
+      if (shouldStress) {
+        const stressResult = await fetchStressMetrics(
+          {
+            aumEokwon: customer.aumEokwon,
+            returnPct: ips.returnPct,
+            risk: ips.risk,
+            timeYears: ips.timeYears,
+            liquidity: ips.liquidity,
+            tax: ips.tax,
+            ratePct: scenario.ratePct,
+            fxKrw: scenario.fxKrw,
+            liveRatePct: liveBase.ratePct,
+            liveFxKrw: liveBase.fxKrw,
+            stressPreset,
+          },
+          basePortfolios,
+        );
+        setStressPortfolios(stressResult.portfolios);
+        if (stressResult.stressTax) setStressTax(stressResult.stressTax);
+        if (stressResult.correlationHeatmap)
+          setCorrelationHeatmap(stressResult.correlationHeatmap);
+        if (stressResult.portfolioTax)
+          setPortfolioTax(stressResult.portfolioTax);
+        setTaxOptimizer(stressResult.taxOptimizer);
+      } else {
+        clearStressMode();
+        const result = await fetchPortfolioCalculate({
+          aumEokwon: customer.aumEokwon,
+          returnPct: ips.returnPct,
+          risk: ips.risk,
+          timeYears: ips.timeYears,
+          liquidity: ips.liquidity,
+          tax: ips.tax,
+          ratePct: liveBase.ratePct,
+          fxKrw: liveBase.fxKrw,
+          consultationId: consultationId || undefined,
+          clientId: customer.clientId,
+        });
+        setPortfolios(result.data.portfolios, result.source, result.note);
+        if (result.data.correlationHeatmap)
+          setCorrelationHeatmap(result.data.correlationHeatmap);
+        if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
+        // 절세 제안·종합과세 게이지는 calculate의 tax_optimizer를 기본 소스로 쓴다.
+        setTaxOptimizer(result.data.taxOptimizer);
+        // 첫 라이브 분석 결과를 스냅샷으로 저장 (백엔드가 consultation_id 기준
+        // first-write-wins로 중복 방지 → 회차당 첫 분석만 보존됨).
+        if (customer.clientId && consultationId && result.source === "live") {
+          void saveDashboardSnapshot(customer.clientId, {
+            consultation_id: consultationId,
+            calculation_session_id: result.data.calculationSessionId,
+            dashboard_result: result.data as unknown as Record<string, unknown>,
+          });
+        }
+      }
+      setAnalysisBaseline(ips, scenario);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+  // 매 렌더마다 최신 handleAnalyze 클로저를 ref에 저장 (early return 이전에 위치)
+  useEffect(() => {
+    handleAnalyzeRef.current = handleAnalyze;
+  });
 
   if (!customer) return null;
 
@@ -204,6 +368,7 @@ export default function Sidebar() {
       isaOpened: true,
       clientId: result.data.clientId || undefined,
       persisted,
+      isNew: true, // 상담 전 신규 고객 — 더미 IPS·자동 분석 없이 빈 상태로 시작
     });
     selectCustomer(id); // 추가한 고객을 바로 선택 → STT 업로드가 이 고객으로 진행
     setNewName("");
@@ -226,6 +391,7 @@ export default function Sidebar() {
     if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
     if (res.source === "live") {
       setSttStatus("done");
+      clearCustomerNew(customer.id); // 상담 확보 → 더 이상 신규(빈) 상태 아님
     } else {
       setSttStatus("error", res.note);
     }
@@ -243,7 +409,8 @@ export default function Sidebar() {
     setHistoryLoading(true);
     const res = await listConsultations(customer.clientId);
     setPastList(res.data);
-    if (res.source !== "live") setHistoryError(res.note ?? "불러오지 못했습니다.");
+    if (res.source !== "live")
+      setHistoryError(res.note ?? "불러오지 못했습니다.");
     setHistoryLoading(false);
   };
 
@@ -252,10 +419,31 @@ export default function Sidebar() {
     if (!customer.clientId || loadingId) return;
     setLoadingId(consultationId);
     const res = await loadConsultationDetail(customer.clientId, consultationId);
+    // 비동기 동안 고객이 바뀌었으면 이전 고객의 데이터·요청을 새 화면에 섞지 않는다.
+    if (useDashboardStore.getState().selectedCustomerId !== customer.id) {
+      setLoadingId(null);
+      return;
+    }
     if (res.source === "live") {
       setTranscript(res.data.transcript, "live");
       setConsultationId(res.data.consultationId);
+      clearCustomerNew(customer.id); // 과거 상담 확보 → 더 이상 신규(빈) 상태 아님
       if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
+      // 선택한 '그 회차'의 대시보드 스냅샷으로 복원(최신이 아니라 해당 회차).
+      const dashRes = await getPreviousDashboard(customer.clientId, {
+        consultationId,
+      });
+      if (dashRes.source === "live" && dashRes.data) {
+        const dr = dashRes.data
+          .dashboard_result as unknown as PortfolioCalcData;
+        if (dr.portfolios?.length) {
+          setPortfolios(dr.portfolios, "live");
+          if (dr.correlationHeatmap)
+            setCorrelationHeatmap(dr.correlationHeatmap);
+          if (dr.portfolioTax) setPortfolioTax(dr.portfolioTax);
+          setTaxOptimizer(dr.taxOptimizer ?? null);
+        }
+      }
       setHistoryOpen(false);
     } else {
       setHistoryError(res.note ?? "상담 내역을 불러오지 못했습니다.");
@@ -435,8 +623,8 @@ export default function Sidebar() {
                 {realtimeStatus === "recording"
                   ? "클릭해 종료"
                   : customer.clientId
-                    ? "WebSocket STT"
-                    : "DB 고객 필요"}
+                    ? "STT"
+                    : "고객 ID 필요"}
               </span>
             </button>
           </div>
@@ -482,25 +670,31 @@ export default function Sidebar() {
             <DataSourceBadge source={transcriptSource} note={sttNote} />
           </div>
           <div className="flex max-h-[150px] flex-col gap-1.5 overflow-y-auto pr-0.5">
-            {transcript.map((m, i) => (
-              <div key={i} className="flex items-start gap-1.5">
-                <span
-                  className={`mt-0.5 inline-flex w-7 shrink-0 items-center justify-center rounded-md py-0.5 text-[8.5px] font-extrabold ${
-                    m.speaker === "고객"
-                      ? "bg-[#DCE9FF] text-brand-dark"
-                      : "bg-[#ADB5BD] text-white"
-                  }`}
-                >
-                  {m.speaker}
-                </span>
-                <span className="flex-1 text-[13px] font-medium leading-snug text-muted-foreground">
-                  {m.text}
-                </span>
-                <span className="mt-0.5 shrink-0 text-[9px] font-semibold tabular-nums text-muted-foreground/60">
-                  {m.time}
-                </span>
-              </div>
-            ))}
+            {transcript.length === 0 ? (
+              <p className="py-6 text-center text-[13px] font-medium text-muted-foreground">
+                상담 내역이 없습니다
+              </p>
+            ) : (
+              transcript.map((m, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  <span
+                    className={`mt-0.5 inline-flex w-7 shrink-0 items-center justify-center rounded-md py-0.5 text-[8.5px] font-extrabold ${
+                      m.speaker === "고객"
+                        ? "bg-[#DCE9FF] text-brand-dark"
+                        : "bg-[#ADB5BD] text-white"
+                    }`}
+                  >
+                    {m.speaker}
+                  </span>
+                  <span className="flex-1 text-[13px] font-medium leading-snug text-muted-foreground">
+                    {m.text}
+                  </span>
+                  <span className="mt-0.5 shrink-0 text-[9px] font-semibold tabular-nums text-muted-foreground/60">
+                    {m.time}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
           <Button
             variant="outline"
@@ -603,9 +797,20 @@ export default function Sidebar() {
 
         <Button
           size="lg"
+          disabled={analyzing}
+          onClick={() => {
+            void handleAnalyze();
+          }}
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
-          분석하기
+          {analyzing ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              분석 중…
+            </>
+          ) : (
+            "분석하기"
+          )}
         </Button>
       </aside>
 
@@ -720,7 +925,9 @@ export default function Sidebar() {
                       disabled={loadingId !== null}
                       onClick={() => loadPast(c.consultationId)}
                     >
-                      {loadingId === c.consultationId ? "불러오는 중" : "불러오기"}
+                      {loadingId === c.consultationId
+                        ? "불러오는 중"
+                        : "불러오기"}
                     </Button>
                   </div>
                 ))

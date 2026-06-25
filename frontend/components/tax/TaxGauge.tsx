@@ -3,24 +3,36 @@
 import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { TAX_THRESHOLD } from "@/lib/mockData";
+import type { StressTaxGauge } from "@/lib/api";
 
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR");
+
+interface Props {
+  /** stressed_tax.financial_income_tax_gauge — 제공 시 실데이터 사용 */
+  gaugeData?: StressTaxGauge | null;
+  /** 현재 선택된 포트폴리오 이름 (TaxSection에서 내려줌) */
+  portfolioLabel?: string;
+}
 
 /**
  * 종합과세 임계선 탭 — 기타 금융소득 슬라이더 + 기준선 게이지 + 판정.
  * 기준선 2,000만원: 소득세법 제14조 제3항 제6호 (금융소득종합과세).
- * 그 외 수치(예상 배당 등)는 백엔드 연동 전 더미.
+ * gaugeData 제공 시 API 실데이터 사용, 없으면 mock 폴백.
  */
-export default function TaxGauge() {
-  const {
-    thresholdManwon,
-    gaugeMaxManwon,
-    otherIncomeDefault,
-    otherIncomeMax,
-    portfolioDividendManwon,
-    separateRateLabel,
-    comprehensiveRateLabel,
-  } = TAX_THRESHOLD;
+export default function TaxGauge({ gaugeData, portfolioLabel = "포트폴리오" }: Props) {
+  const mock = TAX_THRESHOLD;
+  const thresholdManwon = gaugeData?.threshold_manwon ?? mock.thresholdManwon;
+  const gaugeMaxManwon = Math.max(thresholdManwon * 1.5, mock.gaugeMaxManwon);
+  const otherIncomeDefault =
+    gaugeData?.external_financial_income_manwon ?? mock.otherIncomeDefault;
+  const otherIncomeMax = Math.max(gaugeMaxManwon, mock.otherIncomeMax);
+  const portfolioDividendManwon =
+    gaugeData?.portfolio_financial_income_manwon ??
+    mock.portfolioDividendManwon;
+  const separateRateLabel =
+    gaugeData?.separate_rate_label ?? mock.separateRateLabel;
+  const comprehensiveRateLabel =
+    gaugeData?.comprehensive_rate_label ?? mock.comprehensiveRateLabel;
 
   const [otherIncome, setOtherIncome] = useState(otherIncomeDefault);
   const [inputVal, setInputVal] = useState(String(otherIncomeDefault));
@@ -90,7 +102,7 @@ export default function TaxGauge() {
         </div>
         <div className="w-[140px] rounded-xl border bg-brand/5 p-4">
           <p className="text-[13px] font-bold text-muted-foreground">
-            포트폴리오 A
+            {portfolioLabel}
           </p>
           <p className="mt-2 text-[15px] font-extrabold tabular-nums text-brand-dark">
             +{fmt(portfolioDividendManwon)}

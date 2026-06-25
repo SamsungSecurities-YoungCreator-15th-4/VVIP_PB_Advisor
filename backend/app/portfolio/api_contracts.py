@@ -160,6 +160,24 @@ class BenchmarkComparisonsResponse(ExtensibleModel):
     msci_acwi: Optional[BenchmarkComparisonResponse] = None
 
 
+class MetricRangeResponse(ExtensibleModel):
+    """Monte Carlo 지표 분위수의 프론트 표시용 퍼센트 응답."""
+
+    p10: Optional[float] = Field(None, description="%")
+    p20: Optional[float] = Field(None, description="%")
+    p50: Optional[float] = Field(None, description="%")
+    p80: Optional[float] = Field(None, description="%")
+    p90: Optional[float] = Field(None, description="%")
+    lower: Optional[float] = Field(None, description="표시 범위 하단값(%)")
+    center: Optional[float] = Field(None, description="표시 범위 중앙값(%)")
+    upper: Optional[float] = Field(None, description="표시 범위 상단값(%)")
+    lower_percentile: Optional[int] = None
+    center_percentile: Optional[int] = None
+    upper_percentile: Optional[int] = None
+    unit: Literal["percent"] = "percent"
+    direction: Literal["higher_is_better"] = "higher_is_better"
+
+
 class PortfolioMetricsResponse(ExtensibleModel):
     expected_return: float = Field(description="%")
     volatility: float = Field(description="%")
@@ -171,6 +189,8 @@ class PortfolioMetricsResponse(ExtensibleModel):
     selected_benchmark_key: Optional[str] = None
     benchmark_comparisons: BenchmarkComparisonsResponse = Field(default_factory=BenchmarkComparisonsResponse)
     after_tax_return: float = Field(description="%")
+    after_tax_return_range: Optional[MetricRangeResponse] = None
+    mdd_range: Optional[MetricRangeResponse] = None
 
 
 class PortfolioMetricsKRWResponse(ExtensibleModel):
@@ -205,6 +225,26 @@ class PortfolioTaxResponse(ExtensibleModel):
     calculation_notes: List[str] = Field(default_factory=list)
 
 
+class PortfolioHeatmapAssetResponse(ExtensibleModel):
+    asset_class: str
+    name: str
+    weight: float = Field(description="해당 포트폴리오의 그룹 비중(%)")
+
+
+class PortfolioRiskContributionHeatmapResponse(ExtensibleModel):
+    assets: List[PortfolioHeatmapAssetResponse]
+    matrix: List[List[float]]
+    value_type: Literal[
+        "portfolio_variance_contribution_percent"
+    ] = "portfolio_variance_contribution_percent"
+    matrix_total: float
+    portfolio_variance: float
+    portfolio_volatility: float
+    method: Literal[
+        "weighted_group_covariance_decomposition"
+    ] = "weighted_group_covariance_decomposition"
+    interpretation: Optional[str] = None
+
 class PortfolioItemResponse(ExtensibleModel):
     kind: Literal["current", "A", "B"]
     rank: Optional[int] = None
@@ -212,6 +252,7 @@ class PortfolioItemResponse(ExtensibleModel):
     badge: Optional[str] = None
     allocation: List[AllocationItemResponse]
     allocation_total: float = Field(100.0, description="표시 비중 합계")
+    risk_contribution_heatmap: PortfolioRiskContributionHeatmapResponse
     metrics: PortfolioMetricsResponse
     metrics_krw: PortfolioMetricsKRWResponse
     vs_current_krw: VsCurrentKRWResponse
@@ -230,7 +271,15 @@ class CorrelationHeatmapResponse(BaseModel):
     assets: List[CorrelationAssetResponse]
     matrix: List[List[float]]
     value_type: Literal["correlation"] = "correlation"
-
+    grouping_method: Literal[
+        "equal_weighted_constituent_daily_returns"
+    ] = "equal_weighted_constituent_daily_returns"
+    null_value_reason: str = Field(
+        default=(
+            "정의되지 않은 상관계수(예: 분산이 0인 시계열)는 null 대신 0.0으로 반환합니다."
+        ),
+        description="분산 0 등으로 상관계수가 정의되지 않는 경우의 반환 정책",
+    )
 
 class RejectionCountsResponse(ExtensibleModel):
     suitability: int = 0
@@ -320,6 +369,14 @@ class PortfolioCalculateResponseContract(BaseModel):
     input_adapter: InputAdapterResponse
     methodology: MethodologyResponse
     notes: List[str]
+    tax_optimizer: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "절세 최적화 페이로드. {current, portfolio_a, portfolio_b} 맵이며 각 값은 "
+            "build_tax_optimizer_payload 출력(절세 6카드 = strategy_cards 포함). "
+            "stress-metrics의 base_tax/stressed_tax와 동일 구조라 같은 코드로 렌더 가능."
+        ),
+    )
 
 
 class PortfolioStressTestResponseContract(BaseModel):

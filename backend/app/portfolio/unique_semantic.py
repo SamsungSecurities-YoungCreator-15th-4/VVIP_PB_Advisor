@@ -44,7 +44,7 @@ from .semantic_common import (
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
 
-UNIQUE_SEMANTIC_VERSION = "unique-semantic-hard-constraints-v2"
+UNIQUE_SEMANTIC_VERSION = "unique-semantic-hard-soft-v3"
 UNIQUE_CACHE_MAX_SIZE = 256
 _EPSILON = 1e-10
 
@@ -77,7 +77,15 @@ _GROUP_ALIASES: Dict[str, Sequence[str]] = {
     "bond": ("채권", "채권형", "채권 자산"),
     "alternative": ("대체자산", "대체 자산"),
     "cash": ("현금", "현금 자산"),
-    "cash_like": ("안전자산", "안전 자산", "현금성 자산", "유동성 자산"),
+    "cash_like": (
+        "안전자산",
+        "안전 자산",
+        "현금성 자산",
+        "유동성 자산",
+        "비상자금",
+        "여유자금",
+        "대기자금",
+    ),
     "overseas_equity": ("해외주식", "해외 주식", "미국주식", "미국 주식"),
 }
 
@@ -89,6 +97,23 @@ _EXCLUDE_PATTERN = re.compile(
 _MINIMUM_PATTERN = re.compile(r"이상|최소|적어도|하한")
 _MAXIMUM_PATTERN = re.compile(r"이하|최대|넘지|상한")
 _TARGET_PATTERN = re.compile(r"(?:로|까지|수준으로|정도로)\s*(?:맞|유지|조정)|목표")
+_SOFT_PREFER_PATTERN = re.compile(
+    r"관심|선호|좋아|좋게\s*보|긍정|괜찮게\s*보|호감|마음에\s*들|"
+    r"고려해\s*주|염두에\s*두|"
+    r"(?:비상|여유|대기)자금.{0,20}(?:남겨|확보|필요|유지)|"
+    r"(?:남겨|확보|유지).{0,20}(?:현금|현금성|비상|여유|대기)"
+)
+_SOFT_AVOID_PATTERN = re.compile(
+    r"선호하지|관심\s*없|꺼리|부담|피하고\s*싶|"
+    r"가급적.{0,12}(?:적게|피하|줄이)|별로|부정적|우려"
+)
+_EXPLICIT_SOFT_AVOID_INTENT_PATTERN = re.compile(
+    r"선호하지|관심\s*없|꺼리|피하고\s*싶|"
+    r"가급적.{0,12}(?:적게|피하|줄이)|별로"
+)
+_TAX_CONTEXT_PATTERN = re.compile(
+    r"세금|과세|양도세|배당세|금융소득|종합과세|세율|절세"
+)
 _APPROVED_AI_TAG = "[AI 인사이트 승인]"
 
 _NULLABLE_NUMBER = {"anyOf": [{"type": "number"}, {"type": "null"}]}
@@ -137,6 +162,20 @@ UNIQUE_SEMANTIC_SCHEMA: Dict[str, Any] = {
                     "precision_digits",
                     "evidence",
                 ],
+                "additionalProperties": False,
+            },
+        },
+        "soft_preferences": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "subject_type": {"type": "string", "enum": ["asset", "group"]},
+                    "subject": {"type": "string", "enum": _ALLOWED_SUBJECTS},
+                    "direction": {"type": "string", "enum": ["prefer", "avoid"]},
+                    "evidence": {"type": "string"},
+                },
+                "required": ["subject_type", "subject", "direction", "evidence"],
                 "additionalProperties": False,
             },
         },
@@ -198,6 +237,7 @@ UNIQUE_SEMANTIC_SCHEMA: Dict[str, Any] = {
     },
     "required": [
         "constraints",
+        "soft_preferences",
         "liquidity",
         "accounts",
         "advisory_only",
@@ -213,8 +253,10 @@ _SYSTEM_PROMPT = f"""
 [절대 규칙]
 1. 입력에 없는 사실·숫자·세율·비중·기간을 만들지 않는다.
 2. 각 결과의 evidence는 입력에서 그대로 복사한 연속 문자열이어야 한다.
-3. 자산/자산군 선호와 회피만 constraints에 넣는다. 세금 우려만으로 자산 제약을 만들지 않는다.
-4. 숫자 없는 방향성:
+3. 약한 관심·선호·호감은 soft_preferences의 prefer로 넣는다.
+   부담·꺼림·가급적 피하고 싶다는 표현은 soft_preferences의 avoid로 넣는다.
+   세금 우려만으로 자산 선호나 제약을 만들지 않는다.
+4. 고객이 실제 운용 방향을 명시한 숫자 없는 지시는 constraints에 넣는다:
    - 늘리기/확대/높이기 → increase
    - 줄이기/축소/낮추기 → decrease
    - 투자하지 않기/제외/0% → exclude
@@ -225,10 +267,14 @@ _SYSTEM_PROMPT = f"""
    - '20%로 줄이기' → maximum 20
    - 단순히 '20%로 맞추기/20% 목표' → target 20
 6. value_pct는 퍼센트 숫자 그대로 쓴다. 숫자가 없으면 null이다.
+6-1. soft_preferences에는 비중·강도·점수를 만들지 않는다. direction과 evidence만 구조화한다.
+6-2. 동일 원문이 명시적 increase/decrease/minimum/maximum/target/exclude에 해당하면
+     soft_preferences에 중복하지 않고 constraints만 사용한다.
+6-3. 같은 evidence가 구체 자산과 상위 자산군에 모두 해당하면 가장 구체적인 subject 하나만 추출한다.
 7. '채권/주식/대체자산/안전자산'처럼 넓은 표현은 group으로, 구체적 상품·자산은 asset으로 분류한다.
 8. ISA/IRP와 필요자금은 Unique 문장에 명시된 경우만 accounts/liquidity에 넣는다.
 9. {_APPROVED_AI_TAG}가 붙은 구간은 PB가 승인한 AI 인사이트다. 그 구간에서는 자산 방향성만 constraints에 넣고,
-   고객의 실제 계좌·소득·필요자금 사실로 해석하지 않는다.
+   고객 자신의 soft_preferences나 실제 계좌·소득·필요자금 사실로 해석하지 않는다.
 10. 계산으로 직접 연결할 수 없는 승계·상속·법률·법인 문맥은 advisory_only에 원문 그대로 남긴다.
 11. 해석하지 못한 문장은 unmatched_segments에 원문 그대로 남긴다.
 
@@ -419,6 +465,122 @@ def _validate_constraint(text: str, raw: Dict[str, Any]) -> Tuple[Optional[Dict[
     }, None
 
 
+def _validate_soft_preference(
+    text: str,
+    raw: Dict[str, Any],
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """LLM이 추출한 약한 선호를 원문 근거로 다시 검증한다."""
+
+    subject_type = str(raw.get("subject_type") or "")
+    subject = str(raw.get("subject") or "")
+    direction = str(raw.get("direction") or "")
+    evidence = str(raw.get("evidence") or "").strip()
+
+    if subject_type not in {"asset", "group"}:
+        return None, "unsupported_subject_type"
+    if subject_type == "asset" and subject not in ASSET_TICKERS:
+        return None, "unsupported_asset"
+    if subject_type == "group" and subject not in SEMANTIC_GROUP_ASSETS:
+        return None, "unsupported_group"
+    if direction not in {"prefer", "avoid"}:
+        return None, "unsupported_direction"
+    if not _evidence_exists(text, evidence):
+        return None, "evidence_not_found"
+    if not _subject_is_supported_by_evidence(subject_type, subject, evidence):
+        return None, "subject_not_supported_by_evidence"
+    if _is_approved_ai_evidence(text, evidence):
+        return None, "approved_ai_not_customer_preference"
+
+    if (
+        _INCREASE_PATTERN.search(evidence)
+        or _DECREASE_PATTERN.search(evidence)
+        or _EXCLUDE_PATTERN.search(evidence)
+        or bool(_percent_tokens(evidence))
+    ):
+        return None, "explicit_instruction_not_soft_preference"
+
+    if direction == "prefer" and not _SOFT_PREFER_PATTERN.search(evidence):
+        return None, "prefer_language_not_found"
+    if direction == "avoid" and not _SOFT_AVOID_PATTERN.search(evidence):
+        return None, "avoid_language_not_found"
+
+    # "해외주식 양도세가 부담된다"처럼 세금 우려만 있는 문장을
+    # 자산 회피로 바꾸지 않는다. 실제 회피 의사가 명시된 경우만 허용한다.
+    if (
+        direction == "avoid"
+        and _TAX_CONTEXT_PATTERN.search(evidence)
+        and not _EXPLICIT_SOFT_AVOID_INTENT_PATTERN.search(evidence)
+    ):
+        return None, "tax_context_not_asset_preference"
+
+    return {
+        "subject_type": subject_type,
+        "subject": subject,
+        "direction": direction,
+        "evidence": evidence,
+        "source_kind": "customer_unique",
+        "policy": "secondary_ranking_only_no_invented_weight",
+    }, None
+
+
+def _dedupe_soft_preferences(
+    preferences: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """같은 근거에서 asset과 상위 group이 겹치면 구체 asset만 남긴다."""
+
+    kept: List[Dict[str, Any]] = []
+    dropped: List[Dict[str, Any]] = []
+
+    for preference in preferences:
+        evidence_key = _normalize_for_match(str(preference.get("evidence") or ""))
+        direction = str(preference.get("direction") or "")
+        subject_type = str(preference.get("subject_type") or "")
+        preference_assets = _constraint_subject_assets(preference)
+
+        if subject_type == "asset":
+            survivors: List[Dict[str, Any]] = []
+            for existing in kept:
+                same_evidence = (
+                    _normalize_for_match(str(existing.get("evidence") or ""))
+                    == evidence_key
+                )
+                same_direction = str(existing.get("direction") or "") == direction
+                overlaps = bool(
+                    preference_assets
+                    & _constraint_subject_assets(existing)
+                )
+                if (
+                    existing.get("subject_type") == "group"
+                    and same_evidence
+                    and same_direction
+                    and overlaps
+                ):
+                    dropped.append(existing)
+                    continue
+                survivors.append(existing)
+            kept = survivors
+
+        elif subject_type == "group":
+            has_more_specific_asset = any(
+                existing.get("subject_type") == "asset"
+                and _normalize_for_match(str(existing.get("evidence") or ""))
+                == evidence_key
+                and str(existing.get("direction") or "") == direction
+                and bool(
+                    preference_assets
+                    & _constraint_subject_assets(existing)
+                )
+                for existing in kept
+            )
+            if has_more_specific_asset:
+                dropped.append(preference)
+                continue
+
+        kept.append(preference)
+
+    return kept, dropped
+
+
 def _validate_account(text: str, key: str, raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
     evidence = raw.get("evidence")
     discarded: List[str] = []
@@ -538,6 +700,85 @@ def _validate_llm_payload(text: str, raw_payload: Dict[str, Any]) -> Dict[str, A
         seen.add(dedupe_key)
         constraints.append(constraint)
 
+    soft_preferences: List[Dict[str, Any]] = []
+    soft_seen: Set[Tuple[Any, ...]] = set()
+    for raw_preference in raw_payload.get("soft_preferences") or []:
+        preference, reason = _validate_soft_preference(text, raw_preference)
+        if preference is None:
+            discarded.append(
+                {
+                    "kind": "soft_preference",
+                    "reason": reason,
+                    "candidate": raw_preference,
+                }
+            )
+            continue
+        dedupe_key = (
+            preference["subject_type"],
+            preference["subject"],
+            preference["direction"],
+            preference.get("evidence"),
+        )
+        if dedupe_key in soft_seen:
+            continue
+        soft_seen.add(dedupe_key)
+        soft_preferences.append(preference)
+
+    # LLM이 hard constraint 문장에서 선호 표현 일부만 잘라
+    # soft preference로 중복 추출하더라도 Rule 6-2를 강제한다.
+    # evidence가 서로 포함 관계이고 실제 대상 자산이 하나라도 겹칠 때만 제거한다.
+    filtered_soft_preferences: List[Dict[str, Any]] = []
+    for preference in soft_preferences:
+        preference_evidence = _normalize_for_match(
+            str(preference.get("evidence") or "")
+        )
+        preference_assets = _constraint_subject_assets(preference)
+
+        duplicate_of_hard_constraint = False
+        for constraint in constraints:
+            constraint_evidence = _normalize_for_match(
+                str(constraint.get("evidence") or "")
+            )
+            constraint_assets = _constraint_subject_assets(constraint)
+
+            evidence_overlaps = bool(
+                preference_evidence
+                and constraint_evidence
+                and (
+                    preference_evidence in constraint_evidence
+                    or constraint_evidence in preference_evidence
+                )
+            )
+            subject_overlaps = bool(preference_assets & constraint_assets)
+
+            if evidence_overlaps and subject_overlaps:
+                duplicate_of_hard_constraint = True
+                break
+
+        if duplicate_of_hard_constraint:
+            discarded.append(
+                {
+                    "kind": "soft_preference",
+                    "reason": "duplicate_of_hard_constraint",
+                    "candidate": preference,
+                }
+            )
+            continue
+
+        filtered_soft_preferences.append(preference)
+
+    soft_preferences, less_specific_preferences = _dedupe_soft_preferences(
+        filtered_soft_preferences
+    )
+    for preference in less_specific_preferences:
+        discarded.append(
+            {
+                "kind": "soft_preference",
+                "reason": "less_specific_group_duplicate",
+                "candidate": preference,
+            }
+        )
+
     liquidity, liquidity_discarded = _validate_liquidity(text, raw_payload.get("liquidity") or {})
     for reason in liquidity_discarded:
         discarded.append({"kind": "liquidity", "reason": reason})
@@ -563,6 +804,7 @@ def _validate_llm_payload(text: str, raw_payload: Dict[str, Any]) -> Dict[str, A
 
     return {
         "constraints": constraints,
+        "soft_preferences": soft_preferences,
         "liquidity": liquidity,
         "accounts": accounts,
         "advisory_only": advisory_only,
@@ -595,6 +837,7 @@ def parse_unique_semantic(unique_value: Any) -> Dict[str, Any]:
         return {
             "status": "empty",
             "constraints": [],
+            "soft_preferences": [],
             "liquidity": {},
             "accounts": {"isa": {}, "irp": {}},
             "advisory_only": [],
@@ -606,6 +849,7 @@ def parse_unique_semantic(unique_value: Any) -> Dict[str, Any]:
         return {
             "status": "disabled",
             "constraints": [],
+            "soft_preferences": [],
             "liquidity": {},
             "accounts": {"isa": {}, "irp": {}},
             "advisory_only": [],
@@ -643,6 +887,7 @@ def parse_unique_semantic(unique_value: Any) -> Dict[str, Any]:
         return {
             "status": "failed",
             "constraints": [],
+            "soft_preferences": [],
             "liquidity": {},
             "accounts": {"isa": {}, "irp": {}},
             "advisory_only": [],
@@ -684,19 +929,70 @@ def enrich_unique_profile(profile: Dict[str, Any], unique_value: Any) -> Dict[st
 
     result = copy.deepcopy(profile)
     semantic = parse_unique_semantic(unique_value)
-    existing_constraints = list(result.get("semantic_constraints") or [])
-    result["semantic_constraints"] = [*existing_constraints, *semantic.get("constraints", [])]
+    existing_constraints = list(
+        result.get("semantic_constraints")
+        or []
+    )
+    result["semantic_constraints"] = [
+        *existing_constraints,
+        *semantic.get("constraints", []),
+    ]
+
+    existing_soft_preferences = [
+        item
+        for item in (
+            result.get("soft_preferences")
+            or []
+        )
+        if isinstance(item, dict)
+    ]
+    incoming_soft_preferences = [
+        item
+        for item in (
+            semantic.get("soft_preferences")
+            or []
+        )
+        if isinstance(item, dict)
+    ]
+    merged_soft_preferences: List[
+        Dict[str, Any]
+    ] = []
+    seen_soft_preferences: Set[
+        Tuple[Any, ...]
+    ] = set()
+    for preference in [
+        *existing_soft_preferences,
+        *incoming_soft_preferences,
+    ]:
+        signature = (
+            preference.get("subject_type"),
+            preference.get("subject"),
+            preference.get("direction"),
+            preference.get("evidence"),
+        )
+        if signature in seen_soft_preferences:
+            continue
+        seen_soft_preferences.add(signature)
+        merged_soft_preferences.append(
+            copy.deepcopy(preference)
+        )
+    result["soft_preferences"] = (
+        merged_soft_preferences
+    )
     result["semantic_audit"] = {
         "status": semantic.get("status"),
         "version": semantic.get("version"),
         "input_hash": semantic.get("input_hash"),
         "system_fingerprint": semantic.get("system_fingerprint"),
         "applied_constraints": semantic.get("constraints", []),
+        "applied_soft_preferences": semantic.get("soft_preferences", []),
         "advisory_only": semantic.get("advisory_only", []),
         "unmatched_input": semantic.get("unmatched_segments", []),
         "discarded_claims": semantic.get("discarded_claims", []),
         "separation_policy": "unique_only_no_tax_input",
-        "recommendation_policy": "hard_filter_no_weight_score_no_post_adjustment",
+        "recommendation_policy": (
+            "hard_constraints_filter_then_soft_preferences_secondary_ranking"
+        ),
     }
 
     items = list(result.get("items") or [])
@@ -752,7 +1048,8 @@ def enrich_unique_profile(profile: Dict[str, Any], unique_value: Any) -> Dict[st
     result["parser_note"] = (
         str(result.get("parser_note") or "").rstrip()
         + " Unique LLM은 기존 규칙 파서가 놓친 계좌·유동성 사실을 빈 필드에만 보완하고, "
-        "자산 선호는 비중 점수가 아니라 hard constraint로만 제공합니다."
+        "명시적 운용 지시는 hard constraint, 약한 관심·선호는 임의 비중 없이 "
+        "동률 후보의 secondary ranking으로만 제공합니다."
     ).strip()
     return result
 
@@ -831,6 +1128,62 @@ def _normalize_current_weight_map(
 def _subject_weight(weights: Dict[str, float], constraint: Dict[str, Any]) -> float:
     assets = _constraint_subject_assets(constraint)
     return float(sum(float(weights.get(asset, 0.0)) for asset in assets))
+
+
+def calculate_soft_preference_alignment(
+    *,
+    candidate_weights: Dict[str, float],
+    unique_profile: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """후보 비중과 고객의 약한 선호 간 정렬도를 계산한다."""
+
+    candidate = _normalize_weight_map(candidate_weights)
+    profile_dict = unique_profile if isinstance(unique_profile, dict) else {}
+    raw_preferences = profile_dict.get("soft_preferences")
+    preferences = (
+        [item for item in raw_preferences if isinstance(item, dict)]
+        if isinstance(raw_preferences, list)
+        else []
+    )
+    if candidate is None or not preferences:
+        return {
+            "score": 0.0,
+            "preference_count": 0,
+            "details": [],
+            "policy": "secondary_ranking_only_no_invented_weight",
+        }
+
+    components: List[float] = []
+    details: List[Dict[str, Any]] = []
+    for preference in preferences:
+        direction = str(preference.get("direction") or "")
+        assets = _constraint_subject_assets(preference)
+        if direction not in {"prefer", "avoid"} or not assets:
+            continue
+        actual_ratio = min(
+            max(float(sum(float(candidate.get(asset, 0.0)) for asset in assets)), 0.0),
+            1.0,
+        )
+        component = actual_ratio if direction == "prefer" else 1.0 - actual_ratio
+        components.append(component)
+        details.append(
+            {
+                "subject_type": preference.get("subject_type"),
+                "subject": preference.get("subject"),
+                "direction": direction,
+                "actual_ratio": actual_ratio,
+                "alignment_component": component,
+                "evidence": preference.get("evidence"),
+            }
+        )
+
+    score = float(sum(components) / len(components)) if components else 0.0
+    return {
+        "score": score,
+        "preference_count": len(components),
+        "details": details,
+        "policy": "secondary_ranking_only_no_invented_weight",
+    }
 
 
 def evaluate_unique_constraints(

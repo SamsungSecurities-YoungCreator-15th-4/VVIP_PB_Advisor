@@ -14,6 +14,7 @@ from .metrics import calculate_all_benchmark_cumulative_returns, calculate_cumul
 from .models import PortfolioRequest
 from .tax_accounts import calculate_six_strategy_tax_model, get_common_tax_rules
 from .utils import get_benchmark_catalog, safe_float, safe_round
+from .dashboard_views import calculate_portfolio_risk_contribution_heatmap as build_dashboard_risk_heatmap
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,19 @@ def build_portfolio_response(
     correlation_with_recommended_1: Optional[float] = None,
     cov_matrix: Optional[pd.DataFrame] = None,
     backtest_returns: Optional[pd.DataFrame] = None,
+    monte_carlo_scenario_context: Optional[
+        Dict[str, Any]
+    ] = None,
+    shocks: Optional[Dict[str, float]] = None,
+    include_monte_carlo_ranges: bool = True,
 ) -> Dict[str, Any]:
+    # shocks: 자산군별 연간 충격(소수)을 주입해 stressed 지표를 계산한다(스트레스 테스트용).
+    #   None이면 평상시 그대로다 — calculate 경로는 인자를 주지 않아 동작이 바뀌지 않는다.
+    # include_monte_carlo_ranges=False: 스트레스 모드에서는 Monte Carlo Range를
+    #   계산하지 않는다. Range는 충격을 반영하지 않는 별도 시뮬레이션이라 그대로 두면
+    #   stressed 지표와 단위·의미가 어긋나고(=프런트가 base center를 stressed로 오인),
+    #   포트폴리오 3개분 시뮬레이션은 슬라이더 응답을 느리게 한다. 끄면 metrics 의
+    #   after_tax_return_range·mdd_range 가 None 이 되어 프런트가 stressed 본값을 쓴다.
     metrics = calculate_metrics(
         weights=weights,
         returns=returns,
@@ -50,34 +63,45 @@ def build_portfolio_response(
         request=request,
         cov_matrix=cov_matrix,
         include_benchmark_metrics=True,
+        shocks=shocks,
     )
 
-    try:
-        monte_carlo_metric_ranges = (
-            calculate_monte_carlo_metric_ranges(
-                weights=weights,
-                returns=returns,
-                expected_returns=expected_returns,
-                total_asset=request.total_asset,
-                investment_horizon_years=(
-                    request.investment_horizon_years
-                ),
-                tax_breakdown=metrics.get(
-                    "tax_breakdown"
-                ),
-                random_seed=request.random_seed,
-            )
-        )
-    except Exception:
-        # Range는 부가 지표이므로 계산 실패가 전체 추천 응답을
-        # 중단시키지 않도록 안전하게 unavailable로 내린다.
-        logger.exception(
-            "Failed to calculate Monte Carlo metric ranges"
-        )
+    if not include_monte_carlo_ranges:
+        # 스트레스 모드: Range 시뮬레이션을 건너뛴다(위 인자 주석 참고).
         monte_carlo_metric_ranges = {
             "available": False,
-            "reason": "unexpected_simulation_error",
+            "reason": "skipped_under_stress",
         }
+    else:
+        try:
+            monte_carlo_metric_ranges = (
+                calculate_monte_carlo_metric_ranges(
+                    weights=weights,
+                    returns=returns,
+                    expected_returns=expected_returns,
+                    total_asset=request.total_asset,
+                    investment_horizon_years=(
+                        request.investment_horizon_years
+                    ),
+                    tax_breakdown=metrics.get(
+                        "tax_breakdown"
+                    ),
+                    random_seed=request.random_seed,
+                    scenario_context=(
+                        monte_carlo_scenario_context
+                    ),
+                )
+            )
+        except Exception:
+            # Range는 부가 지표이므로 계산 실패가 전체 추천 응답을
+            # 중단시키지 않도록 안전하게 unavailable로 내린다.
+            logger.exception(
+                "Failed to calculate Monte Carlo metric ranges"
+            )
+            monte_carlo_metric_ranges = {
+                "available": False,
+                "reason": "unexpected_simulation_error",
+            }
 
     cumulative_source_returns = (
         backtest_returns
@@ -206,6 +230,10 @@ def build_portfolio_response(
         # 신규 계약: PB가 선택할 수 있는 전체 3종
         "benchmark_backtests": benchmark_backtests,
     }
+    response["risk_contribution_heatmap"] = build_dashboard_risk_heatmap(
+        weights=weights,
+        returns=returns,
+    )
 
     if score is not None:
         response["score"] = round(float(score), 6)
@@ -705,6 +733,14 @@ def build_six_tax_strategy_cards(
                 "reason": reason_payload["reason"],
                 "reason_code": reason_payload["reason_code"],
                 "raw_reason": reason_payload["raw_reason"],
+                # 프런트 TaxAdviceCard 타입과 1:1 정렬(스키마 통일).
+                # calculate(tax_optimizer)·stress-metrics(base_tax/stressed_tax) 모두
+                # 이 함수를 거치므로 두 엔드포인트가 동일 필드를 내보낸다 → 같은 렌더 코드.
+                "savingManwon": int(round(contribution / 10_000)),
+                "transferableManwon": int(
+                    round(safe_float(card.get("transferableManwon")))
+                ),
+                "ineligibleReason": reason_payload["reason"],
             }
         )
 

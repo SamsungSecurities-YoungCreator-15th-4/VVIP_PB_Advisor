@@ -15,53 +15,55 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping, Optional
 
-# 단일 출처 원칙: 세율 상수는 portfolio_logic.py에서만 정의하고 여기서 import한다.
-# portfolio_logic.py가 이 모듈을 import하므로, 순환 임포트를 피하려면
-# portfolio_logic.py에서 세율 상수가 모두 정의된 이후에 tax_advice import가 위치해야 한다.
-try:
-    from .portfolio_logic import (
-        DEFAULT_WITHHOLDING_TAX_RATE as WITHHOLDING_TAX_RATE,
-        FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD as COMPREHENSIVE_TAX_THRESHOLD,
-        OVERSEAS_STOCK_GAIN_DEDUCTION,
-        OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
-        PENSION_RECEIVE_AGE,
-    )
-except ImportError:  # pragma: no cover - direct script execution fallback
-    from portfolio_logic import (  # type: ignore[no-redef]
-        DEFAULT_WITHHOLDING_TAX_RATE as WITHHOLDING_TAX_RATE,
-        FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD as COMPREHENSIVE_TAX_THRESHOLD,
-        OVERSEAS_STOCK_GAIN_DEDUCTION,
-        OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
-        PENSION_RECEIVE_AGE,
-    )
+# 세율·한도·자산별 소득수익률 가정은 constants.py / assets.py를 단일 출처로 쓴다.
+from .assets import (
+    ASSET_INCOME_YIELD_ASSUMPTIONS,
+    INCOME_TAXABLE_ASSETS as ASSET_INCOME_TAXABLE_ASSETS,
+    OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS as ASSET_OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS,
+)
+from .constants import (
+    DEFAULT_WITHHOLDING_TAX_RATE,
+    FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD,
+    IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT,
+    IRP_TAX_CREDIT_RATE_HIGH_INCOME,
+    ISA_ANNUAL_CONTRIBUTION_LIMIT,
+    ISA_GENERAL_TAX_FREE_LIMIT,
+    ISA_LOW_TAX_RATE,
+    ISA_MANDATORY_HOLDING_YEARS,
+    ISA_SEOGMIN_TAX_FREE_LIMIT,
+    OVERSEAS_STOCK_CAPITAL_GAINS_TAX_RATE,
+    OVERSEAS_STOCK_GAIN_DEDUCTION,
+    PENSION_RECEIVE_AGE,
+)
+
+WITHHOLDING_TAX_RATE = (
+    DEFAULT_WITHHOLDING_TAX_RATE
+)
+COMPREHENSIVE_TAX_THRESHOLD = (
+    FINANCIAL_INCOME_COMPREHENSIVE_TAX_THRESHOLD
+)
+ISA_ANNUAL_LIMIT_WON = (
+    ISA_ANNUAL_CONTRIBUTION_LIMIT
+)
+ISA_EXCESS_TAX_RATE = ISA_LOW_TAX_RATE
+PENSION_TAX_CREDIT_LIMIT_WON = (
+    IRP_PENSION_COMBINED_TAX_CREDIT_LIMIT
+)
+PENSION_TAX_CREDIT_RATE = (
+    IRP_TAX_CREDIT_RATE_HIGH_INCOME
+)
 
 DEFAULT_MARGINAL_INCOME_TAX_RATE = 0.385
-ISA_ANNUAL_LIMIT_WON = 20_000_000
-ISA_TAX_FREE_LIMIT_WON = 2_000_000
-ISA_EXCESS_TAX_RATE = 0.099
-ISA_MANDATORY_HOLDING_YEARS = 3
-PENSION_TAX_CREDIT_LIMIT_WON = 9_000_000
-PENSION_TAX_CREDIT_RATE = 0.132
 LONG_BOND_SEPARATE_TAX_RATE = 0.33
 
-ASSET_INCOME_YIELD_ASSUMPTIONS = {
-    "cash": 0.025,
-    "general_bond": 0.030,
-    "low_coupon_bond": 0.015,
-    "separate_tax_bond": 0.025,
-    "overseas_dividend": 0.035,
-    "reit": 0.040,
-}
-# 소득수익률 추정 전체 대상 (해외양도차익 income_part 분리, ISA 편입 가능 자산 등)
-INCOME_TAXABLE_ASSETS = set(ASSET_INCOME_YIELD_ASSUMPTIONS)
+INCOME_TAXABLE_ASSETS = set(
+    ASSET_INCOME_TAXABLE_ASSETS
+)
 # 종합과세 합산 대상 소득 자산 — separate_tax_bond는 33% 분리과세라 합산 제외
 _COMPREHENSIVE_INCOME_ASSETS = INCOME_TAXABLE_ASSETS - {"separate_tax_bond"}
-OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS = {
-    "overseas_blue_chip",
-    "overseas_growth",
-    "overseas_dividend",
-    "reit",
-}
+OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS = set(
+    ASSET_OVERSEAS_STOCK_CAPITAL_GAIN_ASSETS
+)
 _BOND_INCOME_ASSETS = {"general_bond", "low_coupon_bond"}
 _DIVIDEND_INCOME_ASSETS = {"overseas_dividend", "reit"}
 
@@ -193,6 +195,16 @@ def _base_context(
     }
 
 
+def _resolve_isa_tax_free_limit(
+    isa_type: str,
+) -> int:
+    return (
+        ISA_SEOGMIN_TAX_FREE_LIMIT
+        if str(isa_type).lower()
+        == "seogmin"
+        else ISA_GENERAL_TAX_FREE_LIMIT
+    )
+
 def calc_tax_advice(
     portfolio: list[dict[str, Any]],
     gross_return: float,
@@ -208,6 +220,7 @@ def calc_tax_advice(
     near_term_need_manwon: float = 0.0,
     near_term_need_years: Optional[float] = None,
     isa_opened: bool = True,
+    isa_type: str = "general",
     isa_can_open_new: Optional[bool] = None,
     isa_usable: Optional[bool] = None,
     isa_years_until_liquid: Optional[float] = None,
@@ -239,6 +252,11 @@ def calc_tax_advice(
     investable_won = context["investable_won"]
 
     cards: list[dict[str, Any]] = []
+    isa_tax_free_limit_won = (
+        _resolve_isa_tax_free_limit(
+            isa_type
+        )
+    )
 
     # 1) ISA
     isa_headroom_won = max(
@@ -286,7 +304,7 @@ def calc_tax_advice(
             + comp_portion_won * extra_rate
         )
         tax_isa_won = max(
-            moved_income_won - ISA_TAX_FREE_LIMIT_WON, 0.0
+            moved_income_won - isa_tax_free_limit_won, 0.0
         ) * ISA_EXCESS_TAX_RATE
         isa_saving_won = max(tax_outside_won - tax_isa_won, 0.0)
     cards.append(
@@ -299,6 +317,10 @@ def calc_tax_advice(
             if isa_reason is None
             else 0,
             "ineligibleReason": isa_reason,
+            "isaType": str(isa_type).lower(),
+            "taxFreeLimitWon": (
+                isa_tax_free_limit_won
+            ),
         }
     )
 
@@ -438,10 +460,162 @@ def calc_tax_advice(
     return cards
 
 
+def _build_combined_strategy_cards(
+    portfolio: list[dict[str, Any]],
+    context: dict[str, Any],
+    **kwargs: Any,
+) -> dict[str, dict[str, Any]]:
+    # Combined 계산에 실제로 필요한 카드 필드만 만든다.
+    total_won = context["total_won"]
+    income_by_asset = context["income_by_asset"]
+    excess_won = context["excess_won"]
+    investable_won = context["investable_won"]
+
+    isa_type = str(kwargs.get("isa_type") or "general").lower()
+    isa_tax_free_limit_won = _resolve_isa_tax_free_limit(isa_type)
+    isa_headroom_won = max(
+        ISA_ANNUAL_LIMIT_WON
+        - max(float(kwargs.get("isa_used_manwon") or 0.0), 0.0) * 10_000,
+        0.0,
+    )
+    income_asset_value_won = sum(
+        _safe_nonnegative(item.get("weight")) * total_won
+        for item in portfolio
+        if item.get("asset_class") in _COMPREHENSIVE_INCOME_ASSETS
+    )
+    transferable_won = min(
+        isa_headroom_won,
+        income_asset_value_won,
+        investable_won,
+    )
+
+    isa_opened = bool(kwargs.get("isa_opened", True))
+    isa_can_open_new = kwargs.get("isa_can_open_new")
+    isa_usable = kwargs.get("isa_usable")
+    isa_years_until_liquid = kwargs.get("isa_years_until_liquid")
+    horizon_years = kwargs.get("horizon_years")
+
+    isa_reason: Optional[str] = None
+    if isa_usable is False:
+        isa_reason = "ISA 계좌 적격성·잔여한도 조건 미충족"
+    elif not isa_opened and (
+        isa_can_open_new is False
+        or (isa_can_open_new is None and excess_won > 0)
+    ):
+        isa_reason = "ISA 신규 개설 불가(적격성 조건 미충족)"
+    else:
+        remaining_lockup = (
+            max(float(isa_years_until_liquid), 0.0)
+            if isa_years_until_liquid is not None
+            else (0.0 if isa_opened else float(ISA_MANDATORY_HOLDING_YEARS))
+        )
+        if (
+            horizon_years is not None
+            and remaining_lockup > 0
+            and float(horizon_years) < remaining_lockup
+        ):
+            isa_reason = (
+                f"투자기간 {float(horizon_years):g}년 < ISA 잔여 의무보유 "
+                f"{remaining_lockup:g}년"
+            )
+
+    isa_saving_won = 0.0
+    if (
+        isa_reason is None
+        and transferable_won > 0
+        and income_asset_value_won > 0
+    ):
+        avg_income_rate = sum(income_by_asset.values()) / income_asset_value_won
+        moved_income_won = transferable_won * avg_income_rate
+        comp_portion_won = min(moved_income_won, excess_won)
+        tax_outside_won = (
+            moved_income_won * WITHHOLDING_TAX_RATE
+            + comp_portion_won * context["extra_rate"]
+        )
+        tax_isa_won = max(
+            moved_income_won - isa_tax_free_limit_won,
+            0.0,
+        ) * ISA_EXCESS_TAX_RATE
+        isa_saving_won = max(tax_outside_won - tax_isa_won, 0.0)
+
+    pension_headroom_won = max(
+        PENSION_TAX_CREDIT_LIMIT_WON
+        - max(float(kwargs.get("pension_used_manwon") or 0.0), 0.0) * 10_000,
+        0.0,
+    )
+    pension_reason: Optional[str] = None
+    if kwargs.get("pension_usable") is False:
+        pension_reason = "연금계좌 적격성·잔여 세액공제 한도 조건 미충족"
+    elif not kwargs.get("pension_tax_liability_sufficient", True):
+        pension_reason = "산출세액이 세액공제액보다 작아 전액 공제 효과를 가정할 수 없음"
+    else:
+        age = kwargs.get("age")
+        if age is not None and int(age) < PENSION_RECEIVE_AGE:
+            years_to_receive = PENSION_RECEIVE_AGE - int(age)
+            if (
+                horizon_years is not None
+                and float(horizon_years) < years_to_receive
+            ):
+                pension_reason = (
+                    f"투자기간 {float(horizon_years):g}년 < 연금 수령까지 "
+                    f"{years_to_receive:g}년"
+                )
+
+    pension_transferable = min(pension_headroom_won, investable_won)
+    pension_tax_credit_rate = kwargs.get("pension_tax_credit_rate")
+    if pension_tax_credit_rate is None:
+        pension_tax_credit_rate = PENSION_TAX_CREDIT_RATE
+    pension_saving_won = pension_transferable * max(
+        float(pension_tax_credit_rate),
+        0.0,
+    )
+
+    dividend_income_won = sum(
+        income_by_asset.get(asset_class, 0.0)
+        for asset_class in _DIVIDEND_INCOME_ASSETS
+    )
+    dividend_saving_won = (
+        min(dividend_income_won, excess_won) * context["extra_rate"]
+    )
+
+    bond_income_won = sum(
+        income_by_asset.get(asset_class, 0.0)
+        for asset_class in _BOND_INCOME_ASSETS
+    )
+    bond_saving_won = min(bond_income_won, excess_won) * max(
+        context["marginal"] - LONG_BOND_SEPARATE_TAX_RATE,
+        0.0,
+    )
+
+    return {
+        "isa": {
+            "savingWon": round(isa_saving_won),
+            "applicable": isa_reason is None and isa_saving_won > 0,
+            "ineligibleReason": isa_reason,
+        },
+        "pension_credit": {
+            "savingWon": round(pension_saving_won) if pension_reason is None else 0,
+            "applicable": pension_reason is None and pension_saving_won > 0,
+            "ineligibleReason": pension_reason,
+        },
+        "low_tax_dividend": {
+            "applicable": dividend_saving_won > 0,
+        },
+        "separate_bond": {
+            "applicable": bond_saving_won > 0,
+        },
+    }
+
+
 def calc_combined_tax_saving(
     portfolio: list[dict[str, Any]],
     gross_return: float,
     total_assets: float,
+    *,
+    standalone_cards: Optional[
+        list[dict[str, Any]]
+    ] = None,
+    calculate_standalone_cards: bool = True,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Combine six strategies without double-using shared tax bases.
@@ -462,12 +636,27 @@ def calc_combined_tax_saving(
         near_term_need_manwon=kwargs.get("near_term_need_manwon") or 0.0,
         expected_returns_by_asset=expected_returns_by_asset,
     )
-    cards = {
-        card["key"]: card
-        for card in calc_tax_advice(
-            portfolio, gross_return, total_assets, **kwargs
+    if standalone_cards is not None:
+        cards = {
+            card["key"]: card
+            for card in standalone_cards
+        }
+    elif calculate_standalone_cards:
+        cards = {
+            card["key"]: card
+            for card in calc_tax_advice(
+                portfolio,
+                gross_return,
+                total_assets,
+                **kwargs,
+            )
+        }
+    else:
+        cards = _build_combined_strategy_cards(
+            portfolio,
+            context,
+            **kwargs,
         )
-    }
     income_by_asset = context["income_by_asset"]
     total_won = context["total_won"]
     rem = context["excess_won"]

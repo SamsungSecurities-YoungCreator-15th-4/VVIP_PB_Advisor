@@ -17,7 +17,14 @@ import {
   SCENARIO_BASE,
   TAX_THRESHOLD,
 } from "./mockData";
-import type { ApiResult, DataSource, InsightData } from "./api";
+import type {
+  ApiResult,
+  DataSource,
+  InsightData,
+  CorrelationHeatmapResponse,
+  PortfolioTaxResponse,
+  StressTaxData,
+} from "./api";
 
 export interface IpsState {
   returnPct: number;
@@ -29,6 +36,21 @@ export interface IpsState {
   legal: string;
   unique: string;
 }
+
+/**
+ * 신규 고객(상담 전) 전용 빈 IPS — 더미 값을 쓰지 않고 조율기를 비운 채로 시작한다.
+ * Segment(risk/liquidity)는 "" 일 때 아무 항목도 선택되지 않은 상태로 렌더된다.
+ */
+export const EMPTY_IPS: IpsState = {
+  returnPct: 0,
+  risk: "" as IpsState["risk"],
+  timeYears: 0,
+  liquidity: "" as IpsState["liquidity"],
+  goal: "",
+  tax: "",
+  legal: "",
+  unique: "",
+};
 
 /** STT 상담 연동 상태(비동기 흐름·출처 표시용). */
 export type SttStatus = "idle" | "uploading" | "done" | "error";
@@ -57,18 +79,53 @@ interface DashboardState {
   sttNote?: string;
 
   // ── 포트폴리오 계산 결과 ──
+  /** 항상 화면에 표시되는 단일 포트폴리오 배열 (base·stress 모드 모두 여기서 읽는다) */
   portfolios: Portfolio[];
+  /** 마지막 /portfolio/calculate 결과 — stress PnL 델타 계산의 기준선 */
+  basePortfolios: Portfolio[];
   portfolioSource: DataSource;
   portfolioNote?: string;
-  setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
+  /** calculate 결과로 portfolios·basePortfolios 동시 갱신, isStressMode: false */
+  setPortfolios: (
+    portfolios: Portfolio[],
+    source: DataSource,
+    note?: string,
+  ) => void;
+  /** stress-metrics 결과를 portfolios에 반영 (basePortfolios는 유지), isStressMode: true */
+  setStressPortfolios: (portfolios: Portfolio[]) => void;
 
-  // ── 스트레스 테스트 결과 ──
-  stressedPortfolios: Portfolio[];
+  // ── 스트레스 모드 상태 ──
   isStressMode: boolean;
-  stressAnalyzing: boolean;
-  setStressedPortfolios: (portfolios: Portfolio[]) => void;
-  setStressAnalyzing: (v: boolean) => void;
+  stressPreset: "current" | "crisis" | "war" | null;
+  setStressPreset: (preset: "current" | "crisis" | "war" | null) => void;
+  /** portfolios를 basePortfolios로 복원, isStressMode: false */
   clearStressMode: () => void;
+
+  // ── 히트맵·절세 데이터 ──
+  correlationHeatmap: CorrelationHeatmapResponse | null;
+  setCorrelationHeatmap: (h: CorrelationHeatmapResponse | null) => void;
+  /** 포트폴리오 kind("current" | "A" | "B") 별 절세 데이터 */
+  portfolioTax: Record<string, PortfolioTaxResponse> | null;
+  setPortfolioTax: (tax: Record<string, PortfolioTaxResponse>) => void;
+  /** stress-metrics 응답의 base_tax/stressed_tax 쌍 — TaxSection 연동용 */
+  stressTax: { base: StressTaxData; stressed: StressTaxData } | null;
+  setStressTax: (
+    tax: { base: StressTaxData; stressed: StressTaxData } | null,
+  ) => void;
+  /** calculate 응답의 tax_optimizer — 스트레스 미진입 시 절세 제안·종합과세 게이지 소스 */
+  taxOptimizer: Record<string, StressTaxData> | null;
+  setTaxOptimizer: (tax: Record<string, StressTaxData> | null) => void;
+
+  // ── 분석하기 버튼 상태 ──
+  analyzing: boolean;
+  setAnalyzing: (v: boolean) => void;
+  /** IPS·시나리오 기준선 — 마지막 분석 시점을 기록해 다음 분석 시 변화 여부 판단에 사용 */
+  lastAnalyzedIps: IpsState | null;
+  lastAnalyzedScenario: { ratePct: number; fxKrw: number } | null;
+  setAnalysisBaseline: (
+    ips: IpsState,
+    scenario: { ratePct: number; fxKrw: number },
+  ) => void;
 
   // ── 상단바 실시간 시장 지표 ──
   // MacroTicker 가 /api/macro-indicators 로 받은 실데이터를 여기에 올려, PDF 등
@@ -86,6 +143,8 @@ interface DashboardState {
   addCustomer: (c: Customer) => void;
   setCustomers: (customers: Customer[]) => void;
   selectCustomer: (id: string) => void;
+  /** 신규 고객의 isNew 플래그 해제(STT/과거 상담 불러오기 등 실제 데이터 확보 시). */
+  clearCustomerNew: (id: string) => void;
   selectPortfolio: (id: string) => void;
   setIps: (patch: Partial<IpsState>) => void;
   setScenario: (patch: Partial<DashboardState["scenario"]>) => void;
@@ -120,19 +179,40 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
   // 초기 포트폴리오는 mock(데모) — 출처를 fallback 으로 둬 배지로 명시한다.
   portfolios: PORTFOLIOS,
+  basePortfolios: PORTFOLIOS,
   portfolioSource: "fallback" as DataSource,
   portfolioNote: "포트폴리오를 계산 중입니다.",
   setPortfolios: (portfolios, source, note) =>
-    set({ portfolios, portfolioSource: source, portfolioNote: note }),
+    set({
+      portfolios,
+      basePortfolios: portfolios,
+      portfolioSource: source,
+      portfolioNote: note,
+      isStressMode: false,
+    }),
+  setStressPortfolios: (portfolios) => set({ portfolios, isStressMode: true }),
 
-  stressedPortfolios: [],
   isStressMode: false,
-  stressAnalyzing: false,
-  setStressedPortfolios: (portfolios) =>
-    set({ stressedPortfolios: portfolios, isStressMode: true }),
-  setStressAnalyzing: (v) => set({ stressAnalyzing: v }),
+  stressPreset: "current",
+  setStressPreset: (preset) => set({ stressPreset: preset }),
   clearStressMode: () =>
-    set({ stressedPortfolios: [], isStressMode: false }),
+    set((s) => ({ portfolios: s.basePortfolios, isStressMode: false })),
+
+  correlationHeatmap: null,
+  setCorrelationHeatmap: (h) => set({ correlationHeatmap: h }),
+  portfolioTax: null,
+  setPortfolioTax: (tax) => set({ portfolioTax: tax }),
+  stressTax: null,
+  setStressTax: (tax) => set({ stressTax: tax }),
+  taxOptimizer: null,
+  setTaxOptimizer: (tax) => set({ taxOptimizer: tax }),
+
+  analyzing: false,
+  setAnalyzing: (v) => set({ analyzing: v }),
+  lastAnalyzedIps: null,
+  lastAnalyzedScenario: null,
+  setAnalysisBaseline: (ips, scenario) =>
+    set({ lastAnalyzedIps: ips, lastAnalyzedScenario: scenario }),
 
   macroIndicators: MACRO_INDICATORS,
   setMacroIndicators: (rows) => set({ macroIndicators: rows }),
@@ -157,7 +237,44 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         ? s.selectedCustomerId
         : (customers[0]?.id ?? s.selectedCustomerId),
     })),
-  selectCustomer: (id) => set({ selectedCustomerId: id }),
+  selectCustomer: (id) =>
+    set((s) => {
+      // 신규 고객(상담 전)은 IPS도 빈 상태로 시작 — 더미 값을 보여주지 않는다.
+      const target = s.customers.find((c) => c.id === id);
+      return {
+        selectedCustomerId: id,
+        // 고객 전환 시 이전 고객의 분석 결과·스트레스 상태 전체 초기화
+        portfolioSource: "fallback" as DataSource,
+        portfolios: PORTFOLIOS,
+        basePortfolios: PORTFOLIOS,
+        portfolioNote: undefined,
+        correlationHeatmap: null,
+        portfolioTax: null,
+        stressTax: null,
+        taxOptimizer: null,
+        insightResult: null,
+        isStressMode: false,
+        stressPreset: "current",
+        scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분석는 항상 calculate
+        // 고객 전환 시 이전 고객의 상담 내역·상담 ID·STT 상태는 신규/기존 구분 없이 항상 초기화한다.
+        // (이전 고객의 transcript·consultationId가 새 고객 화면에 노출되거나, 새 고객 clientId와
+        //  이전 consultationId 조합으로 스냅샷이 잘못 저장되는 것을 방지)
+        transcript: [] as ConsultMessage[],
+        transcriptSource: "empty" as DataSource,
+        consultationId: "",
+        sttStatus: "idle" as SttStatus,
+        sttNote: undefined,
+        // 신규 고객(상담 전)은 IPS도 빈 상태로 시작 — 더미 데이터 노출 금지.
+        // 기존 고객의 IPS는 직후 자동 복원(getPreviousDashboard→loadConsultationDetail)이 채운다.
+        ...(target?.isNew ? { ips: EMPTY_IPS } : {}),
+      };
+    }),
+  clearCustomerNew: (id) =>
+    set((s) => ({
+      customers: s.customers.map((c) =>
+        c.id === id ? { ...c, isNew: false } : c,
+      ),
+    })),
   selectPortfolio: (id) => set({ selectedPortfolioId: id }),
   setIps: (patch) => set((s) => ({ ips: { ...s.ips, ...patch } })),
   setScenario: (patch) =>
@@ -172,7 +289,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     })),
   setOtherIncome: (manwon) => set({ otherIncomeManwon: Math.max(0, manwon) }),
 
-  setTranscript: (transcript, source) => set({ transcript, transcriptSource: source }),
+  setTranscript: (transcript, source) =>
+    set({ transcript, transcriptSource: source }),
   setConsultationId: (id) => set({ consultationId: id }),
   setSttStatus: (status, note) => set({ sttStatus: status, sttNote: note }),
 }));

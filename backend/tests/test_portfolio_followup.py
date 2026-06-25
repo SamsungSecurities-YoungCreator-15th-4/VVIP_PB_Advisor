@@ -36,6 +36,7 @@ from app.portfolio.portfolio_logic import (  # noqa: E402
     resolve_external_financial_income_krw,
 )
 from app.portfolio.tax_advice import calc_combined_tax_saving  # noqa: E402
+from app.portfolio.formatters import build_metrics_payload  # noqa: E402
 
 
 def _returns(
@@ -945,4 +946,123 @@ def test_pr106_gemini_review_range_failure_is_graceful(
         "after_tax_return_range"
     ] is None
     assert metrics["mdd_range"] is None
+
+
+def test_metric_range_api_exposes_percent_only() -> None:
+    after_tax_range = {
+        "p10": 0.01,
+        "p20": 0.02,
+        "p50": 0.05,
+        "p80": 0.08,
+        "p90": 0.09,
+        "lower": 0.02,
+        "center": 0.05,
+        "upper": 0.08,
+        "lower_percentile": 20,
+        "center_percentile": 50,
+        "upper_percentile": 80,
+        "unit": "rate",
+        "direction": "higher_is_better",
+        "unexpected_rate": 0.99,
+        "amount": 999_999_999,
+    }
+    mdd_range = {
+        "p10": -0.40,
+        "p20": -0.30,
+        "p50": -0.20,
+        "p80": -0.10,
+        "p90": -0.05,
+        "lower": -0.30,
+        "center": -0.20,
+        "upper": -0.10,
+        "lower_percentile": 20,
+        "center_percentile": 50,
+        "upper_percentile": 80,
+        "unit": "rate",
+        "direction": "higher_is_better",
+        "amount": -600_000_000,
+    }
+
+    payload = build_metrics_payload(
+        {
+            "metrics": {
+                "expected_return": 0.08,
+                "volatility": 0.12,
+                "sharpe_ratio": 0.7,
+                "sortino_ratio": 0.9,
+                "mdd": -0.20,
+                "beta": None,
+                "beta_benchmark": None,
+                "selected_benchmark_key": None,
+                "benchmark_comparisons": {},
+                "after_tax_return": 0.06,
+                "after_tax_return_range": after_tax_range,
+                "mdd_range": mdd_range,
+                "monte_carlo_range_basis": {
+                    "after_tax_return": after_tax_range,
+                    "mdd": mdd_range,
+                },
+            }
+        }
+    )
+
+    assert payload["after_tax_return_range"] == {
+        "p10": 1.0,
+        "p20": 2.0,
+        "p50": 5.0,
+        "p80": 8.0,
+        "p90": 9.0,
+        "lower": 2.0,
+        "center": 5.0,
+        "upper": 8.0,
+        "lower_percentile": 20,
+        "center_percentile": 50,
+        "upper_percentile": 80,
+        "direction": "higher_is_better",
+        "unit": "percent",
+    }
+    assert payload["mdd_range"] == {
+        "p10": -40.0,
+        "p20": -30.0,
+        "p50": -20.0,
+        "p80": -10.0,
+        "p90": -5.0,
+        "lower": -30.0,
+        "center": -20.0,
+        "upper": -10.0,
+        "lower_percentile": 20,
+        "center_percentile": 50,
+        "upper_percentile": 80,
+        "direction": "higher_is_better",
+        "unit": "percent",
+    }
+
+    assert "monte_carlo_range_basis" not in payload
+    assert "unexpected_rate" not in payload["after_tax_return_range"]
+    assert "amount" not in payload["after_tax_return_range"]
+    assert "amount" not in payload["mdd_range"]
+
+
+def test_empty_metric_range_is_not_exposed() -> None:
+    payload = build_metrics_payload(
+        {
+            "metrics": {
+                "expected_return": 0.08,
+                "volatility": 0.12,
+                "sharpe_ratio": 0.7,
+                "sortino_ratio": 0.9,
+                "mdd": -0.20,
+                "beta": None,
+                "beta_benchmark": None,
+                "selected_benchmark_key": None,
+                "benchmark_comparisons": {},
+                "after_tax_return": 0.06,
+                "after_tax_return_range": {},
+                "mdd_range": {},
+            }
+        }
+    )
+
+    assert payload["after_tax_return_range"] is None
+    assert payload["mdd_range"] is None
 

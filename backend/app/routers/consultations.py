@@ -707,7 +707,6 @@ def list_consultations(
     ]
 
     return ConsultationListResponse(
-        customer_id=client_id,
         customer_name=client["name"],
         consultations=consultations,
     )

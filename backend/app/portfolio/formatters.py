@@ -7,14 +7,62 @@ import math
 from typing import Dict, List, Optional, Any
 
 from .constants import BACKTEST_BASE_INDEX
-from .assets import ASSET_NAMES_KR, ASSET_TICKERS, RISK_LEVEL_NAME
+from .assets import RISK_LEVEL_NAME
 from .utils import safe_float, safe_round
+from .dashboard_views import build_dashboard_allocation_payload as build_grouped_allocation_payload
+from .dashboard_views import build_common_correlation_heatmap_payload as build_grouped_correlation_payload
 
 KST = ZoneInfo("Asia/Seoul")
 
 
 def rate_to_percent(value: Any, digits: int = 2) -> float:
     return safe_round(safe_float(value) * 100.0, digits)
+
+
+def build_metric_range_payload(
+    range_payload: Any,
+) -> Optional[Dict[str, Any]]:
+    """내부 rate Range를 프론트 표시용 percent 응답으로 제한해 변환한다."""
+    if not isinstance(range_payload, dict) or not range_payload:
+        return None
+
+    rate_value_keys = (
+        "p10",
+        "p20",
+        "p50",
+        "p80",
+        "p90",
+        "lower",
+        "center",
+        "upper",
+    )
+    metadata_keys = (
+        "lower_percentile",
+        "center_percentile",
+        "upper_percentile",
+        "direction",
+    )
+
+    if not any(
+        range_payload.get(key) is not None
+        for key in rate_value_keys
+    ):
+        return None
+
+    # 프론트에는 분위수 % 값과 표시 메타데이터만 전달한다.
+    # 내부 rate 원본, 원화 금액 및 예상치 못한 추가 키는 노출하지 않는다.
+    payload = {
+        key: range_payload[key]
+        for key in (*rate_value_keys, *metadata_keys)
+        if range_payload.get(key) is not None
+    }
+
+    for key in rate_value_keys:
+        if key in payload:
+            payload[key] = rate_to_percent(payload[key])
+
+    payload["unit"] = "percent"
+    return payload
 
 
 def round_allocation_percentages(
@@ -52,25 +100,11 @@ def round_allocation_percentages(
     }
 
 
-def build_allocation_payload(portfolio: Dict[str, Any]) -> List[Dict[str, Any]]:
-    raw_weights = [
-        (asset, safe_float(info.get("weight")))
-        for asset, info in portfolio["weights"].items()
-        if safe_float(info.get("weight")) > 1e-12
-    ]
-    rounded = round_allocation_percentages(raw_weights)
 
-    return [
-        {
-            "asset_class": asset,
-            "name": portfolio["weights"][asset].get(
-                "label",
-                ASSET_NAMES_KR.get(asset, asset),
-            ),
-            "weight": rounded[asset],
-        }
-        for asset, _ in raw_weights
-    ]
+def build_allocation_payload(
+    portfolio: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    return build_grouped_allocation_payload(portfolio)
 
 def build_backtest_payload(
     cumulative_returns: List[Dict[str, Any]],
@@ -116,6 +150,12 @@ def build_metrics_payload(
             {},
         ),
         "after_tax_return": rate_to_percent(metrics["after_tax_return"]),
+        "after_tax_return_range": build_metric_range_payload(
+            metrics.get("after_tax_return_range")
+        ),
+        "mdd_range": build_metric_range_payload(
+            metrics.get("mdd_range")
+        ),
     }
 
 
@@ -207,6 +247,12 @@ def build_tax_payload(
         },
         "saved_vs_current": safe_round(saved_vs_current, 0),
         "summary": build_tax_summary(portfolio, saved_vs_current),
+        # 종합과세 임계선 게이지 — 프론트 TaxGauge 컴포넌트가 포트폴리오 선택 시
+        # mock(520만원 고정) 대신 실계산 금융소득을 표시하는 데 사용.
+        # 출처: tax_accounts.calculate_financial_income_comprehensive_tax_status()["gauge"]
+        "financial_income_tax_gauge": (
+            tax_breakdown.get("financial_income_comprehensive_tax") or {}
+        ).get("gauge"),
         "calculation_notes": [
             "transaction_cost와 fx_cost는 현재 계산 로직에 별도 모델이 없어 0으로 표시합니다.",
             "세금 계산은 하드코딩 규칙표 기반 간이 추정입니다.",
@@ -269,40 +315,23 @@ def build_spec_portfolio_item(
         },
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
+    risk_contribution_heatmap = (
+        portfolio.get("risk_contribution_heatmap")
+        or portfolio.get("dashboard_risk_contribution_heatmap")
+    )
+    if risk_contribution_heatmap is None:
+        raise ValueError(
+            "포트폴리오 응답에 risk_contribution_heatmap이 없습니다."
+        )
+    item["risk_contribution_heatmap"] = risk_contribution_heatmap
     return item
+
 
 
 def build_correlation_heatmap_payload(
     full_response: Dict[str, Any],
 ) -> Dict[str, Any]:
-    raw_matrix = full_response.get("correlation_matrix") or {}
-    asset_keys = [
-        asset
-        for asset in ASSET_TICKERS
-        if asset in raw_matrix
-    ]
-
-    return {
-        "assets": [
-            {
-                "asset_class": asset,
-                "name": ASSET_NAMES_KR.get(asset, asset),
-            }
-            for asset in asset_keys
-        ],
-        "matrix": [
-            [
-                safe_round(
-                    (raw_matrix.get(column_asset) or {}).get(row_asset),
-                    4,
-                )
-                for column_asset in asset_keys
-            ]
-            for row_asset in asset_keys
-        ],
-        "value_type": "correlation",
-    }
-
+    return build_grouped_correlation_payload(full_response)
 
 def build_portfolio_calculate_response(
     full_response: Dict[str, Any],
@@ -373,5 +402,11 @@ def build_portfolio_calculate_response(
             "warnings": warnings,
         },
         "methodology": full_response["methodology"],
+        # 절세 최적화 화면(절세 6카드 = strategy_cards)용 페이로드.
+        # run_full_analysis가 이미 core["tax_optimizer"]까지 계산하므로,
+        # 별도 호출(deprecated /api/tax-optimizer = 분석 재실행) 없이 그대로 싣는다.
+        # 구조는 stress-metrics의 base_tax/stressed_tax와 동일한
+        # build_tax_optimizer_payload 출력이라 프런트가 같은 코드로 렌더한다.
+        "tax_optimizer": full_response.get("tax_optimizer", {}),
         "notes": full_response["notes"],
     }
