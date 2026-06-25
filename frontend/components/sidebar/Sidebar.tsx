@@ -294,7 +294,10 @@ export default function Sidebar() {
       setAnalyzing(false);
     }
   };
-  handleAnalyzeRef.current = handleAnalyze;
+  // render 중 직접 ref 업데이트 금지 → effect로 매 렌더마다 최신 함수를 저장
+  useEffect(() => {
+    handleAnalyzeRef.current = handleAnalyze;
+  });
 
   const handleDropdownToggle = () => {
     if (!dropdownOpen && dropdownTriggerRef.current) {

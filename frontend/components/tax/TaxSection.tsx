@@ -20,15 +20,13 @@ const ID_TO_KIND: Record<string, string> = {
 };
 
 // 백엔드 strategy key → 프론트 고정 카피 (spec §4)
-const STRATEGY_KEY_ORDER = [
-  "isa",
-  "pension_credit",
-  "separate_bond",
-  "low_tax_dividend",
-  "overseas_exemption",
-  "tax_loss",
-] as const;
-type StrategyKey = (typeof STRATEGY_KEY_ORDER)[number];
+type StrategyKey =
+  | "isa"
+  | "pension_credit"
+  | "separate_bond"
+  | "low_tax_dividend"
+  | "overseas_exemption"
+  | "tax_loss";
 
 const STRATEGY_COPY: Record<
   StrategyKey,
