@@ -338,6 +338,7 @@ class TestRagGeneratorDeterminism:
 
     def test_normalize_insight_summary_keeps_short_financial_terms(self):
         assert "시가 50억원" in normalize_insight_summary("시가 50억원 기준")
+        assert normalize_insight_summary("시가 상승") == "시가 상승"
         assert "높은 5%" in normalize_insight_summary("높은 5% 변동성")
 
     def test_normalize_insight_summary_converts_sentence_to_noun_phrase(self):
