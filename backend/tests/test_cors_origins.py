@@ -49,6 +49,26 @@ def test_unrelated_vercel_origin_rejected():
     assert _preflight(EVIL).status_code == 400
 
 
+def test_lookalike_vercel_projects_rejected():
+    # 타인이 같은 접두사로 만든 프로젝트는 우리 계정 접미사가 없으므로 거부돼야 한다.
+    # (Vercel은 누구나 프로젝트 생성 가능 → CORS origin 우회 방지)
+    assert _preflight("https://vvip-pb-advisor-attacker.vercel.app").status_code == 400
+    assert (
+        _preflight(
+            "https://vvip-pb-advisor-xyz-attacker-s-projects.vercel.app"
+        ).status_code
+        == 400
+    )
+
+
+def test_branch_preview_origin_allowed():
+    # 브랜치 프리뷰 URL은 가운데 식별자에 하이픈이 들어가도 허용돼야 한다.
+    res = _preflight(
+        "https://vvip-pb-advisor-git-feat-cors-choi-jung-hyeon-s-projects.vercel.app"
+    )
+    assert res.status_code == 200
+
+
 def test_localhost_origin_allowed():
     # 로컬 개발 origin은 기본 허용 목록에 있다.
     res = _preflight("http://localhost:3000")
