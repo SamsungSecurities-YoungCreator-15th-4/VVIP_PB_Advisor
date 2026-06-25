@@ -89,8 +89,8 @@ def _format_chunks_for_prompt(chunks: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks)
 
 
-def normalize_insight_summary(text: str, max_chars: int = 50, min_chars: int = 20) -> str:
-    """IPS unique 에 붙일 짧은 요약을 한 줄·명사형·최대 길이로 정규화한다."""
+def normalize_insight_summary(text: str, max_chars: int = 90, min_chars: int = 35) -> str:
+    """IPS unique 에 붙일 요약을 한 줄·명사형·완화된 최대 길이로 정규화한다."""
     summary = " ".join(text.split())
     summary = summary.strip("`\"'“”‘’")
     for prefix in ("요약:", "요약："):
@@ -117,6 +117,7 @@ def _normalize_summary_as_noun_phrase(text: str) -> str:
         r"\g<subject> ",
         summary,
     )
+    summary = re.sub(r"(?<=\S)(?:이|가|은|는)\s+(?=\d)", " ", summary)
     sentence_endings = (
         ("확인되었습니다", "확인"),
         ("확인됐습니다", "확인"),
@@ -189,11 +190,22 @@ def _is_substantive_sentence(sentence: str) -> bool:
     return not any(marker in stripped for marker in _PREAMBLE_MARKERS)
 
 
+_NUMERIC_TOKEN_RE = re.compile(
+    r"\d+(?:[,.]\d+)*(?:\s?(?:%|bp|bps|억원|조원|만원|원|년|개월|일|배|회|p))?"
+)
+
+
+def _contains_numeric_evidence(text: str) -> bool:
+    """답변 원문에 있는 수치 근거를 포함한 문장인지 판별한다."""
+    return bool(_NUMERIC_TOKEN_RE.search(text))
+
+
 def fallback_insight_summary(answer: str) -> str:
-    """mini 요약 실패 시 answer 의 첫 '실질' 문장을 50자 이내 명사형으로 줄여 반환한다.
+    """mini 요약 실패 시 answer 의 수치 기반 '실질' 문장을 명사형으로 줄여 반환한다.
 
     answer 가 '~요약해 드리겠습니다' 같은 도입 인사말로 시작하면 그 문장은 건너뛰고
-    실제 정보가 담긴 첫 문장을 고른다(도입부가 그대로 요약으로 노출되는 것을 막는다).
+    실제 정보가 담긴 첫 문장을 고른다. 그중 수치가 있는 문장을 우선해 두루뭉실한
+    요약이 노출되는 것을 줄인다.
     """
     sentences = [
         sentence.strip()
@@ -201,7 +213,8 @@ def fallback_insight_summary(answer: str) -> str:
         if sentence.strip()
     ]
     substantive = [s for s in sentences if _is_substantive_sentence(s)]
-    chosen = (substantive or sentences or [answer])[0]
+    numeric_substantive = [s for s in substantive if _contains_numeric_evidence(s)]
+    chosen = (numeric_substantive or substantive or sentences or [answer])[0]
     # 고른 문장 앞 리스트 번호 머리는 요약에 들어가지 않게 떼고 정규화한다.
     chosen = re.sub(r"^\s*\d+[.)]\s*", "", chosen)
     summary = normalize_insight_summary(chosen)
@@ -265,11 +278,12 @@ class LLMGenerator(Generator):
 
 
 class InsightSummaryGenerator:
-    """AI 인사이트 answer 를 IPS unique 반영용 50자 이내 명사형 요약으로 압축한다.
+    """AI 인사이트 answer 를 IPS unique 반영용 수치 기반 명사형 요약으로 압축한다.
 
     answer 는 이미 검색 근거 기반으로 생성된 텍스트이므로, 요약기는 새 사실·숫자를 만들지
-    않고 화면 반영용 짧은 문장만 만든다. 실패하면 라우터가 fallback_insight_summary()
-    로 답변 원문 기반 요약을 내려준다.
+    않고 화면 반영용 짧은 문장만 만든다. 글자 수는 고정하지 않되 너무 길어지지 않게
+    후처리한다. 실패하면 라우터가 fallback_insight_summary() 로 답변 원문 기반 요약을
+    내려준다.
     """
 
     _SYSTEM_PROMPT = (
@@ -278,9 +292,12 @@ class InsightSummaryGenerator:
         "반드시 다음 규칙을 지킨다.\n"
         "1. 입력된 AI 인사이트 답변에 있는 내용만 사용한다.\n"
         "2. 새로운 사실, 숫자, 투자 권유, 수익 보장 표현을 만들지 않는다.\n"
-        "3. 한국어 명사형 구문으로 50자 이내로 작성한다.\n"
-        "4. '-했습니다', '-됩니다', '-입니다' 같은 문장형 종결어미를 쓰지 않는다.\n"
-        "5. 마크다운, 따옴표, '요약:' 같은 접두사는 쓰지 않는다."
+        "3. 답변에 수치가 있으면 가장 의사결정에 중요한 수치 1~2개를 원문 그대로 포함한다.\n"
+        "4. 수치가 여러 개면 금리·수익률·비중·세금·변동성처럼 상담 판단에 직접 연결되는 "
+        "수치를 우선한다.\n"
+        "5. 한국어 명사형 구문으로 작성하되, 한 줄에서 너무 길어지지 않게 핵심만 남긴다.\n"
+        "6. '-했습니다', '-됩니다', '-입니다' 같은 문장형 종결어미를 쓰지 않는다.\n"
+        "7. 마크다운, 따옴표, '요약:' 같은 접두사는 쓰지 않는다."
     )
 
     def summarize(self, answer: str) -> str:
@@ -290,8 +307,9 @@ class InsightSummaryGenerator:
         user_prompt = (
             "[AI 인사이트 답변]\n"
             f"{answer.strip()}\n\n"
-            "위 답변만 근거로 IPS Unique에 붙일 50자 이내 한국어 명사형 요약 구문을 작성하라. "
-            "예: '금리가 상승했습니다'가 아니라 '금리 상승'처럼 작성하라."
+            "위 답변만 근거로 IPS Unique에 붙일 한국어 명사형 요약 구문을 작성하라. "
+            "답변에 숫자·비율·기간·금액이 있으면 핵심 수치 1~2개를 반드시 포함하라. "
+            "예: '금리가 상승했습니다'가 아니라 '10년물 금리 4.1% 상승'처럼 작성하라."
         )
         response = get_insight_summary_client().chat.completions.create(
             model=get_insight_summary_deployment(),
@@ -300,7 +318,7 @@ class InsightSummaryGenerator:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0,
-            max_tokens=80,
+            max_tokens=120,
             timeout=30.0,
         )
         if not response.choices:
