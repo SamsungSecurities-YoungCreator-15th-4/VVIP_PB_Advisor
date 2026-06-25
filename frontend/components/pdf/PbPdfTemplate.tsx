@@ -709,6 +709,7 @@ function PortfolioPage() {
   const liveBase = useDashboardStore((s) => s.liveBase);
   const customers = useDashboardStore((s) => s.customers);
   const selectedCustomerId = useDashboardStore((s) => s.selectedCustomerId);
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
   const aumEokwon =
     (customers.find((c) => c.id === selectedCustomerId) ?? customers[0])?.aumEokwon ?? 50;
 
@@ -717,10 +718,13 @@ function PortfolioPage() {
   const portB = storePortfolios.find((p) => p.id === "b");
   if (!current || !portA || !portB) return null;
 
+  // 대시보드에서 선택한 포트폴리오(a/b)에 따라 강조·예상손익 대상을 결정한다.
+  const selId: "a" | "b" = selectedPortfolioId === "b" ? "b" : "a";
+
   const cols = [
     { p: current, alloc: buildPdfAllocation(current), label: "현재 포트폴리오", badge: "", badgeColor: "#6B7280", headerColor: "#6B7280", selected: false },
-    { p: portA, alloc: buildPdfAllocation(portA), label: "포트폴리오 A", badge: "수익추구형", badgeColor: BRAND, headerColor: BRAND, selected: true },
-    { p: portB, alloc: buildPdfAllocation(portB), label: "포트폴리오 B", badge: "안정추구형", badgeColor: "#2C7BFF", headerColor: "#2C7BFF", selected: false },
+    { p: portA, alloc: buildPdfAllocation(portA), label: "포트폴리오 A", badge: "수익추구형", badgeColor: BRAND, headerColor: BRAND, selected: selId === "a" },
+    { p: portB, alloc: buildPdfAllocation(portB), label: "포트폴리오 B", badge: "안정추구형", badgeColor: "#2C7BFF", headerColor: "#2C7BFF", selected: selId === "b" },
   ];
 
   const perfRows = buildPdfPerfRows(storePortfolios);
@@ -741,31 +745,20 @@ function PortfolioPage() {
     return { text: `${sign}${Math.abs(v).toFixed(1)}억원`, color: v > 0 ? UP : BRAND };
   };
 
+  // 예상 평가손익은 선택한 포트폴리오(selId) 기준으로 표시한다.
   const stressRows = isStressMode
     ? [
         {
           name: "현재 (기준)",
           rate: `${liveBase.ratePct.toFixed(2)}%`,
           fx: `${liveBase.fxKrw.toLocaleString("ko-KR")}원`,
-          cur: fmtPnl(null),
-          a: fmtPnl(null),
-          b: fmtPnl(null),
-          action: "현재 시장 기준",
+          pnl: fmtPnl(null),
         },
         {
           name: stressPreset === "crisis" ? "금융위기" : stressPreset === "war" ? "러우전쟁" : "설정 시나리오",
           rate: `${scenario.ratePct.toFixed(2)}%`,
           fx: `${scenario.fxKrw.toLocaleString("ko-KR")}원`,
-          cur: fmtPnl(pnlEok("current")),
-          a: fmtPnl(pnlEok("a")),
-          b: fmtPnl(pnlEok("b")),
-          action: (() => {
-            const v = pnlEok("a");
-            if (v === null) return "-";
-            if (v > 0) return "포트폴리오 A 수익 개선";
-            if (v < 0) return "포트폴리오 A 수익 감소";
-            return "영향 없음";
-          })(),
+          pnl: fmtPnl(pnlEok(selId)),
         },
       ]
     : [];
@@ -955,21 +948,14 @@ function PortfolioPage() {
               }}
             >
               <colgroup>
-                <col style={{ width: 160 }} />
-                <col style={{ width: 70 }} />
-                <col style={{ width: 80 }} />
+                <col style={{ width: 220 }} />
+                <col style={{ width: 110 }} />
                 <col style={{ width: 130 }} />
                 <col />
               </colgroup>
               <thead>
                 <tr style={{ background: BG_ALT }}>
-                  {[
-                    "시나리오",
-                    "금리",
-                    "환율",
-                    "예상 평가손익",
-                    "포트폴리오 A 영향",
-                  ].map((h) => (
+                  {["시나리오", "금리", "환율", "예상 평가손익"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -1016,13 +1002,10 @@ function PortfolioPage() {
                         padding: "8px 10px",
                         fontSize: 11,
                         fontWeight: 700,
-                        color: row.a.color,
+                        color: row.pnl.color,
                       }}
                     >
-                      {row.a.text}
-                    </td>
-                    <td style={{ padding: "8px 10px", fontSize: 11, color: TEXT }}>
-                      {row.action}
+                      {row.pnl.text}
                     </td>
                   </tr>
                 ))}
@@ -1108,7 +1091,8 @@ function TaxPage() {
                 marginBottom: 4,
               }}
             >
-              연간 절세 효과 (포트폴리오 A 기준 · {customer.aumLabel})
+              연간 절세 효과 ({selectedPf?.name ?? "포트폴리오 A"} 기준 ·{" "}
+              {customer.aumLabel})
             </div>
             <div
               style={{
