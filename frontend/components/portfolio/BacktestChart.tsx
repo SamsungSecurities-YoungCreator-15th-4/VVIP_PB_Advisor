@@ -45,14 +45,10 @@ const pctFmt = (v: number) => {
 export default function BacktestChart() {
   const [benchmark, setBenchmark] = useState<Benchmark>("KOSPI");
   const helpMode = useDashboardStore((s) => s.helpMode);
-  const portfolios         = useDashboardStore((s) => s.portfolios);
-  const stressedPortfolios = useDashboardStore((s) => s.stressedPortfolios);
-  const isStressMode       = useDashboardStore((s) => s.isStressMode);
-  const portfolioSource    = useDashboardStore((s) => s.portfolioSource);
+  const portfolios      = useDashboardStore((s) => s.portfolios);
+  const portfolioSource = useDashboardStore((s) => s.portfolioSource);
 
-  const displayPortfolios = isStressMode && stressedPortfolios.length > 0
-    ? stressedPortfolios
-    : portfolios;
+  const displayPortfolios = portfolios;
 
   const benchKey = BENCHMARK_KEY[benchmark];
   const hasRealData =

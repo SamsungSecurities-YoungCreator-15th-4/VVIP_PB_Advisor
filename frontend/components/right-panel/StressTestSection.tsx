@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -19,18 +18,15 @@ const SCENARIO_PRESETS = [
   { key: "crisis" as const, label: "금융위기", ratePct: 0.25, fxKrw: 1570 },
   { key: "war" as const, label: "러우전쟁", ratePct: 4.5, fxKrw: 1440 },
 ] as const;
-type PresetKey = "current" | (typeof SCENARIO_PRESETS)[number]["key"];
-
 /** 우측 상단: 시나리오 Test — 금리·환율 슬라이더 */
 export default function StressTestSection() {
   const {
     scenario, setScenario, liveBase,
     customers, selectedCustomerId,
-    portfolios, stressedPortfolios, isStressMode,
+    portfolios, basePortfolios, isStressMode,
+    stressPreset, setStressPreset,
     clearStressMode,
   } = useDashboardStore();
-
-  const [preset, setPreset] = useState<PresetKey | null>("current");
 
   const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
   const aumEokwon = customer?.aumEokwon ?? 50;
@@ -42,16 +38,17 @@ export default function StressTestSection() {
     Math.abs(fxDelta)   >= SCENARIO_WARN.fxDeltaKrw;
 
   const handleCurrentPreset = () => {
-    setPreset("current");
+    setStressPreset("current");
     setScenario({ ratePct: liveBase.ratePct, fxKrw: liveBase.fxKrw });
     clearStressMode();
   };
 
   // 예상 평가손익 (연간 억원)
+  // isStressMode: portfolios = stressed, basePortfolios = calculate 결과(기준선)
   const pnlEok = (id: "current" | "a" | "b") => {
-    if (isStressMode && stressedPortfolios.length > 0) {
-      const base     = portfolios.find((p) => p.id === id);
-      const stressed = stressedPortfolios.find((p) => p.id === id);
+    if (isStressMode) {
+      const base     = basePortfolios.find((p) => p.id === id);
+      const stressed = portfolios.find((p) => p.id === id);
       if (base && stressed) {
         return (
           ((stressed.metrics.expectedReturnPct - base.metrics.expectedReturnPct) / 100) *
@@ -83,7 +80,7 @@ export default function StressTestSection() {
           type="button"
           onClick={handleCurrentPreset}
           className={`flex-1 rounded-md py-1 text-[11px] font-bold transition-colors ${
-            preset === "current" ? "bg-white text-brand-dark shadow-sm" : "text-muted-foreground hover:text-foreground"
+            stressPreset === "current" ? "bg-white text-brand-dark shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           현재
@@ -92,9 +89,9 @@ export default function StressTestSection() {
           <button
             key={p.key}
             type="button"
-            onClick={() => { setPreset(p.key); setScenario({ ratePct: p.ratePct, fxKrw: p.fxKrw }); }}
+            onClick={() => { setStressPreset(p.key); setScenario({ ratePct: p.ratePct, fxKrw: p.fxKrw }); }}
             className={`flex-1 rounded-md py-1 text-[11px] font-bold transition-colors ${
-              preset === p.key ? "bg-white text-brand-dark shadow-sm" : "text-muted-foreground hover:text-foreground"
+              stressPreset === p.key ? "bg-white text-brand-dark shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {p.label}
@@ -106,28 +103,28 @@ export default function StressTestSection() {
         label="금리"
         valueLabel={`${scenario.ratePct.toFixed(2)}%`}
         delta={rateDelta}
-        deltaLabel={`${rateDelta >= 0 ? "+" : ""}${rateDelta.toFixed(2)}%p`}
+        deltaLabel={`${rateDelta > 0 ? "+" : ""}${rateDelta.toFixed(2)}%p`}
         value={scenario.ratePct}
         min={SCENARIO_BASE.rateMin}
         max={SCENARIO_BASE.rateMax}
         step={SCENARIO_BASE.rateStep}
         minLabel={`${SCENARIO_BASE.rateMin.toFixed(1)}%`}
         maxLabel={`${SCENARIO_BASE.rateMax.toFixed(1)}%`}
-        onChange={(v) => { setPreset(null); setScenario({ ratePct: v }); }}
+        onChange={(v) => { setStressPreset(null); setScenario({ ratePct: v }); }}
       />
 
       <ScenarioSlider
         label="환율"
         valueLabel={`${scenario.fxKrw.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`}
         delta={fxDelta}
-        deltaLabel={`${fxDelta >= 0 ? "+" : ""}${fxDelta.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`}
+        deltaLabel={`${fxDelta > 0 ? "+" : ""}${fxDelta.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`}
         value={scenario.fxKrw}
         min={SCENARIO_BASE.fxMin}
         max={SCENARIO_BASE.fxMax}
         step={SCENARIO_BASE.fxStep}
         minLabel={SCENARIO_BASE.fxMin.toLocaleString()}
         maxLabel={SCENARIO_BASE.fxMax.toLocaleString()}
-        onChange={(v) => { setPreset(null); setScenario({ fxKrw: v }); }}
+        onChange={(v) => { setStressPreset(null); setScenario({ fxKrw: v }); }}
       />
 
       {/* 예상 평가손익 */}
@@ -136,7 +133,8 @@ export default function StressTestSection() {
           <p className="text-[13px] font-extrabold">예상 평가손익 (연간)</p>
         </div>
         {PORTFOLIOS.map((pf) => {
-          const v = pnlEok(pf.id);
+          const raw = pnlEok(pf.id);
+          const v = parseFloat(raw.toFixed(1));
           const label = pf.id === "current" ? "현재" : `제안 ${pf.id.toUpperCase()}`;
           return (
             <div key={pf.id} className="flex items-center justify-between py-1 text-[13px]">
@@ -168,7 +166,7 @@ function ScenarioSlider({
         <span className="text-[12px] font-bold text-muted-foreground">{label}</span>
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-extrabold">{valueLabel}</span>
-          <span className={`text-[11px] font-bold ${delta === 0 ? "text-muted-foreground" : delta > 0 ? "text-down" : "text-up"}`}>
+          <span className={`text-[11px] font-bold ${delta === 0 ? "text-foreground" : delta > 0 ? "text-up" : "text-down"}`}>
             {deltaLabel}
           </span>
         </div>

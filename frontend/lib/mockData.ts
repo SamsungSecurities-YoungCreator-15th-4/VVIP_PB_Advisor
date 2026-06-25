@@ -13,7 +13,7 @@ export interface MacroIndicator {
   label: string;
   value: string;
   change: string;
-  direction: "up" | "down";
+  direction: "up" | "down" | "neutral";
 }
 
 export const MACRO_INDICATORS: MacroIndicator[] = [

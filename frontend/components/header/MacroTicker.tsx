@@ -14,7 +14,7 @@ interface Row {
   label: string;
   value: string;
   change: string;
-  direction: "up" | "down";
+  direction: "up" | "down" | "neutral";
   note?: string;
 }
 
@@ -34,7 +34,7 @@ function toRows(d: MacroIndicators): Row[] {
     label,
     value: item.price === 0 ? "—" : value,
     change,
-    direction: item.change >= 0 ? "up" : "down",
+    direction: item.change > 0 ? "up" : item.change < 0 ? "down" : "neutral",
     note: item.isStatic
       ? "발표 기준"
       : item.isFallback
@@ -194,10 +194,15 @@ export default function MacroTicker() {
           ) : (
             <div
               className={`mt-0.5 text-[10px] font-bold tabular-nums ${
-                m.direction === "up" ? "text-up" : "text-down"
+                m.direction === "up"
+                  ? "text-up"
+                  : m.direction === "down"
+                    ? "text-down"
+                    : "text-foreground"
               }`}
             >
-              {m.direction === "up" ? "▲" : "▼"} {m.change}
+              {m.direction === "up" ? "▲ " : m.direction === "down" ? "▼ " : ""}
+              {m.change}
             </div>
           )}
         </div>

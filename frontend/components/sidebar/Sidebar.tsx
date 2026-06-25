@@ -23,10 +23,15 @@ import { type Customer, CUSTOMERS } from "@/lib/mockData";
 import {
   type ConsultationSummaryItem,
   type ListedClient,
+  type PortfolioCalcData,
   createClient,
+  fetchPortfolioCalculate,
+  fetchStressMetrics,
+  getPreviousDashboard,
   listClients,
   listConsultations,
   loadConsultationDetail,
+  saveDashboardSnapshot,
   uploadSttConsultation,
 } from "@/lib/api";
 import { useDashboardStore } from "@/lib/store";
@@ -93,6 +98,22 @@ export default function Sidebar() {
     setTranscript,
     setConsultationId,
     setSttStatus,
+    scenario,
+    liveBase,
+    basePortfolios,
+    setPortfolios,
+    setStressPortfolios,
+    setStressTax,
+    setCorrelationHeatmap,
+    setPortfolioTax,
+    stressPreset,
+    clearStressMode,
+    analyzing,
+    setAnalyzing,
+    lastAnalyzedIps,
+    lastAnalyzedScenario,
+    setAnalysisBaseline,
+    consultationId,
   } = useDashboardStore();
   const customer =
     customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
@@ -109,6 +130,8 @@ export default function Sidebar() {
   const [newAum, setNewAum] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  // STT(업로드·실시간) 완료 후 첫 분析하기 때만 스냅샷 저장하기 위한 플래그
+  const [hasFreshStt, setHasFreshStt] = useState(false);
 
   const {
     status: realtimeStatus,
@@ -156,7 +179,91 @@ export default function Sidebar() {
     };
   }, [setCustomers]);
 
+  // 실시간 STT가 "done"으로 전환될 때만 플래그 설정 (마운트 시 초기값은 무시)
+  const prevRealtimeStatusRef = useRef(realtimeStatus);
+  useEffect(() => {
+    if (prevRealtimeStatusRef.current !== "done" && realtimeStatus === "done") {
+      setHasFreshStt(true);
+    }
+    prevRealtimeStatusRef.current = realtimeStatus;
+  }, [realtimeStatus]);
+
   if (!customer) return null;
+
+  const handleAnalyze = async () => {
+    if (analyzing) return;
+
+    const ipsChanged =
+      lastAnalyzedIps === null ||
+      lastAnalyzedIps.returnPct !== ips.returnPct ||
+      lastAnalyzedIps.risk !== ips.risk ||
+      lastAnalyzedIps.timeYears !== ips.timeYears ||
+      lastAnalyzedIps.liquidity !== ips.liquidity ||
+      lastAnalyzedIps.tax !== ips.tax ||
+      lastAnalyzedIps.goal !== ips.goal;
+
+    const scenarioChanged =
+      lastAnalyzedScenario !== null &&
+      (lastAnalyzedScenario.ratePct !== scenario.ratePct ||
+        lastAnalyzedScenario.fxKrw !== scenario.fxKrw);
+
+    const onlyStressChanged =
+      !ipsChanged && scenarioChanged && stressPreset !== "current";
+
+    setAnalyzing(true);
+    try {
+      if (onlyStressChanged) {
+        const stressResult = await fetchStressMetrics(
+          {
+            aumEokwon: customer.aumEokwon,
+            returnPct: ips.returnPct,
+            risk: ips.risk,
+            timeYears: ips.timeYears,
+            liquidity: ips.liquidity,
+            tax: ips.tax,
+            ratePct: scenario.ratePct,
+            fxKrw: scenario.fxKrw,
+            liveRatePct: liveBase.ratePct,
+            liveFxKrw: liveBase.fxKrw,
+            stressPreset,
+          },
+          basePortfolios,
+        );
+        setStressPortfolios(stressResult.portfolios);
+        if (stressResult.stressTax) setStressTax(stressResult.stressTax);
+      } else {
+        clearStressMode();
+        const result = await fetchPortfolioCalculate({
+          aumEokwon: customer.aumEokwon,
+          returnPct: ips.returnPct,
+          risk: ips.risk,
+          timeYears: ips.timeYears,
+          liquidity: ips.liquidity,
+          tax: ips.tax,
+          ratePct: liveBase.ratePct,
+          fxKrw: liveBase.fxKrw,
+          consultationId: consultationId || undefined,
+          clientId: customer.clientId,
+        });
+        setPortfolios(result.data.portfolios, result.source, result.note);
+        if (result.data.correlationHeatmap)
+          setCorrelationHeatmap(result.data.correlationHeatmap);
+        if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
+        // STT 직후 첫 분析하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
+        if (hasFreshStt && customer.clientId && consultationId && result.source === "live") {
+          setHasFreshStt(false);
+          void saveDashboardSnapshot(customer.clientId, {
+            consultation_id: consultationId,
+            calculation_session_id: result.data.calculationSessionId,
+            dashboard_result: result.data as unknown as Record<string, unknown>,
+          });
+        }
+      }
+      setAnalysisBaseline(ips, scenario);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleDropdownToggle = () => {
     if (!dropdownOpen && dropdownTriggerRef.current) {
@@ -226,6 +333,7 @@ export default function Sidebar() {
     if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
     if (res.source === "live") {
       setSttStatus("done");
+      setHasFreshStt(true);
     } else {
       setSttStatus("error", res.note);
     }
@@ -243,7 +351,8 @@ export default function Sidebar() {
     setHistoryLoading(true);
     const res = await listConsultations(customer.clientId);
     setPastList(res.data);
-    if (res.source !== "live") setHistoryError(res.note ?? "불러오지 못했습니다.");
+    if (res.source !== "live")
+      setHistoryError(res.note ?? "불러오지 못했습니다.");
     setHistoryLoading(false);
   };
 
@@ -251,11 +360,22 @@ export default function Sidebar() {
   const loadPast = async (consultationId: string) => {
     if (!customer.clientId || loadingId) return;
     setLoadingId(consultationId);
+    setHasFreshStt(false); // 과거 로드 시에는 스냅샷 저장 안 함
     const res = await loadConsultationDetail(customer.clientId, consultationId);
     if (res.source === "live") {
       setTranscript(res.data.transcript, "live");
       setConsultationId(res.data.consultationId);
       if (Object.keys(res.data.ips).length > 0) setIps(res.data.ips);
+      // 가장 최근 저장된 대시보드 스냅샷으로 중앙 대시보드 복원
+      const dashRes = await getPreviousDashboard(customer.clientId);
+      if (dashRes.source === "live" && dashRes.data) {
+        const dr = dashRes.data.dashboard_result as unknown as PortfolioCalcData;
+        if (dr.portfolios?.length) {
+          setPortfolios(dr.portfolios, "live");
+          if (dr.correlationHeatmap) setCorrelationHeatmap(dr.correlationHeatmap);
+          if (dr.portfolioTax) setPortfolioTax(dr.portfolioTax);
+        }
+      }
       setHistoryOpen(false);
     } else {
       setHistoryError(res.note ?? "상담 내역을 불러오지 못했습니다.");
@@ -435,8 +555,8 @@ export default function Sidebar() {
                 {realtimeStatus === "recording"
                   ? "클릭해 종료"
                   : customer.clientId
-                    ? "WebSocket STT"
-                    : "DB 고객 필요"}
+                    ? "STT"
+                    : "고객 ID 필요"}
               </span>
             </button>
           </div>
@@ -603,9 +723,20 @@ export default function Sidebar() {
 
         <Button
           size="lg"
+          disabled={analyzing}
+          onClick={() => {
+            void handleAnalyze();
+          }}
           className="w-full rounded-xl py-6 text-sm font-extrabold shadow-[0_4px_14px_rgba(0,100,255,0.28)]"
         >
-          분석하기
+          {analyzing ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              분析 중…
+            </>
+          ) : (
+            "분析하기"
+          )}
         </Button>
       </aside>
 
@@ -720,7 +851,9 @@ export default function Sidebar() {
                       disabled={loadingId !== null}
                       onClick={() => loadPast(c.consultationId)}
                     >
-                      {loadingId === c.consultationId ? "불러오는 중" : "불러오기"}
+                      {loadingId === c.consultationId
+                        ? "불러오는 중"
+                        : "불러오기"}
                     </Button>
                   </div>
                 ))

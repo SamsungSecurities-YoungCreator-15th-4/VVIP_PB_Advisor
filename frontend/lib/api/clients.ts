@@ -9,7 +9,7 @@
  */
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
-import { type ApiResult, fallback, live } from "./result";
+import { type ApiResult, empty, fallback, live } from "./result";
 
 export interface CreatedClient {
   clientId: string; // DB UUID. fallback 시엔 빈 문자열(미저장).
@@ -80,6 +80,62 @@ export async function createClient(
       data: { clientId: "", name, aumEokwon },
       note,
     };
+  }
+}
+
+// ── 대시보드 스냅샷 ────────────────────────────────────────────
+// POST /clients/{client_id}/dashboard-snapshot : 상담별 첫 분析(1-1) 저장
+// GET  /clients/{client_id}/previous-dashboard : 가장 최근 저장된 분析 반환
+// 백엔드가 consultation_id 기준 중복 방지 처리(같은 id 재요청 시 기존 반환)를 한다.
+
+export interface DashboardSnapshotResult {
+  saved: boolean;
+  client_id: string;
+  consultation_id: string;
+  calculation_session_id: string;
+  dashboard_result: Record<string, unknown>;
+  stress_test_result?: Record<string, unknown> | null;
+  saved_at: string;
+  message?: string;
+}
+
+/** STT 완료 후 첫 분析하기 결과를 스냅샷으로 저장. 실패해도 UI를 막지 않는다(fire-and-forget). */
+export async function saveDashboardSnapshot(
+  clientId: string,
+  payload: {
+    consultation_id: string;
+    calculation_session_id: string;
+    dashboard_result: Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    await apiPost<DashboardSnapshotResult>(
+      `/clients/${encodeURIComponent(clientId)}/dashboard-snapshot`,
+      payload,
+    );
+  } catch {
+    // 저장 실패는 조용히 처리 — 화면 흐름을 막지 않는다
+  }
+}
+
+/** 해당 고객의 가장 최근 저장된 대시보드 스냅샷을 반환. 없으면 null(정상). */
+export async function getPreviousDashboard(
+  clientId: string,
+): Promise<ApiResult<DashboardSnapshotResult | null>> {
+  try {
+    const res = await apiGet<DashboardSnapshotResult>(
+      `/clients/${encodeURIComponent(clientId)}/previous-dashboard`,
+    );
+    return live(res.saved ? res : null);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return live(null); // 이전 분析 없음 — 정상
+    }
+    const note =
+      err instanceof ApiError && err.isTimeout
+        ? "이전 분析 결과 조회 시간이 초과되었습니다."
+        : "이전 분析 결과를 불러오지 못했습니다.";
+    return empty<DashboardSnapshotResult | null>(null, note);
   }
 }
 
