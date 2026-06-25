@@ -3,12 +3,11 @@
  * 구조: 표지 → 시장&IPS → 포트폴리오 비교&지표 → 절세&계좌 → 분산투자&상관관계
  */
 
-import { DISPLAY_GROUPS } from "@/lib/assetMapping";
 import { useDashboardStore } from "@/lib/store";
 import {
   buildPdfAllocation,
   buildPdfMacroCell,
-  buildPdfCorrMatrix,
+  buildPdfCorrHeatmap,
   heatBg,
   heatTextColor,
 } from "@/lib/pdfPortfolioData";
@@ -1198,7 +1197,8 @@ function TaxPage() {
                 marginBottom: 4,
               }}
             >
-              연간 절세 효과 (포트폴리오 A 기준 · {C.aumLabel})
+              연간 절세 효과 ({selectedPf?.name ?? "포트폴리오 A"} 기준 ·{" "}
+              {C.aumLabel})
             </div>
             <div
               style={{
@@ -1859,46 +1859,57 @@ function TaxProductsPage() {
 
 // 대시보드 CorrelationHeatmap과 동일한 데이터·색상 공식
 // 색상: rgba(0,100,255, 0.06 + v * 0.8) — CorrelationHeatmap.tsx 동일
-const GROUP_ABBR: Record<string, string> = {
-  국내주식: "국내주식",
-  해외배당주: "해외배당",
-  해외성장주: "해외성장",
-  일반채권: "일반채권",
-  저쿠폰채: "저쿠폰채",
-  분리과세: "분리과세",
-};
-
 const ASSET_CARDS = [
   {
     title: "저쿠폰 장기채",
     corr: "주식과 상관계수: −0.3 ~ −0.5",
     body: "금리가 내릴 때 가격이 크게 오르는 채권입니다. 주식 시장 하락 시 포트폴리오를 안정시키는 역할을 합니다.",
-    note: "포트폴리오 A에 14% 배분 — 주식 급락 시 완충 역할",
   },
   {
     title: "해외 배당주",
     corr: "국내주식과 상관계수: 0.4~0.6",
     body: "미국 등 해외 고배당 주식은 국내 주식과 완전히 같이 움직이지 않아 분산 효과가 있습니다. 환율 상승 시 추가 이익도 기대할 수 있습니다.",
-    note: "포트폴리오 A에 22% 배분 — 환율 상승 시 추가 수익 기대",
   },
   {
     title: "분리과세 채권 ETF",
     corr: "주식과 상관계수: 0.1~0.2",
     body: "세금 면에서 유리하게 설계된 채권 ETF입니다. 주식과 거의 독립적으로 움직여 안정적인 수익을 제공하면서 세금도 줄여줍니다.",
-    note: "ISA 계좌에 담아 비과세/분리과세 혜택 동시 누림",
   },
   {
     title: "리츠 (부동산 ETF)",
     corr: "주식과 상관계수: 0.5~0.7",
     body: "부동산에 간접 투자하는 방법으로, 정기적인 배당 수익을 기대할 수 있습니다. 실물 부동산보다 유동성이 높아 필요 시 빠르게 현금화됩니다.",
-    note: "향후 추가 검토 자산 — 증여 전략과 연계 가능",
   },
 ];
 
+// 히트맵 레이아웃 — 자산 개수에 따라 셀 너비를 동적으로 계산(페이지 폭 안에 맞춤)
+const HEATMAP_AVAIL = 714; // 794 - 좌우 패딩 40*2
+const HEATMAP_LABEL_COL = 56;
+const HEATMAP_GAP = 2;
+
 function DiversificationPage() {
   const heatmap = useDashboardStore((s) => s.correlationHeatmap);
-  const { matrix: corrMatrix, isFallback: corrIsFallback } =
-    buildPdfCorrMatrix(heatmap);
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const storePortfolios = useDashboardStore((s) => s.portfolios);
+  // 대시보드와 동일하게 '선택한 포트폴리오'의 비중>0 자산 기준으로 히트맵을 구성한다.
+  const selectedPf =
+    storePortfolios.find((p) => p.id === selectedPortfolioId) ??
+    storePortfolios.find((p) => p.id === "a");
+  const {
+    labels: corrLabels,
+    matrix: corrMatrix,
+    isFallback: corrIsFallback,
+  } = buildPdfCorrHeatmap(heatmap, selectedPf);
+  const heatCellW = Math.max(
+    40,
+    Math.min(
+      96,
+      Math.floor((HEATMAP_AVAIL - HEATMAP_LABEL_COL) / corrLabels.length) -
+        HEATMAP_GAP,
+    ),
+  );
+  const heatTableW =
+    HEATMAP_LABEL_COL + corrLabels.length * (heatCellW + HEATMAP_GAP);
   return (
     <div
       data-pdf-page=""
@@ -1979,16 +1990,16 @@ function DiversificationPage() {
             자산별 상관관계 히트맵
           </div>
 
-          {/* 히트맵 테이블 */}
-          <table style={{ borderCollapse: "separate", borderSpacing: 2 }}>
+          {/* 히트맵 테이블 — 선택 포트폴리오의 비중>0 자산 기준(대시보드 동일) */}
+          <table style={{ borderCollapse: "separate", borderSpacing: HEATMAP_GAP }}>
             <thead>
               <tr>
-                <th style={{ width: 76, padding: 0 }} />
-                {DISPLAY_GROUPS.map((g) => (
+                <th style={{ width: HEATMAP_LABEL_COL, padding: 0 }} />
+                {corrLabels.map((g, ci) => (
                   <th
-                    key={g}
+                    key={`${g}-${ci}`}
                     style={{
-                      width: 96,
+                      width: heatCellW,
                       paddingBottom: 4,
                       fontSize: 10,
                       fontWeight: 600,
@@ -1997,7 +2008,7 @@ function DiversificationPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {GROUP_ABBR[g]}
+                    {g}
                   </th>
                 ))}
               </tr>
@@ -2007,6 +2018,7 @@ function DiversificationPage() {
                 <tr key={ri}>
                   <td
                     style={{
+                      width: HEATMAP_LABEL_COL,
                       fontSize: 10,
                       fontWeight: 600,
                       color: MUTED,
@@ -2015,13 +2027,13 @@ function DiversificationPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {GROUP_ABBR[DISPLAY_GROUPS[ri]]}
+                    {corrLabels[ri]}
                   </td>
                   {row.map((v, ci) => (
                     <td
                       key={ci}
                       style={{
-                        width: 96,
+                        width: heatCellW,
                         height: 40,
                         background: heatBg(v),
                         textAlign: "center",
@@ -2055,7 +2067,11 @@ function DiversificationPage() {
 
           {/* 범례 — 그라디언트 바 */}
           <div
-            style={{ marginTop: 12, width: 96 * 6 + 76, paddingLeft: 76 + 8 }}
+            style={{
+              marginTop: 12,
+              width: heatTableW,
+              paddingLeft: HEATMAP_LABEL_COL + 8,
+            }}
           >
             <div
               style={{
@@ -2139,21 +2155,11 @@ function DiversificationPage() {
                   fontSize: 11,
                   color: TEXT,
                   lineHeight: 1.6,
-                  margin: "0 0 8px",
+                  margin: 0,
                 }}
               >
                 {c.body}
               </p>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: MUTED,
-                  borderTop: `1px solid ${BORDER}`,
-                  paddingTop: 6,
-                }}
-              >
-                {c.note}
-              </div>
             </div>
           ))}
         </div>
