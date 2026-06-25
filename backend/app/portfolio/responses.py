@@ -14,6 +14,7 @@ from .metrics import calculate_all_benchmark_cumulative_returns, calculate_cumul
 from .models import PortfolioRequest
 from .tax_accounts import calculate_six_strategy_tax_model, get_common_tax_rules
 from .utils import get_benchmark_catalog, safe_float, safe_round
+from .dashboard_views import calculate_portfolio_risk_contribution_heatmap as build_dashboard_risk_heatmap
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,10 @@ def build_portfolio_response(
         # 신규 계약: PB가 선택할 수 있는 전체 3종
         "benchmark_backtests": benchmark_backtests,
     }
+    response["risk_contribution_heatmap"] = build_dashboard_risk_heatmap(
+        weights=weights,
+        returns=returns,
+    )
 
     if score is not None:
         response["score"] = round(float(score), 6)

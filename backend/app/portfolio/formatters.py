@@ -7,8 +7,10 @@ import math
 from typing import Dict, List, Optional, Any
 
 from .constants import BACKTEST_BASE_INDEX
-from .assets import ASSET_NAMES_KR, ASSET_TICKERS, RISK_LEVEL_NAME
+from .assets import RISK_LEVEL_NAME
 from .utils import safe_float, safe_round
+from .dashboard_views import build_dashboard_allocation_payload as build_grouped_allocation_payload
+from .dashboard_views import build_common_correlation_heatmap_payload as build_grouped_correlation_payload
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -52,25 +54,11 @@ def round_allocation_percentages(
     }
 
 
-def build_allocation_payload(portfolio: Dict[str, Any]) -> List[Dict[str, Any]]:
-    raw_weights = [
-        (asset, safe_float(info.get("weight")))
-        for asset, info in portfolio["weights"].items()
-        if safe_float(info.get("weight")) > 1e-12
-    ]
-    rounded = round_allocation_percentages(raw_weights)
 
-    return [
-        {
-            "asset_class": asset,
-            "name": portfolio["weights"][asset].get(
-                "label",
-                ASSET_NAMES_KR.get(asset, asset),
-            ),
-            "weight": rounded[asset],
-        }
-        for asset, _ in raw_weights
-    ]
+def build_allocation_payload(
+    portfolio: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    return build_grouped_allocation_payload(portfolio)
 
 def build_backtest_payload(
     cumulative_returns: List[Dict[str, Any]],
@@ -269,40 +257,23 @@ def build_spec_portfolio_item(
         },
         "tax": build_tax_payload(portfolio, current_portfolio),
     }
+    risk_contribution_heatmap = (
+        portfolio.get("risk_contribution_heatmap")
+        or portfolio.get("dashboard_risk_contribution_heatmap")
+    )
+    if risk_contribution_heatmap is None:
+        raise ValueError(
+            "포트폴리오 응답에 risk_contribution_heatmap이 없습니다."
+        )
+    item["risk_contribution_heatmap"] = risk_contribution_heatmap
     return item
+
 
 
 def build_correlation_heatmap_payload(
     full_response: Dict[str, Any],
 ) -> Dict[str, Any]:
-    raw_matrix = full_response.get("correlation_matrix") or {}
-    asset_keys = [
-        asset
-        for asset in ASSET_TICKERS
-        if asset in raw_matrix
-    ]
-
-    return {
-        "assets": [
-            {
-                "asset_class": asset,
-                "name": ASSET_NAMES_KR.get(asset, asset),
-            }
-            for asset in asset_keys
-        ],
-        "matrix": [
-            [
-                safe_round(
-                    (raw_matrix.get(column_asset) or {}).get(row_asset),
-                    4,
-                )
-                for column_asset in asset_keys
-            ]
-            for row_asset in asset_keys
-        ],
-        "value_type": "correlation",
-    }
-
+    return build_grouped_correlation_payload(full_response)
 
 def build_portfolio_calculate_response(
     full_response: Dict[str, Any],

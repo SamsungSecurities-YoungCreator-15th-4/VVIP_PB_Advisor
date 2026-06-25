@@ -4,6 +4,7 @@
 import uuid
 from typing import Dict, Any
 
+
 from .constants import TRADING_DAYS
 from .assets import ASSET_NAMES_KR, CLIENT_RISK_LEVEL
 from .models import AnalysisRequest, PortfolioRequest
@@ -41,6 +42,8 @@ from .responses import (
     build_tax_optimizer_map,
     extract_tax_inputs_payload,
 )
+from .dashboard_views import calculate_dashboard_group_correlation_matrix
+
 
 
 def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
@@ -167,7 +170,7 @@ def run_analysis_core(request: PortfolioRequest) -> Dict[str, Any]:
         backtest_returns=analysis_backtest_returns,
     )
 
-    correlation_matrix = returns.corr().round(4).to_dict()
+    correlation_matrix = calculate_dashboard_group_correlation_matrix(returns)
     asset_summary = build_asset_summary(returns, expected_returns)
 
     unique_ratio = request.unique_need_amount / request.total_asset
