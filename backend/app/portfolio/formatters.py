@@ -373,5 +373,11 @@ def build_portfolio_calculate_response(
             "warnings": warnings,
         },
         "methodology": full_response["methodology"],
+        # 절세 최적화 화면(절세 6카드 = strategy_cards)용 페이로드.
+        # run_full_analysis가 이미 core["tax_optimizer"]까지 계산하므로,
+        # 별도 호출(deprecated /api/tax-optimizer = 분석 재실행) 없이 그대로 싣는다.
+        # 구조는 stress-metrics의 base_tax/stressed_tax와 동일한
+        # build_tax_optimizer_payload 출력이라 프런트가 같은 코드로 렌더한다.
+        "tax_optimizer": full_response.get("tax_optimizer", {}),
         "notes": full_response["notes"],
     }
