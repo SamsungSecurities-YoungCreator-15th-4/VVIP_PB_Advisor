@@ -128,13 +128,21 @@ export async function saveDashboardSnapshot(
   }
 }
 
-/** 해당 고객의 가장 최근 저장된 대시보드 스냅샷을 반환. 없으면 null(정상). */
+/**
+ * 저장된 대시보드 스냅샷을 반환. 없으면 null(정상).
+ * - consultationId 지정: 그 회차의 스냅샷('지난 상담 불러오기'에서 선택한 회차 복원).
+ * - 미지정: 고객의 가장 최근 스냅샷(첫 접속 자동 복원).
+ */
 export async function getPreviousDashboard(
   clientId: string,
+  opts?: { consultationId?: string },
 ): Promise<ApiResult<DashboardSnapshotResult | null>> {
   try {
+    const query = opts?.consultationId
+      ? `?consultation_id=${encodeURIComponent(opts.consultationId)}`
+      : "";
     const res = await apiGet<DashboardSnapshotResult>(
-      `/clients/${encodeURIComponent(clientId)}/previous-dashboard`,
+      `/clients/${encodeURIComponent(clientId)}/previous-dashboard${query}`,
     );
     return live(res.saved ? res : null);
   } catch (err) {
