@@ -153,7 +153,7 @@ export default function Sidebar() {
   const autoAnalyzedForRef = useRef<string | null>(null);
   useEffect(() => {
     // clientId 없는 mock 고객은 스킵 — listClients() 응답 후 실 고객으로 바뀌면 실행
-    if (!customer || !customer.clientId || analyzing) return;
+    if (!customer || !customer.clientId || !liveBaseLoaded || analyzing) return;
     if (portfolioSource === "live") return;
     const cid = customer.id;
     if (autoAnalyzedForRef.current === cid) return;

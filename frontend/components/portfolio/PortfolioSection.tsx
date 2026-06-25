@@ -5,7 +5,11 @@ import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import AssetDonut from "@/components/portfolio/AssetDonut";
 import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
-import { BACKEND_ASSET_COLORS, DISPLAY_GROUP_COLORS, toDisplayAllocation } from "@/lib/assetMapping";
+import {
+  BACKEND_ASSET_COLORS,
+  DISPLAY_GROUP_COLORS,
+  toDisplayAllocation,
+} from "@/lib/assetMapping";
 import { type Portfolio, type PortfolioMetrics } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 import HelpTooltip from "@/components/common/HelpTooltip";
@@ -52,7 +56,7 @@ export default function PortfolioSection() {
           {analyzing ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
-              분석中...
+              분석...
             </div>
           ) : portfolioSource === "live" ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand-dark">
@@ -78,7 +82,9 @@ export default function PortfolioSection() {
         )}
       </div>
 
-      {portfolioSource === "fallback" && portfolioNote === undefined && !analyzing ? (
+      {portfolioSource === "fallback" &&
+      portfolioNote === undefined &&
+      !analyzing ? (
         <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-muted-foreground/20 bg-muted/30">
           <p className="text-[14px] font-semibold text-muted-foreground">
             분석 결과가 존재하지 않습니다
@@ -127,7 +133,10 @@ function PortfolioCard({
         weight: a.weight,
         color: DISPLAY_GROUP_COLORS[a.group],
       }));
-  const m = pf.metrics as PortfolioMetrics & { afterTaxReturnRangeLabel?: string; mddRangeLabel?: string };
+  const m = pf.metrics as PortfolioMetrics & {
+    afterTaxReturnRangeLabel?: string;
+    mddRangeLabel?: string;
+  };
 
   const portfolioType =
     pf.id === "a" ? "수익추구형" : pf.id === "b" ? "안정추구형" : null;
@@ -205,10 +214,16 @@ function PortfolioCard({
         />
         <Metric
           k="세후수익률"
-          v={`${m.afterTaxReturnPct > 0 ? "+" : ""}${m.afterTaxReturnPct.toFixed(1)}%`}
+          v={`${Math.abs(m.afterTaxReturnPct).toFixed(1)}%`}
           rangeSub={m.afterTaxReturnRangeLabel}
           sub={m.afterTaxAmountLabel}
-          tone={m.afterTaxReturnPct > 0 ? "up" : m.afterTaxReturnPct < 0 ? "down" : undefined}
+          tone={
+            m.afterTaxReturnPct > 0
+              ? "up"
+              : m.afterTaxReturnPct < 0
+                ? "down"
+                : undefined
+          }
           value={m.afterTaxReturnPct}
         />
         <Metric
@@ -219,11 +234,11 @@ function PortfolioCard({
         />
         <Metric
           k="MDD"
-          v={`${(-m.mddPct).toFixed(1)}%`}
+          v={`${m.mddPct.toFixed(1)}%`}
           rangeSub={m.mddRangeLabel}
           sub={m.mddAmountLabel}
           tone={m.mddPct > 0 ? "down" : undefined}
-          value={-m.mddPct}
+          value={m.mddPct}
         />
       </div>
     </Card>
@@ -279,7 +294,9 @@ function Metric({
           </div>
         )}
         {sub && (
-          <div className={`mt-0.5 text-[12px] font-bold tabular-nums ${toneCls}`}>
+          <div
+            className={`mt-0.5 text-[12px] font-bold tabular-nums ${toneCls}`}
+          >
             {value === 0 ? sub.replace(/^[+\-±]/, "") : sub}
           </div>
         )}
