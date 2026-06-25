@@ -91,6 +91,9 @@ interface DashboardState {
   /** stress-metrics 응답의 base_tax/stressed_tax 쌍 — TaxSection 연동용 */
   stressTax: { base: StressTaxData; stressed: StressTaxData } | null;
   setStressTax: (tax: { base: StressTaxData; stressed: StressTaxData } | null) => void;
+  /** calculate 응답의 tax_optimizer — 스트레스 미진입 시 절세 제안·종합과세 게이지 소스 */
+  taxOptimizer: StressTaxData | null;
+  setTaxOptimizer: (tax: StressTaxData | null) => void;
 
   // ── 분析하기 버튼 상태 ──
   analyzing: boolean;
@@ -173,6 +176,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setPortfolioTax: (tax) => set({ portfolioTax: tax }),
   stressTax: null,
   setStressTax: (tax) => set({ stressTax: tax }),
+  taxOptimizer: null,
+  setTaxOptimizer: (tax) => set({ taxOptimizer: tax }),
 
   analyzing: false,
   setAnalyzing: (v) => set({ analyzing: v }),

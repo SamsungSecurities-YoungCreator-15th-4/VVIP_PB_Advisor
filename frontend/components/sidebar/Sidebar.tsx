@@ -104,6 +104,7 @@ export default function Sidebar() {
     setPortfolios,
     setStressPortfolios,
     setStressTax,
+    setTaxOptimizer,
     setCorrelationHeatmap,
     setPortfolioTax,
     stressPreset,
@@ -249,6 +250,8 @@ export default function Sidebar() {
         if (result.data.correlationHeatmap)
           setCorrelationHeatmap(result.data.correlationHeatmap);
         if (result.data.portfolioTax) setPortfolioTax(result.data.portfolioTax);
+        // 절세 제안·종합과세 게이지는 calculate의 tax_optimizer를 기본 소스로 쓴다.
+        setTaxOptimizer(result.data.taxOptimizer);
         // STT 직후 첫 분析하기일 때만 스냅샷 저장 (백엔드가 consultation_id 기준 중복 방지)
         if (hasFreshStt && customer.clientId && consultationId && result.source === "live") {
           setHasFreshStt(false);

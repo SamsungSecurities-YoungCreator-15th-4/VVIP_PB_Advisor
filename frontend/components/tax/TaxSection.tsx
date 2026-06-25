@@ -50,6 +50,7 @@ export default function TaxSection() {
     portfolioSource,
     portfolioTax,
     stressTax,
+    taxOptimizer,
     customers,
     selectedCustomerId,
     analyzing,
@@ -78,11 +79,14 @@ export default function TaxSection() {
     ? { waterfall: selectedTax.waterfall, savingManwon: annualSavingManwon ?? 0 }
     : null;
 
-  // 스트레스 모드의 게이지 데이터 (있을 때만)
-  const gaugeData = stressTax?.stressed.financial_income_tax_gauge ?? null;
+  // 절세 화면 소스: 스트레스 모드면 stressTax, 아니면 calculate의 tax_optimizer.
+  const taxSource = stressTax?.stressed ?? taxOptimizer;
 
-  // 절세 제안 카드: stressTax가 있으면 strategy_cards, 없으면 mock
-  const liveStrategyCards = stressTax?.stressed.strategy_cards ?? null;
+  // 종합과세 게이지
+  const gaugeData = taxSource?.financial_income_tax_gauge ?? null;
+
+  // 절세 제안 카드: 소스가 있으면 strategy_cards, 없으면 mock
+  const liveStrategyCards = taxSource?.strategy_cards ?? null;
 
   const baseLabel = selectedPortfolio?.name ?? "포트폴리오";
 
