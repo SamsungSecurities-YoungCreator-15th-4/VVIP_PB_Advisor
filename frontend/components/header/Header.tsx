@@ -5,7 +5,7 @@ import HelpModeToggle from "@/components/header/HelpModeToggle";
 import PdfExportButton from "@/components/header/PdfExportButton";
 import LogoutButton from "@/components/header/LogoutButton";
 
-/** 상단 헤더: 로고 · 거시지표 6개 · 로그아웃 · 가이드 · PDF 추출 */
+/** 상단 헤더: 로고 · 거시지표 6개 · 가이드 · PDF 추출 · 로그아웃 */
 export default function Header() {
   return (
     <header className="flex h-14.5 items-center gap-3 rounded-2xl border bg-card px-4 shadow-sm">
@@ -35,12 +35,13 @@ export default function Header() {
       {/* 모바일에서 버튼을 오른쪽으로 밀기 */}
       <div className="flex-1 md:hidden" />
 
-      <LogoutButton />
-
       <HelpModeToggle />
 
       {/* PDF 버튼 — 클릭 시 PB용/고객용 선택 드롭다운 */}
       <PdfExportButton />
+
+      {/* 로그아웃 — 실수 클릭 방지를 위해 맨 우측에 아이콘 전용으로 배치 */}
+      <LogoutButton />
     </header>
   );
 }
