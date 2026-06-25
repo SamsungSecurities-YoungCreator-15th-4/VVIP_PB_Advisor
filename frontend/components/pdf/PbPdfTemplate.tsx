@@ -1610,12 +1610,28 @@ function TaxPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <span style={{ fontSize: 10, fontWeight: 700, color: BRAND_DARK }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: BRAND_DARK,
+              whiteSpace: "nowrap",
+            }}
+          >
             {taxAdvice.totalLabel}
           </span>
-          <span style={{ fontSize: 11, fontWeight: 900, color: BRAND_DARK }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 900,
+              color: BRAND_DARK,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
             {taxAdvice.totalSaving}
           </span>
         </div>
@@ -1746,6 +1762,7 @@ function AiPage() {
   const insightResult = useDashboardStore((s) => s.insightResult);
   if (!insightResult) return null;
   const answer = insightResult.data.answer;
+  const question = insightResult.data.question?.trim();
   // 한 질의가 같은 문서의 여러 청크를 인용해 제목이 중복될 수 있다. 출처 목록은 문서당
   // 한 번만 적는 게 보편적이고, 중복을 그대로 두면 페이지를 넘쳐 깨지므로 제목 기준으로
   // 중복을 제거하고 안전하게 상한을 둔다(렌더 마크업은 그대로).
@@ -1799,6 +1816,43 @@ function AiPage() {
             marginBottom: 36,
           }}
         >
+          {/* Q. — 사용자가 입력한 질문 (있을 때만) */}
+          {question && (
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "flex-start",
+                marginBottom: 12,
+                paddingBottom: 12,
+                borderBottom: `1px solid ${BORDER}`,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 900,
+                  color: BRAND,
+                  flexShrink: 0,
+                  lineHeight: 1.5,
+                }}
+              >
+                Q.
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: TEXT,
+                  lineHeight: 1.6,
+                  paddingTop: 1,
+                }}
+              >
+                {question}
+              </span>
+            </div>
+          )}
+          {/* A. — AI 답변 */}
           <div
             style={{
               display: "flex",

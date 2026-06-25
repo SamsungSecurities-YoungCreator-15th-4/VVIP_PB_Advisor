@@ -21,6 +21,8 @@ export interface InsightCitation {
 }
 
 export interface InsightData {
+  /** 사용자가 입력한 질문(PDF의 Q. 표시용). 폴백 mock은 비어 있을 수 있다. */
+  question?: string;
   answer: string;
   summary: string;
   citations: InsightCitation[];
@@ -86,12 +88,12 @@ export async function fetchRagInsight(
 
   try {
     const res = await apiPost<RagInsightResponse>("/rag/insight", body);
-    return live(mapResponse(res));
+    return live({ ...mapResponse(res), question: query });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       // 임계값 미달 — 정상 빈결과. 폴백(mock)이 아니라 "관련 문서 없음".
       return empty<InsightData>(
-        { answer: "", summary: "", citations: [] },
+        { question: query, answer: "", summary: "", citations: [] },
         "관련 문서를 찾지 못했습니다(유사도 임계값 미달).",
       );
     }
@@ -99,6 +101,6 @@ export async function fetchRagInsight(
       err instanceof ApiError && err.isTimeout
         ? "응답 시간 초과로 데모 데이터를 표시합니다."
         : "백엔드 연결 실패로 데모 데이터를 표시합니다.";
-    return fallback(mockInsight(), note);
+    return fallback({ ...mockInsight(), question: query }, note);
   }
 }
