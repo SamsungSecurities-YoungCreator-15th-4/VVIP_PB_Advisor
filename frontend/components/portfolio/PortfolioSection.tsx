@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import AssetDonut from "@/components/portfolio/AssetDonut";
 import CorrelationHeatmap from "@/components/portfolio/CorrelationHeatmap";
 import { toDisplayAllocation } from "@/lib/assetMapping";
-import { fetchPortfolioCalculate } from "@/lib/api";
 import { type Portfolio } from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
 import HelpTooltip from "@/components/common/HelpTooltip";
@@ -29,49 +28,17 @@ const METRIC_HELP: Record<string, string> = {
 export default function PortfolioSection() {
   const {
     selectedPortfolioId, selectPortfolio,
-    portfolios, portfolioSource, portfolioNote, setPortfolios,
+    portfolios, portfolioSource, portfolioNote,
     stressedPortfolios, isStressMode, stressAnalyzing,
-    selectedCustomerId, customers,
-    ips, liveBase, consultationId,
-    analyzeNonce,
+    calculating,
   } = useDashboardStore();
 
   const displayPortfolios = isStressMode && stressedPortfolios.length > 0
     ? stressedPortfolios
     : portfolios;
-  const [calculating, setCalculating] = useState(false);
 
-  // '분석하기' 클릭 시에만 포트폴리오를 계산한다(analyzeNonce 증가가 트리거).
-  // 마운트·고객선택·슬라이더 변경으로는 자동 계산하지 않는다 — Render 무료티어에서
-  // 첫 진입 시 불필요한 콜드 계산이 돌다 120초 만에 (canceled) 되던 문제를 막는다.
-  // nonce 0(초기)에는 계산하지 않고 데모 포트폴리오를 그대로 보여준다.
-  useEffect(() => {
-    if (analyzeNonce === 0) return;
-    const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
-    if (!customer) return;
-
-    let cancelled = false;
-    setCalculating(true);
-    fetchPortfolioCalculate({
-      aumEokwon: customer.aumEokwon,
-      returnPct: ips.returnPct,
-      risk: ips.risk,
-      timeYears: ips.timeYears,
-      liquidity: ips.liquidity,
-      tax: ips.tax,
-      ratePct: liveBase.ratePct,
-      fxKrw: liveBase.fxKrw,
-      consultationId: consultationId || undefined,
-      clientId: customer.id,
-    }).then((result) => {
-      if (!cancelled) setPortfolios(result.data.portfolios, result.source, result.note);
-    }).finally(() => {
-      if (!cancelled) setCalculating(false);
-    });
-    return () => { cancelled = true; };
-    // 트리거는 analyzeNonce 뿐. 입력값들은 클릭 시점의 최신값을 클로저로 읽는다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyzeNonce]);
+  // 계산은 '분석하기' 클릭 시 store의 requestAnalyze가 직접 수행한다(이벤트 기반).
+  // 여기서는 진행 상태(calculating)와 결과(portfolios)만 구독해 표시한다.
 
   const asOf = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "2-digit", day: "2-digit",

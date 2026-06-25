@@ -18,6 +18,7 @@ import {
   TAX_THRESHOLD,
 } from "./mockData";
 import type { ApiResult, DataSource, InsightData } from "./api";
+import { fetchPortfolioCalculate } from "./api";
 
 export interface IpsState {
   returnPct: number;
@@ -63,9 +64,10 @@ interface DashboardState {
   setPortfolios: (portfolios: Portfolio[], source: DataSource, note?: string) => void;
 
   // ── 분석 트리거 ──
-  // '분석하기' 클릭 시에만 calculate를 돌린다. 마운트·입력 변경 자동 계산은 하지 않는다.
-  // 클릭마다 nonce를 올려 PortfolioSection의 effect가 그때만 1회 계산하게 한다.
-  analyzeNonce: number;
+  // '분석하기' 클릭 시에만 calculate를 돌린다(이벤트 기반). 마운트·입력 변경 자동
+  // 계산은 하지 않는다 — Render 무료티어에서 첫 진입 시 불필요한 콜드 계산이 돌다
+  // 120초 클라 타임아웃에 걸려 (canceled) 되던 문제를 막는다.
+  calculating: boolean;
   requestAnalyze: () => void;
 
   // ── 스트레스 테스트 결과 ──
@@ -105,7 +107,7 @@ interface DashboardState {
   setSttStatus: (status: SttStatus, note?: string) => void;
 }
 
-export const useDashboardStore = create<DashboardState>((set) => ({
+export const useDashboardStore = create<DashboardState>((set, get) => ({
   customers: [...CUSTOMERS],
   selectedCustomerId: CUSTOMERS[0].id,
   selectedPortfolioId: "a",
@@ -131,8 +133,36 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setPortfolios: (portfolios, source, note) =>
     set({ portfolios, portfolioSource: source, portfolioNote: note }),
 
-  analyzeNonce: 0,
-  requestAnalyze: () => set((s) => ({ analyzeNonce: s.analyzeNonce + 1 })),
+  calculating: false,
+  requestAnalyze: () => {
+    const s = get();
+    if (s.calculating) return; // 진행 중이면 중복 클릭 무시
+    const customer =
+      s.customers.find((c) => c.id === s.selectedCustomerId) ?? s.customers[0];
+    if (!customer) return;
+
+    set({ calculating: true });
+    fetchPortfolioCalculate({
+      aumEokwon: customer.aumEokwon,
+      returnPct: s.ips.returnPct,
+      risk: s.ips.risk,
+      timeYears: s.ips.timeYears,
+      liquidity: s.ips.liquidity,
+      tax: s.ips.tax,
+      ratePct: s.liveBase.ratePct,
+      fxKrw: s.liveBase.fxKrw,
+      consultationId: s.consultationId || undefined,
+      clientId: customer.id,
+    })
+      .then((result) =>
+        set({
+          portfolios: result.data.portfolios,
+          portfolioSource: result.source,
+          portfolioNote: result.note,
+        }),
+      )
+      .finally(() => set({ calculating: false }));
+  },
 
   stressedPortfolios: [],
   isStressMode: false,
