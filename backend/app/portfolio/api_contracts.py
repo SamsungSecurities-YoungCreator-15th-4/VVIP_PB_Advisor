@@ -72,7 +72,7 @@ class PortfolioCalculateRequest(BaseModel):
     current_portfolio: Optional[List[CurrentPortfolioItem]] = None
     benchmark_key: BenchmarkKey = DEFAULT_BENCHMARK_KEY
     period: str = "5y"
-    num_simulations: int = Field(5000, ge=500, le=100000)
+    num_simulations: int = Field(3000, ge=500, le=100000)
     expected_return_haircut: float = Field(0.75, ge=0.0, le=1.0)
     random_seed: int = Field(42, ge=0)
     scenario: Optional[ScenarioInput] = None
@@ -110,7 +110,7 @@ class PortfolioCalculateRequest(BaseModel):
                 ],
                 "benchmark_key": "msci_acwi",
                 "period": "5y",
-                "num_simulations": 5000,
+                "num_simulations": 3000,
             }
         },
     )

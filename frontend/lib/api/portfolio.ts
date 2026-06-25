@@ -233,7 +233,8 @@ export async function fetchPortfolioCalculate(
     const res = await apiPost<PortfolioCalculateResponse>(
       "/portfolio/calculate",
       body,
-      { timeoutMs: 60_000 },
+      // Render Free의 약한 CPU에서 시뮬레이션이 60초를 넘겨 취소되던 문제 → 여유 상향.
+      { timeoutMs: 120_000 },
     );
     return live({
       portfolios: res.portfolios.map(mapPortfolioItem),
