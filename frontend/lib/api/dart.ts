@@ -114,6 +114,7 @@ function mapResponse(res: DartInsightResponse): InsightData {
       : [];
 
   return {
+    question: res.query,
     answer,
     summary:
       fin && src

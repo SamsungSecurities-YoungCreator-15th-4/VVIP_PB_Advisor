@@ -1705,12 +1705,28 @@ function TaxPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <span style={{ fontSize: 10, fontWeight: 700, color: BRAND_DARK }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: BRAND_DARK,
+              whiteSpace: "nowrap",
+            }}
+          >
             {taxAdvice.totalLabel}
           </span>
-          <span style={{ fontSize: 11, fontWeight: 900, color: BRAND_DARK }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 900,
+              color: BRAND_DARK,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
             {taxAdvice.totalSaving}
           </span>
         </div>
