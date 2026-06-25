@@ -61,8 +61,9 @@ const ASSET_GROUPS = [
 // 포트폴리오 비중을 화면 6분류(DISPLAY_GROUPS 순서) 정수 비중(%)으로 변환.
 // 대시보드 도넛과 동일한 매핑을 써 PDF 수치를 대시보드와 일치시킨다.
 function allocationPct(
-  weights: Parameters<typeof toDisplayAllocation>[0],
+  weights: Parameters<typeof toDisplayAllocation>[0] | null | undefined,
 ): number[] {
+  if (!weights) return [0, 0, 0, 0, 0, 0];
   return toDisplayAllocation(weights).map((d) => Math.round(d.weight));
 }
 
@@ -728,21 +729,23 @@ const METRIC_CARDS = [
 ];
 
 function PortfolioPage() {
+  // 훅은 early return 앞에서 호출(react-hooks/rules-of-hooks).
   const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const C = useSelectedCustomer();
   const portCurrent = storePortfolios.find((p) => p.id === "current");
   const portA = storePortfolios.find((p) => p.id === "a");
   if (!portCurrent || !portA) return null;
   const cur = portCurrent.metrics;
   const a = portA.metrics;
-  const C = useSelectedCustomer();
   // 추천(포트폴리오 A)의 자산 배분 칩 — 대시보드 도넛과 동일 매핑으로 store에서 생성.
-  const assetLabelsA = toDisplayAllocation(portA.weights).map(
-    (d) => `${d.group} ${Math.round(d.weight)}%`,
-  );
+  // weights가 없으면 빈 객체로 폴백(toDisplayAllocation은 누락 키를 0으로 처리).
+  const assetLabelsA = toDisplayAllocation(
+    portA.weights ?? ({} as Parameters<typeof toDisplayAllocation>[0]),
+  ).map((d) => `${d.group} ${Math.round(d.weight)}%`);
   // 포트폴리오 A 선택 시 현재 대비 연간 세후수익 개선액(만원) = 세후수익률 차이 × 운용자산.
-  // 세후수익률은 %, 운용자산은 억원 → 억원×10000=만원.
+  // 세후수익률은 %, 운용자산은 억원 → 억원×10000=만원. (값 누락 시 NaN 방지로 ?? 0)
   const afterTaxImproveManwon = Math.round(
-    ((a.afterTaxReturnPct - cur.afterTaxReturnPct) / 100) *
+    (((a.afterTaxReturnPct ?? 0) - (cur.afterTaxReturnPct ?? 0)) / 100) *
       (C?.aumEokwon ?? 0) *
       10000,
   );

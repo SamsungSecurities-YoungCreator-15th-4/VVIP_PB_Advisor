@@ -10,8 +10,9 @@ import { buildPdfTaxEffect, buildPdfTaxAdvice, extractTaxOptimizerEntry } from "
 // 포트폴리오 비중을 화면 6분류(ASSET_GROUPS 순서) 정수 비중(%)으로 변환.
 // 대시보드 도넛과 동일한 매핑(toDisplayAllocation)을 써 PDF 수치를 대시보드와 일치시킨다.
 function allocationPct(
-  weights: Parameters<typeof toDisplayAllocation>[0],
+  weights: Parameters<typeof toDisplayAllocation>[0] | null | undefined,
 ): number[] {
+  if (!weights) return [0, 0, 0, 0, 0, 0];
   return toDisplayAllocation(weights).map((d) => Math.round(d.weight));
 }
 
