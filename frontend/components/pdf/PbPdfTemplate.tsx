@@ -3,13 +3,8 @@
  * 구조: 표지 → 시장현황&IPS → 포트폴리오 비교 → 절세 최적화 → AI 인사이트
  */
 
-import {
-  PORTFOLIOS,
-  INSIGHT,
-  BASE_TIME,
-} from "@/lib/mockData";
 import { useDashboardStore } from "@/lib/store";
-import { buildPdfTaxEffect, buildPdfTaxAdvice } from "@/lib/pdfTaxData";
+import { buildPdfTaxEffect, buildPdfTaxAdvice, extractTaxOptimizerEntry } from "@/lib/pdfTaxData";
 
 // ── 상수 ────────────────────────────────────────────────────────
 const W = 794;
@@ -130,6 +125,11 @@ function getToday() {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function getNow() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 // ── 공통 컴포넌트 ────────────────────────────────────────────────
 function PageFooter({ page, total }: { page: number; total: number }) {
   return (
@@ -167,7 +167,7 @@ function PageFooter({ page, total }: { page: number; total: number }) {
           Page {page} / {total}
         </span>
         <span style={{ fontSize: 10, color: MUTED }}>
-          {getToday()} {BASE_TIME}
+          {getToday()} {getNow()}
         </span>
       </div>
     </div>
@@ -290,11 +290,9 @@ function CoverPage() {
   const today = getToday();
   const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
   const storePortfolios = useDashboardStore((s) => s.portfolios);
-  const taxEffect = buildPdfTaxEffect(useDashboardStore((s) => s.taxOptimizer));
+  const taxEffect = buildPdfTaxEffect(extractTaxOptimizerEntry(useDashboardStore((s) => s.taxOptimizer), selectedPortfolioId));
   const selectedPortfolioName =
-    (storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS).find(
-      (p) => p.id === selectedPortfolioId,
-    )?.name ?? "포트폴리오 A";
+    storePortfolios.find((p) => p.id === selectedPortfolioId)?.name ?? "포트폴리오 A";
   return (
     <div
       data-pdf-page=""
@@ -446,7 +444,7 @@ function CoverPage() {
         <div style={{ display: "flex" }}>
           {[
             { label: "보고서 일자", value: today },
-            { label: "기준 시각", value: `${BASE_TIME} 기준` },
+            { label: "기준 시각", value: `${getNow()} 기준` },
             { label: "선택 포트폴리오", value: selectedPortfolioName },
             {
               label: "예상 연간 절세",
@@ -747,10 +745,10 @@ function MarketIpsPage() {
 // ── 페이지 3: 포트폴리오 비교 ────────────────────────────────────
 function PortfolioPage() {
   const storePortfolios = useDashboardStore((s) => s.portfolios);
-  const displayPortfolios = storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS;
-  const current = displayPortfolios.find((p) => p.id === "current") ?? PORTFOLIOS.find((p) => p.id === "current")!;
-  const portA = displayPortfolios.find((p) => p.id === "a") ?? PORTFOLIOS.find((p) => p.id === "a")!;
-  const portB = displayPortfolios.find((p) => p.id === "b") ?? PORTFOLIOS.find((p) => p.id === "b")!;
+  const current = storePortfolios.find((p) => p.id === "current");
+  const portA = storePortfolios.find((p) => p.id === "a");
+  const portB = storePortfolios.find((p) => p.id === "b");
+  if (!current || !portA || !portB) return null;
   const cols = [
     {
       p: current,
@@ -1098,9 +1096,11 @@ function PortfolioPage() {
 // ── 페이지 4: 절세 최적화 전략 ──────────────────────────────────
 function TaxPage() {
   const customer = useSelectedCustomer();
-  const taxOptimizer = useDashboardStore((s) => s.taxOptimizer);
-  const taxEffect = buildPdfTaxEffect(taxOptimizer);
-  const taxAdvice = buildPdfTaxAdvice(taxOptimizer);
+  const taxOptimizerMap = useDashboardStore((s) => s.taxOptimizer);
+  const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
+  const taxOptimizerEntry = extractTaxOptimizerEntry(taxOptimizerMap, selectedPortfolioId);
+  const taxEffect = buildPdfTaxEffect(taxOptimizerEntry);
+  const taxAdvice = buildPdfTaxAdvice(taxOptimizerEntry);
   // 계좌별 사용액 계산 (AccountAllocation 동일 로직)
   const accountRows = ACCOUNT_PDF.filter((acct) => acct.key !== "general").map(
     (acct) => {
@@ -1673,7 +1673,7 @@ function TaxPage() {
 
 // ── 페이지 5: 절세 제안 추천 상품 ──────────────────────────────
 function TaxProductsPage() {
-  const taxAdvice = buildPdfTaxAdvice(useDashboardStore((s) => s.taxOptimizer));
+  const taxAdvice = buildPdfTaxAdvice(extractTaxOptimizerEntry(useDashboardStore((s) => s.taxOptimizer), useDashboardStore((s) => s.selectedPortfolioId)));
   return (
     <div
       data-pdf-page=""
@@ -1789,14 +1789,15 @@ function TaxProductsPage() {
 // ── 페이지 6: AI 인사이트 ────────────────────────────────────────
 function AiPage() {
   const insightResult = useDashboardStore((s) => s.insightResult);
-  const answer = insightResult?.data?.answer ?? INSIGHT.defaultAnswer;
+  if (!insightResult) return null;
+  const answer = insightResult.data.answer;
   // 한 질의가 같은 문서의 여러 청크를 인용해 제목이 중복될 수 있다. 출처 목록은 문서당
   // 한 번만 적는 게 보편적이고, 중복을 그대로 두면 페이지를 넘쳐 깨지므로 제목 기준으로
   // 중복을 제거하고 안전하게 상한을 둔다(렌더 마크업은 그대로).
   const citationSources = (() => {
     const seen = new Set<string>();
     const unique: { title: string; date: string | null }[] = [];
-    for (const src of insightResult?.data?.citations ?? INSIGHT.sources) {
+    for (const src of insightResult.data.citations) {
       const key = (src.title ?? "").trim();
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -1845,39 +1846,6 @@ function AiPage() {
         >
           <div
             style={{
-              display: "flex",
-              gap: 8,
-              marginBottom: 12,
-              alignItems: "flex-start",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 900,
-                color: BRAND,
-                flexShrink: 0,
-                lineHeight: 1.5,
-              }}
-            >
-              Q.
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: TEXT,
-                fontWeight: 600,
-                lineHeight: 1.65,
-                paddingTop: 1,
-              }}
-            >
-              {INSIGHT.query}
-            </span>
-          </div>
-          <div
-            style={{
-              borderTop: `1px solid ${BORDER}`,
-              paddingTop: 12,
               display: "flex",
               gap: 8,
               alignItems: "flex-start",

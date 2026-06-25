@@ -85,8 +85,8 @@ interface PortfolioCalculateResponse {
     matrix: number[][];
     value_type?: string;
   };
-  // 절세 6카드(strategy_cards)·종합과세 게이지 — stress-metrics의 base/stressed_tax와 동일 구조.
-  tax_optimizer?: StressTaxData;
+  // 포트폴리오별 절세 맵 {current, portfolio_a, portfolio_b} — 각 값은 build_tax_optimizer_payload 출력.
+  tax_optimizer?: Record<string, StressTaxData>;
 }
 
 // ── IPS 값 변환 ────────────────────────────────────────────────
@@ -227,8 +227,8 @@ export interface PortfolioCalcData {
   calculationSessionId: string;
   correlationHeatmap: CorrelationHeatmapResponse | null;
   portfolioTax: Record<string, PortfolioTaxResponse> | null;
-  // 절세 제안 카드·종합과세 게이지 (calculate 응답의 tax_optimizer). 스트레스 미진입 시 절세 화면 소스.
-  taxOptimizer: StressTaxData | null;
+  // 포트폴리오별 절세 맵 {current, portfolio_a, portfolio_b}. 스트레스 미진입 시 절세 화면 소스.
+  taxOptimizer: Record<string, StressTaxData> | null;
 }
 
 function extractPortfolioTax(

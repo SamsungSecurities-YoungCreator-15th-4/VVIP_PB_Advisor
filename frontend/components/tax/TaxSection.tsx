@@ -34,12 +34,12 @@ const STRATEGY_COPY: Record<
   StrategyKey,
   { body: string; tag: string; products: { name: string }[] }
 > = {
-  isa:                TAX_ADVICE.cards[0]!,
-  pension_credit:     TAX_ADVICE.cards[1]!,
-  separate_bond:      TAX_ADVICE.cards[2]!,
-  low_tax_dividend:   TAX_ADVICE.cards[3]!,
+  isa: TAX_ADVICE.cards[0]!,
+  pension_credit: TAX_ADVICE.cards[1]!,
+  separate_bond: TAX_ADVICE.cards[2]!,
+  low_tax_dividend: TAX_ADVICE.cards[3]!,
   overseas_exemption: TAX_ADVICE.cards[4]!,
-  tax_loss:           TAX_ADVICE.cards[5]!,
+  tax_loss: TAX_ADVICE.cards[5]!,
 };
 
 /** 중앙 하단: 절세 최적화 시뮬레이터 */
@@ -56,17 +56,38 @@ export default function TaxSection() {
     analyzing,
   } = useDashboardStore();
 
-  const customer = customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
-  const selectedPortfolio = portfolios.find((p) => p.id === selectedPortfolioId);
-  const currentPortfolio  = portfolios.find((p) => p.id === "current");
+  const customer =
+    customers.find((c) => c.id === selectedCustomerId) ?? customers[0];
+  const selectedPortfolio = portfolios.find(
+    (p) => p.id === selectedPortfolioId,
+  );
+  const currentPortfolio = portfolios.find((p) => p.id === "current");
 
   // 선택된 포트폴리오의 tax 데이터 (calculate 응답)
   const selectedKind = ID_TO_KIND[selectedPortfolioId] ?? "current";
-  const selectedTax  = portfolioTax?.[selectedKind] ?? null;
-  const isLive = portfolioSource === "live" && selectedTax != null;
+  const selectedTax = portfolioTax?.[selectedKind] ?? null;
+
+  // selectedPortfolioId → tax_optimizer 맵 키 (백엔드: current / portfolio_a / portfolio_b)
+  const TAX_OPT_KEY: Record<string, string> = {
+    current: "current",
+    a: "portfolio_a",
+    b: "portfolio_b",
+  };
+  const taxOptEntry = taxOptimizer
+    ? (taxOptimizer[TAX_OPT_KEY[selectedPortfolioId] ?? "current"] ??
+      taxOptimizer["portfolio_a"] ??
+      Object.values(taxOptimizer)[0] ??
+      null)
+    : null;
+
+  // 절세 화면 소스: 스트레스 모드면 stressTax.stressed, 아니면 calculate의 tax_optimizer 해당 포트폴리오.
+  const taxSource = stressTax?.stressed ?? taxOptEntry;
+
+  const isLive =
+    portfolioSource === "live" && selectedTax != null && taxSource != null;
 
   // 세후수익률 비교 — 현재 vs 선택 포트폴리오
-  const currentAfterTax  = currentPortfolio?.metrics.afterTaxReturnPct ?? null;
+  const currentAfterTax = currentPortfolio?.metrics.afterTaxReturnPct ?? null;
   const selectedAfterTax = selectedPortfolio?.metrics.afterTaxReturnPct ?? null;
 
   // 절세 효과 헤드라인
@@ -74,13 +95,31 @@ export default function TaxSection() {
     ? Math.round(selectedTax.saved_vs_current / 10000)
     : null;
 
+  // 실효세 절감: taxSource.headline의 세전→세후 실효세 (만원)
+  const effectiveTaxBeforeMan =
+    taxSource?.headline.tax_amount_before != null
+      ? Math.round(taxSource.headline.tax_amount_before / 10000)
+      : null;
+  const effectiveTaxAfterMan =
+    taxSource?.headline.tax_amount_after != null
+      ? Math.round(taxSource.headline.tax_amount_after / 10000)
+      : null;
+  const effectiveTaxDeltaPct =
+    effectiveTaxBeforeMan != null &&
+    effectiveTaxAfterMan != null &&
+    effectiveTaxBeforeMan > 0
+      ? ((effectiveTaxAfterMan - effectiveTaxBeforeMan) /
+          effectiveTaxBeforeMan) *
+        100
+      : null;
+
   // TaxWaterfall에 넘길 waterfallData
   const waterfallData = selectedTax
-    ? { waterfall: selectedTax.waterfall, savingManwon: annualSavingManwon ?? 0 }
+    ? {
+        waterfall: selectedTax.waterfall,
+        savingManwon: annualSavingManwon ?? 0,
+      }
     : null;
-
-  // 절세 화면 소스: 스트레스 모드면 stressTax, 아니면 calculate의 tax_optimizer.
-  const taxSource = stressTax?.stressed ?? taxOptimizer;
 
   // 종합과세 게이지
   const gaugeData = taxSource?.financial_income_tax_gauge ?? null;
@@ -89,6 +128,21 @@ export default function TaxSection() {
   const liveStrategyCards = taxSource?.strategy_cards ?? null;
 
   const baseLabel = selectedPortfolio?.name ?? "포트폴리오";
+
+  if (portfolioSource === "fallback" && !analyzing) {
+    return (
+      <section>
+        <div className="mb-2 px-0.5">
+          <h2 className="text-lg font-extrabold">절세 최적화 시뮬레이터</h2>
+        </div>
+        <div className="flex min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-muted-foreground/20 bg-muted/30">
+          <p className="text-[14px] font-semibold text-muted-foreground">
+            분석 결과가 존재하지 않습니다
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <Tabs defaultValue="effect">
@@ -144,16 +198,19 @@ export default function TaxSection() {
                 </span>
               </div>
               {annualSavingManwon != null ? (
-                <p className={`mt-1.5 flex items-baseline gap-1.5 text-[13px] font-bold ${annualSavingManwon > 0 ? "text-up" : "text-foreground"}`}>
+                <p
+                  className={`mt-1.5 flex items-baseline gap-1.5 text-[13px] font-bold ${annualSavingManwon > 0 ? "text-up" : "text-foreground"}`}
+                >
                   연간 절세 효과
                   <b className="text-3xl font-extrabold tabular-nums tracking-tight">
-                    {annualSavingManwon > 0 ? "+" : ""}{annualSavingManwon.toLocaleString()}
+                    {annualSavingManwon > 0 ? "+" : ""}
+                    {annualSavingManwon.toLocaleString()}
                   </b>
                   <span className="text-[12px] font-extrabold">만원</span>
                 </p>
               ) : (
                 <p className="mt-1.5 text-[13px] font-bold text-muted-foreground">
-                  분析하기를 실행하면 실제 절세 효과를 계산합니다
+                  분석하기를 실행하면 실제 절세 효과를 계산합니다
                 </p>
               )}
               {selectedTax?.summary && (
@@ -167,16 +224,28 @@ export default function TaxSection() {
                 <SummaryStat
                   k="세후 수익률"
                   v={`${currentAfterTax.toFixed(1)}% → ${selectedAfterTax.toFixed(1)}%`}
-                  d={`${(selectedAfterTax - currentAfterTax) > 0 ? "+" : ""}${(selectedAfterTax - currentAfterTax).toFixed(1)}%p`}
+                  d={`${selectedAfterTax - currentAfterTax > 0 ? "+" : ""}${(selectedAfterTax - currentAfterTax).toFixed(1)}%p`}
                   delta={selectedAfterTax - currentAfterTax}
                 />
-                {annualSavingManwon != null && (
+                {effectiveTaxBeforeMan != null &&
+                effectiveTaxAfterMan != null ? (
+                  <SummaryStat
+                    k="실효세 절감"
+                    v={`${effectiveTaxBeforeMan.toLocaleString()} → ${effectiveTaxAfterMan.toLocaleString()}만`}
+                    d={
+                      effectiveTaxDeltaPct != null
+                        ? `${effectiveTaxDeltaPct >= 0 ? "+" : ""}${effectiveTaxDeltaPct.toFixed(1)}%`
+                        : ""
+                    }
+                    delta={effectiveTaxDeltaPct ?? undefined}
+                  />
+                ) : annualSavingManwon != null ? (
                   <SummaryStat
                     k="절세 효과"
                     v={`${annualSavingManwon.toLocaleString()}만원`}
-                    d={`vs 현재 포트폴리오`}
+                    d="vs 현재 포트폴리오"
                   />
-                )}
+                ) : null}
               </>
             )}
           </div>
@@ -192,7 +261,7 @@ export default function TaxSection() {
 
         {/* 탭 2: 종합과세 임계선 */}
         <TabsContent value="threshold">
-          <TaxGauge gaugeData={gaugeData} />
+          <TaxGauge gaugeData={gaugeData} portfolioLabel={baseLabel} />
         </TabsContent>
 
         {/* 탭 3: 절세 제안 */}
@@ -226,18 +295,20 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
             title: lc.title,
             body: copy?.body ?? "",
             tag: copy?.tag ?? "",
-            saving: lc.applicable && lc.combined_contribution_manwon > 0
-              ? `+${lc.combined_contribution_manwon.toLocaleString()}만원`
-              : "",
+            saving:
+              lc.applicable && lc.combined_contribution_manwon > 0
+                ? `+${lc.combined_contribution_manwon.toLocaleString()}만원`
+                : "",
             products: copy?.products ?? [],
             applicable: lc.applicable,
           };
         })
     : TAX_ADVICE.cards.map((c) => ({ ...c, applicable: true }));
 
-  const totalSaving = totalManwon != null
-    ? `+${totalManwon.toLocaleString()}만원`
-    : TAX_ADVICE.totalSaving;
+  const totalSaving =
+    totalManwon != null
+      ? `+${totalManwon.toLocaleString()}만원`
+      : TAX_ADVICE.totalSaving;
 
   return (
     <>
@@ -259,9 +330,13 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
                       <button
                         key={t}
                         type="button"
-                        onClick={() => setTabs((prev) => ({ ...prev, [card.title]: t }))}
+                        onClick={() =>
+                          setTabs((prev) => ({ ...prev, [card.title]: t }))
+                        }
                         className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-                          active === t ? "bg-white text-brand-dark shadow-sm" : "text-muted-foreground"
+                          active === t
+                            ? "bg-white text-brand-dark shadow-sm"
+                            : "text-muted-foreground"
                         }`}
                       >
                         {t}
@@ -276,9 +351,13 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
                       {card.body}
                     </p>
                     <div className="mt-auto pt-1">
-                      <p className="text-[13px] font-bold text-muted-foreground/60">{card.tag}</p>
+                      <p className="text-[13px] font-bold text-muted-foreground/60">
+                        {card.tag}
+                      </p>
                       {card.saving && (
-                        <p className="text-[13px] font-extrabold tabular-nums text-up">{card.saving}</p>
+                        <p className="text-[13px] font-extrabold tabular-nums text-up">
+                          {card.saving}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -292,13 +371,20 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
                             key={p.name}
                             type="button"
                             disabled={!url}
-                            onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}
+                            onClick={() =>
+                              url &&
+                              window.open(url, "_blank", "noopener,noreferrer")
+                            }
                             className={`flex items-center gap-1.5 rounded-lg bg-brand/5 px-2 py-1.5 text-left transition-colors ${
-                              url ? "cursor-pointer hover:bg-brand/10" : "cursor-default opacity-50"
+                              url
+                                ? "cursor-pointer hover:bg-brand/10"
+                                : "cursor-default opacity-50"
                             }`}
                           >
                             <ExternalLink className="size-3 shrink-0 text-brand" />
-                            <span className="text-[12px] font-extrabold text-brand-dark">{p.name}</span>
+                            <span className="text-[12px] font-extrabold text-brand-dark">
+                              {p.name}
+                            </span>
                           </button>
                         );
                       })}
@@ -311,14 +397,28 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
         </div>
       </div>
       <div className="mt-2 flex items-center justify-between rounded-xl bg-brand/10 px-3 py-2">
-        <span className="text-[13px] font-bold text-brand-dark">{TAX_ADVICE.totalLabel}</span>
-        <span className="text-[13px] font-extrabold tabular-nums text-brand-dark">{totalSaving}</span>
+        <span className="text-[13px] font-bold text-brand-dark">
+          {TAX_ADVICE.totalLabel}
+        </span>
+        <span className="text-[13px] font-extrabold tabular-nums text-brand-dark">
+          {totalSaving}
+        </span>
       </div>
     </>
   );
 }
 
-function SummaryStat({ k, v, d, delta }: { k: string; v: string; d: string; delta?: number }) {
+function SummaryStat({
+  k,
+  v,
+  d,
+  delta,
+}: {
+  k: string;
+  v: string;
+  d: string;
+  delta?: number;
+}) {
   const dCls =
     delta === undefined || delta > 0
       ? "text-up"
@@ -329,7 +429,9 @@ function SummaryStat({ k, v, d, delta }: { k: string; v: string; d: string; delt
     <div className="min-w-29.5 rounded-xl border bg-white px-3 py-2">
       <p className="text-[13px] font-bold text-muted-foreground">{k}</p>
       <p className="mt-1 text-[13px] font-extrabold tabular-nums">{v}</p>
-      <p className={`mt-0.5 text-[13px] font-extrabold tabular-nums ${dCls}`}>{d}</p>
+      <p className={`mt-0.5 text-[13px] font-extrabold tabular-nums ${dCls}`}>
+        {d}
+      </p>
     </div>
   );
 }

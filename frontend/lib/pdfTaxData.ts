@@ -16,6 +16,23 @@
 import { TAX_ADVICE, TAX_EFFECT } from "@/lib/mockData";
 import type { StressTaxData } from "@/lib/api/types";
 
+// selectedPortfolioId("current"|"a"|"b") → tax_optimizer 맵 키
+const PDF_TAX_OPT_KEY: Record<string, string> = {
+  current: "current",
+  a: "portfolio_a",
+  b: "portfolio_b",
+};
+
+/** tax_optimizer 맵에서 선택 포트폴리오의 StressTaxData를 꺼낸다. 없으면 null. */
+export function extractTaxOptimizerEntry(
+  taxOptimizer: Record<string, StressTaxData> | null,
+  selectedPortfolioId: string,
+): StressTaxData | null {
+  if (!taxOptimizer) return null;
+  const key = PDF_TAX_OPT_KEY[selectedPortfolioId] ?? "portfolio_a";
+  return taxOptimizer[key] ?? taxOptimizer["portfolio_a"] ?? taxOptimizer["current"] ?? null;
+}
+
 // strategy_cards.key → mock TAX_ADVICE.cards 인덱스(카피·상품 출처).
 const ADVICE_KEY_ORDER = [
   "isa",

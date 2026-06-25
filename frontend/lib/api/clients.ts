@@ -61,14 +61,24 @@ export async function createClient(
     });
     return {
       status: "live",
-      data: { clientId: res.client_id, name: res.name, aumEokwon: res.aum_eokwon },
+      data: {
+        clientId: res.client_id,
+        name: res.name,
+        aumEokwon: res.aum_eokwon,
+      },
     };
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) {
-      return { status: "conflict", message: `이미 등록된 고객명입니다: ${name}` };
+      return {
+        status: "conflict",
+        message: `이미 등록된 고객명입니다: ${name}`,
+      };
     }
     if (err instanceof ApiError && (err.status === 400 || err.status === 422)) {
-      return { status: "invalid", message: "고객명·운용자산 입력값을 확인해주세요." };
+      return {
+        status: "invalid",
+        message: "고객명·운용자산 입력값을 확인해주세요.",
+      };
     }
     // 네트워크/타임아웃/5xx — 저장은 실패했으나 화면은 죽지 않게 로컬 데모로 추가.
     const note =
@@ -84,8 +94,8 @@ export async function createClient(
 }
 
 // ── 대시보드 스냅샷 ────────────────────────────────────────────
-// POST /clients/{client_id}/dashboard-snapshot : 상담별 첫 분析(1-1) 저장
-// GET  /clients/{client_id}/previous-dashboard : 가장 최근 저장된 분析 반환
+// POST /clients/{client_id}/dashboard-snapshot : 상담별 첫 분석(1-1) 저장
+// GET  /clients/{client_id}/previous-dashboard : 가장 최근 저장된 분석 반환
 // 백엔드가 consultation_id 기준 중복 방지 처리(같은 id 재요청 시 기존 반환)를 한다.
 
 export interface DashboardSnapshotResult {
@@ -99,7 +109,7 @@ export interface DashboardSnapshotResult {
   message?: string;
 }
 
-/** STT 완료 후 첫 분析하기 결과를 스냅샷으로 저장. 실패해도 UI를 막지 않는다(fire-and-forget). */
+/** STT 완료 후 첫 분석하기 결과를 스냅샷으로 저장. 실패해도 UI를 막지 않는다(fire-and-forget). */
 export async function saveDashboardSnapshot(
   clientId: string,
   payload: {
@@ -129,12 +139,12 @@ export async function getPreviousDashboard(
     return live(res.saved ? res : null);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      return live(null); // 이전 분析 없음 — 정상
+      return live(null); // 이전 분석 없음 — 정상
     }
     const note =
       err instanceof ApiError && err.isTimeout
-        ? "이전 분析 결과 조회 시간이 초과되었습니다."
-        : "이전 분析 결과를 불러오지 못했습니다.";
+        ? "이전 분석 결과 조회 시간이 초과되었습니다."
+        : "이전 분석 결과를 불러오지 못했습니다.";
     return empty<DashboardSnapshotResult | null>(null, note);
   }
 }
