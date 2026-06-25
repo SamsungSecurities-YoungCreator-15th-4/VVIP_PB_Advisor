@@ -588,6 +588,20 @@ export interface StressTaxFlow {
   after_tax_strategy?: StressTaxFlowEntry | null;
 }
 
+export interface StressTaxAccountCard {
+  status_label?: string | null;
+  description?: string | null;
+  used_capacity?: number | null;        // 원
+  remaining_capacity?: number | null;   // 원
+  [key: string]: unknown;
+}
+
+export interface StressTaxAccountCards {
+  isa?: StressTaxAccountCard | null;
+  irp?: StressTaxAccountCard | null;
+  taxable_account?: StressTaxAccountCard | null;
+}
+
 export interface StressTaxData {
   portfolio_key: string;                   // "base_tax" | "stressed_tax"
   portfolio_name: string;
@@ -595,6 +609,7 @@ export interface StressTaxData {
   headline: StressTaxHeadline;
   strategy_cards: StressTaxStrategyCards;
   financial_income_tax_gauge: StressTaxGauge;
+  account_cards?: StressTaxAccountCards | null;
   tax_flow?: StressTaxFlow | null;
   notes?: string[] | null;
 }

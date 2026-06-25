@@ -5,13 +5,12 @@
 
 import {
   PORTFOLIOS,
-  TAX_EFFECT,
-  TAX_ADVICE,
   CORRELATION_MATRIX,
   BASE_TIME,
 } from "@/lib/mockData";
 import { DISPLAY_GROUPS } from "@/lib/assetMapping";
 import { useDashboardStore } from "@/lib/store";
+import { buildPdfTaxEffect, buildPdfTaxAdvice } from "@/lib/pdfTaxData";
 
 /** 현재 대시보드에서 선택된 고객(없으면 첫 고객)을 store 에서 읽는다. */
 function useSelectedCustomer() {
@@ -140,6 +139,7 @@ function CoverPage() {
   const C = useSelectedCustomer();
   const selectedPortfolioId = useDashboardStore((s) => s.selectedPortfolioId);
   const storePortfolios = useDashboardStore((s) => s.portfolios);
+  const taxEffect = buildPdfTaxEffect(useDashboardStore((s) => s.taxOptimizer));
   const selectedPortfolioName =
     (storePortfolios.length > 0 ? storePortfolios : PORTFOLIOS).find(
       (p) => p.id === selectedPortfolioId,
@@ -297,7 +297,7 @@ function CoverPage() {
             { label: "선택 포트폴리오", value: selectedPortfolioName },
             {
               label: "예상 연간 절세",
-              value: `+${TAX_EFFECT.annualSavingManwon.toLocaleString()}만원`,
+              value: `+${taxEffect.annualSavingManwon.toLocaleString()}만원`,
             },
           ].map((item, i) => (
             <div
@@ -1122,9 +1122,12 @@ function PortfolioPage() {
 
 function TaxPage() {
   const C = useSelectedCustomer();
+  const taxOptimizer = useDashboardStore((s) => s.taxOptimizer);
+  const taxEffect = buildPdfTaxEffect(taxOptimizer);
+  const taxAdvice = buildPdfTaxAdvice(taxOptimizer);
   const accountRows = ACCOUNT_PDF.filter((acct) => acct.key !== "general").map(
     (acct) => {
-      const accData = TAX_EFFECT.accounts.find((a) => a.name === acct.name);
+      const accData = taxEffect.accounts.find((a) => a.name === acct.name);
       const used =
         accData?.used != null
           ? accData.used
@@ -1202,7 +1205,7 @@ function TaxPage() {
                 lineHeight: 1,
               }}
             >
-              + {TAX_EFFECT.annualSavingManwon.toLocaleString()}만원
+              + {taxEffect.annualSavingManwon.toLocaleString()}만원
             </div>
           </div>
           <div style={{ textAlign: "right", maxWidth: 260 }}>
@@ -1213,7 +1216,7 @@ function TaxPage() {
                 lineHeight: 1.7,
               }}
             >
-              {TAX_EFFECT.subNote}
+              {taxEffect.subNote}
             </div>
           </div>
         </div>
@@ -1224,7 +1227,7 @@ function TaxPage() {
         >
           <SectionBar />
           <div style={{ fontSize: 13, fontWeight: 800, color: TEXT }}>
-            절세 전략 비교 ({TAX_EFFECT.flow.pretaxLabel})
+            절세 전략 비교 ({taxEffect.flow.pretaxLabel})
           </div>
         </div>
 
@@ -1272,7 +1275,7 @@ function TaxPage() {
                 </tr>
               </thead>
               <tbody>
-                {TAX_EFFECT.flow.rows.map((row, i) => (
+                {taxEffect.flow.rows.map((row, i) => (
                   <tr
                     key={row.label}
                     style={{
@@ -1334,11 +1337,11 @@ function TaxPage() {
               }}
             >
               <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.7 }}>
-                ✓ 세후 수익률 {TAX_EFFECT.afterTaxReturn.from} →{" "}
-                {TAX_EFFECT.afterTaxReturn.to} (
-                {TAX_EFFECT.afterTaxReturn.delta})<br />✓ 실효세 절감{" "}
-                {TAX_EFFECT.effectiveTax.from} → {TAX_EFFECT.effectiveTax.to} (
-                {TAX_EFFECT.effectiveTax.delta})
+                ✓ 세후 수익률 {taxEffect.afterTaxReturn.from} →{" "}
+                {taxEffect.afterTaxReturn.to} (
+                {taxEffect.afterTaxReturn.delta})<br />✓ 실효세 절감{" "}
+                {taxEffect.effectiveTax.from} → {taxEffect.effectiveTax.to} (
+                {taxEffect.effectiveTax.delta})
               </div>
             </div>
           </div>
@@ -1630,7 +1633,7 @@ function TaxPage() {
             marginBottom: 10,
           }}
         >
-          {TAX_ADVICE.cards.map((card) => (
+          {taxAdvice.cards.map((card) => (
             <div
               key={card.title}
               style={{
@@ -1687,10 +1690,10 @@ function TaxPage() {
           }}
         >
           <span style={{ fontSize: 10, fontWeight: 700, color: BRAND_DARK }}>
-            {TAX_ADVICE.totalLabel}
+            {taxAdvice.totalLabel}
           </span>
           <span style={{ fontSize: 11, fontWeight: 900, color: BRAND_DARK }}>
-            {TAX_ADVICE.totalSaving}
+            {taxAdvice.totalSaving}
           </span>
         </div>
       </div>
@@ -1703,6 +1706,7 @@ function TaxPage() {
 // ── Page 5: 전략별 추천 상품 ────────────────────────────────────
 
 function TaxProductsPage() {
+  const taxAdvice = buildPdfTaxAdvice(useDashboardStore((s) => s.taxOptimizer));
   return (
     <div
       data-pdf-page=""
@@ -1788,7 +1792,7 @@ function TaxProductsPage() {
             </tr>
           </thead>
           <tbody>
-            {TAX_ADVICE.cards.map((card, i) => (
+            {taxAdvice.cards.map((card, i) => (
               <tr
                 key={card.title}
                 style={{
