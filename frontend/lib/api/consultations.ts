@@ -17,6 +17,7 @@ import {
 import type {
   ConsultationListResponse,
   ConsultationResponse,
+  InitialIpsResponse,
 } from "./types";
 
 export type { IpsPatch, SttConsultationData };
@@ -48,6 +49,28 @@ export async function listConsultations(
         ? "상담 목록 조회 시간이 초과되었습니다."
         : "상담 목록을 불러오지 못했습니다.";
     return empty<ConsultationSummaryItem[]>([], note);
+  }
+}
+
+/**
+ * 신규/미상담 고객의 최초(initial) IPS 를 불러온다.
+ * 고객 생성 시 백엔드가 DEFAULT_IPS_TEMPLATE 로 저장한 initial 스냅샷을 읽어,
+ * IPS 조율기가 이전 고객·페르소나 값으로 남지 않게 한다. 없으면 null(정상).
+ */
+export async function fetchInitialIps(
+  clientId: string,
+): Promise<ApiResult<IpsPatch | null>> {
+  const params = new URLSearchParams({ client_id: clientId });
+  try {
+    const res = await apiGet<InitialIpsResponse>(
+      `/consultations/initial-ips?${params.toString()}`,
+    );
+    return live(mapIps(res.ips_json as unknown as Parameters<typeof mapIps>[0]));
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return live(null); // 최초 IPS 미저장 — 정상
+    }
+    return empty<IpsPatch | null>(null, "최초 IPS를 불러오지 못했습니다.");
   }
 }
 

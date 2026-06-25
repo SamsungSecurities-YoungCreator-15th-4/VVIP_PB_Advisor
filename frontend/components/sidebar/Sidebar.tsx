@@ -25,6 +25,7 @@ import {
   type ListedClient,
   type PortfolioCalcData,
   createClient,
+  fetchInitialIps,
   fetchPortfolioCalculate,
   fetchStressMetrics,
   getPreviousDashboard,
@@ -191,7 +192,13 @@ export default function Sidebar() {
           }
         }
       }
-      // 스냅샷 없거나 clientId 미보유 → 신규 분석하기
+      // 스냅샷 없음(신규/미상담 고객) → IPS 조율기가 이전 고객·페르소나 값으로
+      // 남지 않도록 백엔드 최초 IPS(DEFAULT_IPS_TEMPLATE)를 불러와 채운 뒤 분석한다.
+      // handleAnalyze는 store의 최신 IPS를 읽으므로 setIps 직후 호출해도 반영된다.
+      if (customer.clientId) {
+        const initial = await fetchInitialIps(customer.clientId);
+        if (initial.source === "live" && initial.data) setIps(initial.data);
+      }
       void handleAnalyzeRef.current?.();
     })();
   }, [customer, liveBaseLoaded, portfolioSource, analyzing, setPortfolios, setCorrelationHeatmap, setPortfolioTax, setTaxOptimizer, setConsultationId, setIps]);
@@ -240,6 +247,10 @@ export default function Sidebar() {
   const handleAnalyze = async () => {
     if (!customer || analyzing) return;
 
+    // 자동 분석은 신규 고객 초기 IPS를 setIps 한 직후 동기 호출될 수 있어,
+    // 렌더 클로저가 아닌 store의 최신 IPS를 읽어 분석에 쓴다(stale IPS 방지).
+    const latestIps = useDashboardStore.getState().ips;
+
     // stressPreset이 현재값 외 프리셋이거나 슬라이더가 live 기준값에서 벗어나면 스트레스 테스트 API 호출
     const shouldStress =
       (stressPreset !== "current" && stressPreset !== null) ||
@@ -252,11 +263,11 @@ export default function Sidebar() {
         const stressResult = await fetchStressMetrics(
           {
             aumEokwon: customer.aumEokwon,
-            returnPct: ips.returnPct,
-            risk: ips.risk,
-            timeYears: ips.timeYears,
-            liquidity: ips.liquidity,
-            tax: ips.tax,
+            returnPct: latestIps.returnPct,
+            risk: latestIps.risk,
+            timeYears: latestIps.timeYears,
+            liquidity: latestIps.liquidity,
+            tax: latestIps.tax,
             ratePct: scenario.ratePct,
             fxKrw: scenario.fxKrw,
             liveRatePct: liveBase.ratePct,
@@ -271,11 +282,11 @@ export default function Sidebar() {
         clearStressMode();
         const result = await fetchPortfolioCalculate({
           aumEokwon: customer.aumEokwon,
-          returnPct: ips.returnPct,
-          risk: ips.risk,
-          timeYears: ips.timeYears,
-          liquidity: ips.liquidity,
-          tax: ips.tax,
+          returnPct: latestIps.returnPct,
+          risk: latestIps.risk,
+          timeYears: latestIps.timeYears,
+          liquidity: latestIps.liquidity,
+          tax: latestIps.tax,
           ratePct: liveBase.ratePct,
           fxKrw: liveBase.fxKrw,
           consultationId: consultationId || undefined,
@@ -302,7 +313,7 @@ export default function Sidebar() {
           });
         }
       }
-      setAnalysisBaseline(ips, scenario);
+      setAnalysisBaseline(latestIps, scenario);
     } finally {
       setAnalyzing(false);
     }

@@ -232,7 +232,7 @@ export type { TaxInsightData } from "./api/tax";
 export { uploadSttConsultation } from "./api/stt";
 export type { SttConsultationData, IpsPatch } from "./api/stt";
 
-export { listConsultations, loadConsultationDetail } from "./api/consultations";
+export { listConsultations, loadConsultationDetail, fetchInitialIps } from "./api/consultations";
 export type { ConsultationSummaryItem } from "./api/consultations";
 
 export { createClient, listClients, saveDashboardSnapshot, getPreviousDashboard } from "./api/clients";
