@@ -435,7 +435,7 @@ export default function Sidebar() {
                 {realtimeStatus === "recording"
                   ? "클릭해 종료"
                   : customer.clientId
-                    ? "WebSocket STT"
+                    ? "STT"
                     : "DB 고객 필요"}
               </span>
             </button>
