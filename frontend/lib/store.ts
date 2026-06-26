@@ -281,12 +281,21 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     set((s) => ({ scenario: { ...s.scenario, ...patch } })),
   resetScenario: () => set((s) => ({ scenario: { ...s.liveBase } })),
   setLiveBase: (base) =>
-    set((s) => ({
-      liveBase: base,
-      // 최초 로드 시에만 슬라이더를 실시간 값으로 스냅 (이후엔 사용자 조작 보존)
-      scenario: s.liveBaseLoaded ? s.scenario : { ...base },
-      liveBaseLoaded: true,
-    })),
+    set((s) => {
+      // 사용자가 슬라이더를 직접 건드리지 않았으면(=scenario가 직전 liveBase와 동일)
+      // 거시지표 새로고침 시 scenario도 새 live 기준으로 재동기화한다.
+      // 그렇지 않으면(스트레스 값을 직접 넣어둔 경우) 사용자 조작을 보존한다.
+      // 이 재동기화가 없으면 새로고침 후 scenario≠liveBase 가 되어, 일반 분석이
+      // 스트레스 분기로 잘못 라우팅되고 대시보드 스냅샷 저장이 누락된다.
+      const untouched =
+        s.scenario.ratePct === s.liveBase.ratePct &&
+        s.scenario.fxKrw === s.liveBase.fxKrw;
+      return {
+        liveBase: base,
+        scenario: !s.liveBaseLoaded || untouched ? { ...base } : s.scenario,
+        liveBaseLoaded: true,
+      };
+    }),
   setOtherIncome: (manwon) => set({ otherIncomeManwon: Math.max(0, manwon) }),
 
   setTranscript: (transcript, source) =>
