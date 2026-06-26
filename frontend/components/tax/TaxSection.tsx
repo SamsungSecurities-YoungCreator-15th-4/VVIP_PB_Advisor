@@ -268,7 +268,20 @@ export default function TaxSection() {
               liveHeadline={isStressMode ? (taxSource?.headline ?? null) : null}
               liveAumEokwon={customer?.aumEokwon}
             />
-            <AccountAllocation />
+            <AccountAllocation
+              accounts={[
+                {
+                  key: "isa",
+                  usedManwon: customer?.isaUsedManwon ?? null,
+                  limitManwon: 2000, // 법정 연 한도 2,000만원 (조세특례제한법 §91의18)
+                },
+                {
+                  key: "pension",
+                  usedManwon: customer?.pensionUsedManwon ?? null,
+                  limitManwon: 900, // 세액공제 한도 900만원 (소득세법 §59의3)
+                },
+              ]}
+            />
           </div>
         </TabsContent>
 
@@ -304,9 +317,20 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
         .sort((a, b) => a.priority_rank - b.priority_rank)
         .map((lc) => {
           const copy = STRATEGY_COPY[lc.key as StrategyKey];
+          // 백엔드가 계산한 이전/납입 가능 금액(이미 만원 단위로 반환됨)
+          const transferManwon = lc.transferableManwon ?? null;
+
+          // ISA·연금 카드는 잔여 한도를 동적으로 표시
+          let body = copy?.body ?? "";
+          if (lc.key === "isa" && transferManwon != null) {
+            body = `이자·배당 자산 ${transferManwon.toLocaleString()}만원을 ISA 잔여 한도로 이전 — 비과세 200만 + 초과분 9.9% 분리과세, 종합과세 합산 제외.`;
+          } else if (lc.key === "pension_credit" && transferManwon != null) {
+            body = `연금저축+IRP 잔여 한도 ${transferManwon.toLocaleString()}만원 납입 시 13.2% 세액공제 — 만 55세 이후 연금 수령.`;
+          }
+
           return {
             title: lc.title,
-            body: copy?.body ?? "",
+            body,
             tag: copy?.tag ?? "",
             saving:
               lc.applicable && lc.combined_contribution_manwon > 0
