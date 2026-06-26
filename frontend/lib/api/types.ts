@@ -549,7 +549,7 @@ export interface StressTaxStrategyCard {
   standalone_saving: number;               // 원
   combined_contribution: number;           // 원
   combined_contribution_manwon: number;    // 만원
-  transferable_amount?: number | null;
+  transferableManwon?: number | null;      // 이전/납입 가능 금액(만원)
   rule_keys?: string[] | null;
   reason?: Record<string, unknown> | null;
 }

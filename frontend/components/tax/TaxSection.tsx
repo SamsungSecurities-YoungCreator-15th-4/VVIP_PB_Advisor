@@ -316,11 +316,8 @@ function AdviceCards({ liveCards, totalManwon }: AdviceCardsProps) {
         .sort((a, b) => a.priority_rank - b.priority_rank)
         .map((lc) => {
           const copy = STRATEGY_COPY[lc.key as StrategyKey];
-          // 백엔드가 계산한 이전/납입 가능 금액(원→만원)
-          const transferManwon =
-            lc.transferable_amount != null
-              ? Math.round(lc.transferable_amount / 10000)
-              : null;
+          // 백엔드가 계산한 이전/납입 가능 금액(이미 만원 단위로 반환됨)
+          const transferManwon = lc.transferableManwon ?? null;
 
           // ISA·연금 카드는 잔여 한도를 동적으로 표시
           let body = copy?.body ?? "";
