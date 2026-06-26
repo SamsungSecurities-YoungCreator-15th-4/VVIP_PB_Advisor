@@ -102,14 +102,13 @@ export default function TaxSection() {
   const currentAfterTax = currentPortfolio?.metrics.afterTaxReturnPct ?? null;
   const selectedAfterTax = selectedPortfolio?.metrics.afterTaxReturnPct ?? null;
 
-  // 절세 효과 헤드라인: 스트레스 모드면 taxSource(stressed) headline, 아니면 calculate saved_vs_current
-  const annualSavingManwon = isStressMode
-    ? taxSource?.headline.annual_tax_saving != null
+  // 절세 효과 헤드라인: 실시간 추출/최적화 반영된 총 절세 효과 (만원)
+  const annualSavingManwon =
+    taxSource?.headline.annual_tax_saving != null
       ? Math.round(taxSource.headline.annual_tax_saving / 10000)
-      : null
-    : selectedTax
-      ? Math.round(selectedTax.saved_vs_current / 10000)
-      : null;
+      : (selectedTax
+          ? Math.round(selectedTax.saved_vs_current / 10000)
+          : null);
 
   // 실효세 절감: taxSource.headline의 세전→세후 실효세 (만원)
   const effectiveTaxBeforeMan =
