@@ -137,15 +137,22 @@ export default function TaxSection() {
     null;
 
   // 실시간 추출/계산된 계좌 잔여 한도 및 사용액 반영 (IPS 실시간 연동)
-  const isaLiveUsed = taxSource?.account_cards?.isa?.used_capacity;
-  const isaLiveRemaining = taxSource?.account_cards?.isa?.remaining_capacity;
+  // 백엔드 값이 문자열로 와도 산술 더하기가 문자열 연결로 변질되지 않도록 숫자로 강제
+  // 변환한다. 변환 불가(NaN)·nullish 는 null 로 떨궈 폴백(2000/900)을 타게 한다.
+  const toFiniteNumber = (v: unknown): number | null => {
+    if (v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const isaLiveUsed = toFiniteNumber(taxSource?.account_cards?.isa?.used_capacity);
+  const isaLiveRemaining = toFiniteNumber(taxSource?.account_cards?.isa?.remaining_capacity);
   const isaUsedManwon = isaLiveUsed != null ? Math.round(isaLiveUsed / 10000) : (customer?.isaUsedManwon ?? null);
   const isaLimitManwon = (isaLiveUsed != null && isaLiveRemaining != null)
     ? Math.round((isaLiveUsed + isaLiveRemaining) / 10000)
     : 2000;
 
-  const irpLiveUsed = taxSource?.account_cards?.irp?.used_capacity;
-  const irpLiveRemaining = taxSource?.account_cards?.irp?.remaining_capacity;
+  const irpLiveUsed = toFiniteNumber(taxSource?.account_cards?.irp?.used_capacity);
+  const irpLiveRemaining = toFiniteNumber(taxSource?.account_cards?.irp?.remaining_capacity);
   const pensionUsedManwon = irpLiveUsed != null ? Math.round(irpLiveUsed / 10000) : (customer?.pensionUsedManwon ?? null);
   const pensionLimitManwon = (irpLiveUsed != null && irpLiveRemaining != null)
     ? Math.round((irpLiveUsed + irpLiveRemaining) / 10000)
