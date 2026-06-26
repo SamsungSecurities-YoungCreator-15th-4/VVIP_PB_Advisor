@@ -183,9 +183,11 @@ export function buildPdfPerfRows(portfolios: Portfolio[]): PdfPerfRow[] {
 // 백엔드 heatmap asset_class(snake_case) 별 약칭 (CorrelationHeatmap.tsx 동일)
 const ASSET_ABBR: Record<string, string> = {
   domestic_equity: "국내주",
+  overseas_equity: "해외주",
   overseas_dividend: "해배주",
   overseas_blue_chip: "해성주",
   overseas_growth: "신흥주",
+  bond: "채권",
   general_bond: "국내채",
   dollar: "해외채",
   low_coupon_bond: "저쿠폰",
@@ -241,11 +243,27 @@ export function buildPdfCorrHeatmap(
   portfolio: Portfolio | null | undefined,
 ): PdfCorrHeatmap {
   if (heatmap && portfolio) {
-    const nonZeroIds = new Set(
-      Object.entries(portfolio.weights ?? {})
-        .filter(([, w]) => (w ?? 0) > 0)
-        .flatMap(([calcId]) => CALC_TO_BACKEND[calcId] ?? []),
-    );
+    const nonZeroIds = portfolio.allocation
+      ? new Set(
+          portfolio.allocation
+            .filter((a) => a.weight > 0)
+            .map((a) => a.asset_class)
+        )
+      : new Set(
+          Object.entries(portfolio.weights ?? {})
+            .filter(([, w]) => (w ?? 0) > 0)
+            .flatMap(([calcId]) => {
+              if (calcId === "domesticEquity") return ["domestic_equity"];
+              if (calcId === "overseasDividendEquity" || calcId === "overseasGrowthEquity" || calcId === "emergingEquity") return ["overseas_equity"];
+              if (calcId === "domesticBond") return ["bond", "cash"];
+              if (calcId === "overseasBond") return ["dollar"];
+              if (calcId === "lowCouponBond" || calcId === "separateTaxBond") return ["bond"];
+              if (calcId === "reits") return ["reit"];
+              if (calcId === "gold") return ["gold"];
+              if (calcId === "infraFund") return ["commodity"];
+              return [];
+            })
+        );
     const indices = heatmap.assets
       .map((a, i) => ({ ...a, i }))
       .filter(({ asset_class }) => nonZeroIds.has(asset_class));
