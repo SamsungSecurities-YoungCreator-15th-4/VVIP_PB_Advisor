@@ -16,9 +16,11 @@ const GROUP_ABBR: Record<DisplayGroup, string> = {
 // 백엔드 heatmap asset_class(snake_case) 별 약칭
 const ASSET_ABBR: Record<string, string> = {
   domestic_equity:    "국내주",
+  overseas_equity:    "해외주",
   overseas_dividend:  "해배주",
   overseas_blue_chip: "해성주",
   overseas_growth:    "신흥주",
+  bond:               "채권",
   general_bond:       "국내채",
   dollar:             "해외채",
   low_coupon_bond:    "저쿠폰",
@@ -49,11 +51,31 @@ export default function CorrelationHeatmap({ portfolio }: { portfolio?: Portfoli
   const correlationHeatmap = useDashboardStore((s) => s.correlationHeatmap);
 
   if (correlationHeatmap && portfolio) {
-    const nonZeroIds = new Set(
-      Object.entries(portfolio.weights)
-        .filter(([, w]) => w > 0)
-        .flatMap(([calcId]) => CALC_TO_BACKEND[calcId] ?? []),
-    );
+    const CALC_TO_HEATMAP_ASSET: Record<string, string[]> = {
+      domesticEquity: ["domestic_equity"],
+      overseasDividendEquity: ["overseas_equity"],
+      overseasGrowthEquity: ["overseas_equity"],
+      emergingEquity: ["overseas_equity"],
+      domesticBond: ["bond", "cash"],
+      overseasBond: ["dollar"],
+      lowCouponBond: ["bond"],
+      separateTaxBond: ["bond"],
+      reits: ["reit"],
+      gold: ["gold"],
+      infraFund: ["commodity"],
+    };
+
+    const nonZeroIds = portfolio.allocation
+      ? new Set(
+          portfolio.allocation
+            .filter((a) => (a.weight ?? 0) > 0)
+            .map((a) => a.asset_class)
+        )
+      : new Set(
+          Object.entries(portfolio.weights ?? {})
+            .filter(([, w]) => (w ?? 0) > 0)
+            .flatMap(([calcId]) => CALC_TO_HEATMAP_ASSET[calcId] ?? [])
+        );
 
     const indices = correlationHeatmap.assets
       .map((a, i) => ({ ...a, i }))
