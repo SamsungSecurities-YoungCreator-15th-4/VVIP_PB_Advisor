@@ -39,20 +39,24 @@ export default function AssetDonut({ allocation }: Props) {
 
       {/* 범례: 항상 하단 */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-2">
-        {data.map((d) => (
-          <div key={d.label} className="flex min-w-0 items-center gap-1.5">
-            <span
-              className="size-2 shrink-0 rounded-full"
-              style={{ backgroundColor: d.fill }}
-            />
-            <span className="flex-1 truncate text-[11px] font-semibold text-muted-foreground">
-              {d.label}
-            </span>
-            <span className="shrink-0 text-[11px] font-bold tabular-nums">
-              {Math.round(d.weight)}%
-            </span>
-          </div>
-        ))}
+        {data.map((d) => {
+          const rounded = Math.round(d.weight * 10) / 10;
+          const displayWeight = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
+          return (
+            <div key={d.label} className="flex min-w-0 items-center gap-1.5">
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: d.fill }}
+              />
+              <span className="flex-1 truncate text-[11px] font-semibold text-muted-foreground">
+                {d.label}
+              </span>
+              <span className="shrink-0 text-[11px] font-bold tabular-nums">
+                {displayWeight}%
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
