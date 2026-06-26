@@ -47,39 +47,11 @@ const CALC_TO_BACKEND: Record<string, string[]> = {
   infraFund:              ["commodity"],
 };
 
-export default function CorrelationHeatmap({ portfolio }: { portfolio?: Portfolio }) {
+export default function CorrelationHeatmap(_: { portfolio?: Portfolio }) {
   const correlationHeatmap = useDashboardStore((s) => s.correlationHeatmap);
 
-  if (correlationHeatmap && portfolio) {
-    const CALC_TO_HEATMAP_ASSET: Record<string, string[]> = {
-      domesticEquity: ["domestic_equity"],
-      overseasDividendEquity: ["overseas_equity"],
-      overseasGrowthEquity: ["overseas_equity"],
-      emergingEquity: ["overseas_equity"],
-      domesticBond: ["bond", "cash"],
-      overseasBond: ["dollar"],
-      lowCouponBond: ["bond"],
-      separateTaxBond: ["bond"],
-      reits: ["reit"],
-      gold: ["gold"],
-      infraFund: ["commodity"],
-    };
-
-    const nonZeroIds = portfolio.allocation
-      ? new Set(
-          portfolio.allocation
-            .filter((a) => (a.weight ?? 0) > 0)
-            .map((a) => a.asset_class)
-        )
-      : new Set(
-          Object.entries(portfolio.weights ?? {})
-            .filter(([, w]) => (w ?? 0) > 0)
-            .flatMap(([calcId]) => CALC_TO_HEATMAP_ASSET[calcId] ?? [])
-        );
-
-    const indices = correlationHeatmap.assets
-      .map((a, i) => ({ ...a, i }))
-      .filter(({ asset_class }) => nonZeroIds.has(asset_class));
+  if (correlationHeatmap) {
+    const indices = correlationHeatmap.assets.map((a, i) => ({ ...a, i }));
 
     if (indices.length > 0) {
       const labels = indices.map(({ asset_class, name }) => ({
