@@ -452,7 +452,10 @@ export async function fetchStressMetrics(
   const res = await apiPost<StressMetricsBackendResponse>(
     "/portfolio/stress-metrics",
     body,
-    { timeoutMs: 60_000 },
+    // stress-metrics는 calculate의 추천 엔진(find_recommended_portfolios)을 그대로
+    // 돌린 뒤 base/stressed 지표·벤치마크까지 추가 계산해 calculate보다 무겁다.
+    // Render Free 약한 CPU에서 60초를 넘겨 끊기던 문제 → calculate(120s)와 동일하게 상향.
+    { timeoutMs: 120_000 },
   );
 
   // 백엔드가 calculate와 동일한 전체 portfolios를 반환하면 그대로 사용.

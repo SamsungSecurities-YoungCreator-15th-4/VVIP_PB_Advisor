@@ -24,6 +24,7 @@ import {
   type ConsultationSummaryItem,
   type ListedClient,
   type PortfolioCalcData,
+  ApiError,
   createClient,
   fetchPortfolioCalculate,
   fetchStressMetrics,
@@ -105,6 +106,7 @@ export default function Sidebar() {
     basePortfolios,
     setPortfolios,
     setStressPortfolios,
+    setStressError,
     setStressTax,
     setTaxOptimizer,
     setCorrelationHeatmap,
@@ -255,31 +257,45 @@ export default function Sidebar() {
       scenario.fxKrw !== liveBase.fxKrw;
 
     setAnalyzing(true);
+    setStressError(null);
     try {
       if (shouldStress) {
-        const stressResult = await fetchStressMetrics(
-          {
-            aumEokwon: customer.aumEokwon,
-            returnPct: ips.returnPct,
-            risk: ips.risk,
-            timeYears: ips.timeYears,
-            liquidity: ips.liquidity,
-            tax: ips.tax,
-            ratePct: scenario.ratePct,
-            fxKrw: scenario.fxKrw,
-            liveRatePct: liveBase.ratePct,
-            liveFxKrw: liveBase.fxKrw,
-            stressPreset,
-          },
-          basePortfolios,
-        );
-        setStressPortfolios(stressResult.portfolios);
-        if (stressResult.stressTax) setStressTax(stressResult.stressTax);
-        if (stressResult.correlationHeatmap)
-          setCorrelationHeatmap(stressResult.correlationHeatmap);
-        if (stressResult.portfolioTax)
-          setPortfolioTax(stressResult.portfolioTax);
-        setTaxOptimizer(stressResult.taxOptimizer);
+        // 스트레스 재계산은 fetchStressMetrics 내부에 폴백이 없어 타임아웃·네트워크
+        // 실패 시 예외가 그대로 올라온다. catch 없이 두면 portfolios가 갱신되지 않아
+        // "값이 안 바뀐다"로 보이므로(에러 표시도 없음), 여기서 잡아 사유를 명시한다.
+        try {
+          const stressResult = await fetchStressMetrics(
+            {
+              aumEokwon: customer.aumEokwon,
+              returnPct: ips.returnPct,
+              risk: ips.risk,
+              timeYears: ips.timeYears,
+              liquidity: ips.liquidity,
+              tax: ips.tax,
+              ratePct: scenario.ratePct,
+              fxKrw: scenario.fxKrw,
+              liveRatePct: liveBase.ratePct,
+              liveFxKrw: liveBase.fxKrw,
+              stressPreset,
+            },
+            basePortfolios,
+          );
+          setStressPortfolios(stressResult.portfolios);
+          if (stressResult.stressTax) setStressTax(stressResult.stressTax);
+          if (stressResult.correlationHeatmap)
+            setCorrelationHeatmap(stressResult.correlationHeatmap);
+          if (stressResult.portfolioTax)
+            setPortfolioTax(stressResult.portfolioTax);
+          setTaxOptimizer(stressResult.taxOptimizer);
+        } catch (err) {
+          // 임의 값을 만들지 않고(금융 수치 날조 금지) 기존 값을 유지한 채 실패를 명시.
+          const isTimeout = err instanceof ApiError && err.isTimeout;
+          setStressError(
+            isTimeout
+              ? "스트레스 재계산 응답이 지연되어 반영하지 못했습니다. 잠시 후 다시 분석해 주세요."
+              : "스트레스 재계산에 실패했습니다. 잠시 후 다시 분석해 주세요.",
+          );
+        }
       } else {
         clearStressMode();
         const result = await fetchPortfolioCalculate({

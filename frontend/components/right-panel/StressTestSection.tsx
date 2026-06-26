@@ -39,6 +39,7 @@ export default function StressTestSection() {
     setStressPreset,
     helpMode,
     analyzing,
+    stressError,
   } = useDashboardStore();
 
   const customer =
@@ -175,6 +176,11 @@ export default function StressTestSection() {
           <div className="flex items-center justify-center gap-1.5 py-2 text-[12px] font-semibold text-muted-foreground">
             <Loader2 className="size-3 animate-spin" />
             분석 중...
+          </div>
+        ) : stressError ? (
+          <div className="flex items-start gap-1.5 py-1 text-[12px] font-semibold text-red-600">
+            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+            <span>{stressError}</span>
           </div>
         ) : !isStressMode ? (
           <p className="py-1 text-center text-[12px] font-semibold text-muted-foreground">

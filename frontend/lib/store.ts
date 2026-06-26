@@ -93,6 +93,9 @@ interface DashboardState {
   ) => void;
   /** stress-metrics 결과를 portfolios에 반영 (basePortfolios는 유지), isStressMode: true */
   setStressPortfolios: (portfolios: Portfolio[]) => void;
+  /** 스트레스 재계산 실패 사유(타임아웃 등). StressTestSection에 표시. null이면 정상. */
+  stressError: string | null;
+  setStressError: (msg: string | null) => void;
 
   // ── 스트레스 모드 상태 ──
   isStressMode: boolean;
@@ -189,8 +192,12 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       portfolioSource: source,
       portfolioNote: note,
       isStressMode: false,
+      stressError: null,
     }),
-  setStressPortfolios: (portfolios) => set({ portfolios, isStressMode: true }),
+  setStressPortfolios: (portfolios) =>
+    set({ portfolios, isStressMode: true, stressError: null }),
+  stressError: null,
+  setStressError: (msg) => set({ stressError: msg }),
 
   isStressMode: false,
   stressPreset: "current",
@@ -255,6 +262,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         insightResult: null,
         isStressMode: false,
         stressPreset: "current",
+        stressError: null,
         scenario: { ...s.liveBase }, // 슬라이더도 live 기준으로 초기화 → 자동분석는 항상 calculate
         // 고객 전환 시 이전 고객의 상담 내역·상담 ID·STT 상태는 신규/기존 구분 없이 항상 초기화한다.
         // (이전 고객의 transcript·consultationId가 새 고객 화면에 노출되거나, 새 고객 clientId와
