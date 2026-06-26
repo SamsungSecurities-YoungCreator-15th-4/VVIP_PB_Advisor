@@ -41,6 +41,16 @@ const STRATEGY_COPY: Record<
 };
 
 /** 중앙 하단: 절세 최적화 시뮬레이터 */
+// 백엔드 값이 문자열로 와도 산술 더하기가 문자열 연결로 변질되지 않도록 숫자로 강제
+// 변환한다. number 거나 비어있지 않은 string 만 인정하고(빈문자열·boolean·배열이
+// Number()로 0/1 둔갑하는 것 차단), 변환 불가(NaN)·그 외는 null 로 떨궈 폴백을 타게 한다.
+function toFiniteNumber(v: unknown): number | null {
+  if (typeof v !== "number" && (typeof v !== "string" || v.trim() === ""))
+    return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function TaxSection() {
   const {
     selectedPortfolioId,
@@ -137,13 +147,6 @@ export default function TaxSection() {
     null;
 
   // 실시간 추출/계산된 계좌 잔여 한도 및 사용액 반영 (IPS 실시간 연동)
-  // 백엔드 값이 문자열로 와도 산술 더하기가 문자열 연결로 변질되지 않도록 숫자로 강제
-  // 변환한다. 변환 불가(NaN)·nullish 는 null 로 떨궈 폴백(2000/900)을 타게 한다.
-  const toFiniteNumber = (v: unknown): number | null => {
-    if (v == null) return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
   const isaLiveUsed = toFiniteNumber(taxSource?.account_cards?.isa?.used_capacity);
   const isaLiveRemaining = toFiniteNumber(taxSource?.account_cards?.isa?.remaining_capacity);
   const isaUsedManwon = isaLiveUsed != null ? Math.round(isaLiveUsed / 10000) : (customer?.isaUsedManwon ?? null);
