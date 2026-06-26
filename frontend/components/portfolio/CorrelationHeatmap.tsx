@@ -51,26 +51,30 @@ export default function CorrelationHeatmap({ portfolio }: { portfolio?: Portfoli
   const correlationHeatmap = useDashboardStore((s) => s.correlationHeatmap);
 
   if (correlationHeatmap && portfolio) {
+    const CALC_TO_HEATMAP_ASSET: Record<string, string[]> = {
+      domesticEquity: ["domestic_equity"],
+      overseasDividendEquity: ["overseas_equity"],
+      overseasGrowthEquity: ["overseas_equity"],
+      emergingEquity: ["overseas_equity"],
+      domesticBond: ["bond", "cash"],
+      overseasBond: ["dollar"],
+      lowCouponBond: ["bond"],
+      separateTaxBond: ["bond"],
+      reits: ["reit"],
+      gold: ["gold"],
+      infraFund: ["commodity"],
+    };
+
     const nonZeroIds = portfolio.allocation
       ? new Set(
           portfolio.allocation
-            .filter((a) => a.weight > 0)
+            .filter((a) => (a.weight ?? 0) > 0)
             .map((a) => a.asset_class)
         )
       : new Set(
-          Object.entries(portfolio.weights)
-            .filter(([, w]) => w > 0)
-            .flatMap(([calcId]) => {
-              if (calcId === "domesticEquity") return ["domestic_equity"];
-              if (calcId === "overseasDividendEquity" || calcId === "overseasGrowthEquity" || calcId === "emergingEquity") return ["overseas_equity"];
-              if (calcId === "domesticBond") return ["bond", "cash"];
-              if (calcId === "overseasBond") return ["dollar"];
-              if (calcId === "lowCouponBond" || calcId === "separateTaxBond") return ["bond"];
-              if (calcId === "reits") return ["reit"];
-              if (calcId === "gold") return ["gold"];
-              if (calcId === "infraFund") return ["commodity"];
-              return [];
-            })
+          Object.entries(portfolio.weights ?? {})
+            .filter(([, w]) => (w ?? 0) > 0)
+            .flatMap(([calcId]) => CALC_TO_HEATMAP_ASSET[calcId] ?? [])
         );
 
     const indices = correlationHeatmap.assets
