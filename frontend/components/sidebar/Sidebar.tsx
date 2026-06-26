@@ -270,6 +270,9 @@ export default function Sidebar() {
             liveRatePct: liveBase.ratePct,
             liveFxKrw: liveBase.fxKrw,
             stressPreset,
+            isaUsedManwon: customer.isaUsedManwon ?? undefined,
+            pensionUsedManwon: customer.pensionUsedManwon ?? undefined,
+            age: customer.age ?? undefined,
           },
           basePortfolios,
         );
@@ -293,6 +296,9 @@ export default function Sidebar() {
           fxKrw: liveBase.fxKrw,
           consultationId: consultationId || undefined,
           clientId: customer.clientId,
+          isaUsedManwon: customer.isaUsedManwon ?? undefined,
+          pensionUsedManwon: customer.pensionUsedManwon ?? undefined,
+          age: customer.age ?? undefined,
         });
         setPortfolios(result.data.portfolios, result.source, result.note);
         if (result.data.correlationHeatmap)

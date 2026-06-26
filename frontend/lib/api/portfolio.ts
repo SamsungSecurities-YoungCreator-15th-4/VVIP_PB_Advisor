@@ -250,6 +250,9 @@ export interface PortfolioCalcOptions {
   fxKrw: number;
   consultationId?: string;
   clientId?: string;
+  isaUsedManwon?: number;
+  pensionUsedManwon?: number;
+  age?: number;
 }
 
 export interface PortfolioCalcData {
@@ -297,6 +300,9 @@ export async function fetchPortfolioCalculate(
       investment_horizon_years: Math.max(1, Math.min(50, opts.timeYears)),
       tax_sensitivity: mapTax(opts.tax),
       liquidity_need: mapLiquidity(opts.liquidity),
+      isa_cumulative_contribution: opts.isaUsedManwon != null ? opts.isaUsedManwon * 10_000 : 0,
+      irp_current_year_contribution: opts.pensionUsedManwon != null ? opts.pensionUsedManwon * 10_000 : 0,
+      age: opts.age ?? undefined,
     },
     scenario: {
       base_interest_rate: opts.ratePct / 100,
@@ -382,6 +388,9 @@ export interface StressMetricsOptions {
   liveFxKrw: number;
   /** 프리셋 버튼 선택 여부: crisis → crisis_2008, war → crisis_ru_war, null → 슬라이더 */
   stressPreset: "current" | "crisis" | "war" | null;
+  isaUsedManwon?: number;
+  pensionUsedManwon?: number;
+  age?: number;
 }
 
 /** CalcUnitWeights(% 단위) → 백엔드 stress-metrics weights(소수 단위) 변환 */
@@ -445,6 +454,9 @@ export async function fetchStressMetrics(
       liquidity_need: mapLiquidity(opts.liquidity),
       stress_interest_rate_shock: rateShock,
       stress_fx_shock: fxShock,
+      isa_cumulative_contribution: opts.isaUsedManwon != null ? opts.isaUsedManwon * 10_000 : 0,
+      irp_current_year_contribution: opts.pensionUsedManwon != null ? opts.pensionUsedManwon * 10_000 : 0,
+      age: opts.age ?? undefined,
     },
     scenario: scenarioKey,
   };
