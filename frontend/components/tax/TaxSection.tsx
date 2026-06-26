@@ -136,6 +136,21 @@ export default function TaxSection() {
     selectedTax?.gauge ??
     null;
 
+  // 실시간 추출/계산된 계좌 잔여 한도 및 사용액 반영 (IPS 실시간 연동)
+  const isaLiveUsed = taxSource?.account_cards?.isa?.used_capacity;
+  const isaLiveRemaining = taxSource?.account_cards?.isa?.remaining_capacity;
+  const isaUsedManwon = isaLiveUsed != null ? Math.round(isaLiveUsed / 10000) : (customer?.isaUsedManwon ?? null);
+  const isaLimitManwon = (isaLiveUsed != null && isaLiveRemaining != null)
+    ? Math.round((isaLiveUsed + isaLiveRemaining) / 10000)
+    : 2000;
+
+  const irpLiveUsed = taxSource?.account_cards?.irp?.used_capacity;
+  const irpLiveRemaining = taxSource?.account_cards?.irp?.remaining_capacity;
+  const pensionUsedManwon = irpLiveUsed != null ? Math.round(irpLiveUsed / 10000) : (customer?.pensionUsedManwon ?? null);
+  const pensionLimitManwon = (irpLiveUsed != null && irpLiveRemaining != null)
+    ? Math.round((irpLiveUsed + irpLiveRemaining) / 10000)
+    : 900;
+
   // 절세 제안 카드: 소스가 있으면 strategy_cards, 없으면 mock
   const liveStrategyCards = taxSource?.strategy_cards ?? null;
 
@@ -272,13 +287,13 @@ export default function TaxSection() {
               accounts={[
                 {
                   key: "isa",
-                  usedManwon: customer?.isaUsedManwon ?? null,
-                  limitManwon: 2000, // 법정 연 한도 2,000만원 (조세특례제한법 §91의18)
+                  usedManwon: isaUsedManwon,
+                  limitManwon: isaLimitManwon,
                 },
                 {
                   key: "pension",
-                  usedManwon: customer?.pensionUsedManwon ?? null,
-                  limitManwon: 900, // 세액공제 한도 900만원 (소득세법 §59의3)
+                  usedManwon: pensionUsedManwon,
+                  limitManwon: pensionLimitManwon,
                 },
               ]}
             />
