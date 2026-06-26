@@ -315,7 +315,7 @@ export default function Sidebar() {
       setAnalyzing(false);
     }
   };
-  // 매 렌더마다 최신 handleAnalyze 클로저를 ref에 저장 (early return 이전에 위치)
+  // 매 렌더마다 최신 handleAnalyze 클로저를 ref에 저장
   useEffect(() => {
     handleAnalyzeRef.current = handleAnalyze;
   });
