@@ -288,8 +288,8 @@ export default function TaxSection() {
 
           <div className="grid grid-cols-2 items-start gap-4">
             <TaxWaterfall
-              waterfallData={isStressMode ? null : waterfallData}
-              liveHeadline={isStressMode ? (taxSource?.headline ?? null) : null}
+              waterfallData={null}
+              liveHeadline={taxSource?.headline ?? null}
               liveAumEokwon={customer?.aumEokwon}
             />
             <AccountAllocation
